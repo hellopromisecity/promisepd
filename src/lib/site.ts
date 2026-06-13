@@ -379,12 +379,13 @@ export const DIVISIONS: Division[] = [
  *  showcase card icon and the "আমাদের বিভাগ" nav dropdown.  Keyed by
  *  slug; a division without an entry falls back to its lucide `icon`.
  *  Sources converted via scripts/convert-division-logos.mjs.
- *  (interior-3d-design has no brand logo yet → keeps the lucide icon.) */
+ *  All five divisions now have a brand logo. */
 export const DIVISION_LOGO: Record<string, string> = {
   "promise-city": "/div-promise-city.webp",
   "ahbab-real-estate": "/div-ahbab-real-estate.webp",
   "promise-international": "/div-promise-international.webp",
   "ahbab-travels-tours": "/div-ahbab-travels-tours.webp",
+  "interior-3d-design": "/div-ahbab-interior.webp",
 };
 
 /** Real photo per division for the homepage division-card headers.

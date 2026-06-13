@@ -23,6 +23,9 @@ const MAP = [
   ["Ahbab-Real-Estate's-Logo.png", "div-ahbab-real-estate.webp"],
   ["PI.png", "div-promise-international.webp"],
   ["Ahbab-Travels-and-Tours-logo.png", "div-ahbab-travels-tours.webp"],
+  // Ahbab Interior and Architects — the colour mark (the -white variant is
+  // for dark backgrounds and would be invisible in the light icon boxes).
+  ["AIA-LOGO.png", "div-ahbab-interior.webp"],
 ];
 
 for (const [srcName, outName] of MAP) {
