@@ -223,6 +223,9 @@ export async function convertLead(
 
 const VALID_TYPES = new Set(OFFICER_TYPES.map((t) => t.code));
 
+/** Round to 2 decimals (points can be fractional, e.g. 0.20). */
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 function revalidateLeaderboard() {
   revalidatePath("/admin/marketing");
   revalidatePath("/leaderboard");
@@ -338,16 +341,17 @@ export async function awardPoints(input: {
 
     const { data: item, error: itemErr } = await admin
       .from("marketing_point_items")
-      .select("label, points")
+      .select("label, points, afr")
       .eq("id", input.itemId)
       .maybeSingle();
     if (itemErr) throw new Error(itemErr.message);
     if (!item) throw new AuthzError("Point item not found");
-    const added = (item.points ?? 0) * qty;
+    const added = round2(Number(item.points || 0) * qty);
+    const afrAdded = round2(Number(item.afr || 0) * qty);
 
     const { data: officer, error: readErr } = await admin
       .from("marketing_officers")
-      .select("points, name")
+      .select("points, afr_total, name")
       .eq("id", input.officerId)
       .maybeSingle();
     if (readErr) throw new Error(readErr.message);
@@ -358,6 +362,7 @@ export async function awardPoints(input: {
       item_label: item.label,
       quantity: qty,
       points: added,
+      afr: afrAdded,
       note: clean(input.note),
       created_by: me.id,
     });
@@ -365,7 +370,10 @@ export async function awardPoints(input: {
 
     const { error: updErr } = await admin
       .from("marketing_officers")
-      .update({ points: (officer.points ?? 0) + added })
+      .update({
+        points: round2(Number(officer.points || 0) + added),
+        afr_total: round2(Number(officer.afr_total || 0) + afrAdded),
+      })
       .eq("id", input.officerId);
     if (updErr) throw new Error(updErr.message);
 
@@ -382,18 +390,18 @@ export async function awardPoints(input: {
 
 // ── Point catalogue (admin-editable points per item / sale) ───────
 
-export async function addPointItem(label: string, points: number): Promise<ActionResult<{ id: string }>> {
+export async function addPointItem(label: string, points: number, afr = 0): Promise<ActionResult<{ id: string }>> {
   return runAction(async () => {
     await requireManager();
     const admin = getAdmin();
     if (!admin) throw new Error("Database is not configured.");
     const l = (label ?? "").trim();
     if (!l) throw new Error("Item name is required.");
-    const p = Math.max(0, Math.floor(Number(points) || 0));
+    const p = Math.max(0, round2(points));
 
     const { data, error } = await admin
       .from("marketing_point_items")
-      .insert({ label: l, points: p, sort: 99 })
+      .insert({ label: l, points: p, afr: Math.max(0, round2(afr)), sort: 99 })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -404,16 +412,20 @@ export async function addPointItem(label: string, points: number): Promise<Actio
   });
 }
 
-export async function updatePointItem(id: string, input: { label?: string; points?: number }): Promise<ActionResult> {
+export async function updatePointItem(
+  id: string,
+  input: { label?: string; points?: number; afr?: number },
+): Promise<ActionResult> {
   return runAction(async () => {
     await requireManager();
     if (!id) throw new Error("Missing item id.");
     const admin = getAdmin();
     if (!admin) throw new Error("Database is not configured.");
 
-    const patch: { label?: string; points?: number } = {};
+    const patch: { label?: string; points?: number; afr?: number } = {};
     if (typeof input.label === "string" && input.label.trim()) patch.label = input.label.trim();
-    if (input.points != null) patch.points = Math.max(0, Math.floor(Number(input.points) || 0));
+    if (input.points != null) patch.points = Math.max(0, round2(input.points));
+    if (input.afr != null) patch.afr = Math.max(0, round2(input.afr));
     if (!Object.keys(patch).length) throw new Error("Nothing to update.");
 
     const { error } = await admin.from("marketing_point_items").update(patch).eq("id", id);

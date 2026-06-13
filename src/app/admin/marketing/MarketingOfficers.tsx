@@ -1,35 +1,38 @@
 "use client";
 
-/** Marketing officer leaderboard + management.  Three dialogs:
- *   - Add officer (name, type, position + contact fields)
- *   - Award points (officer + point item × quantity → item value auto-
- *     computed and added to the officer's total)
- *   - Point values (admin-editable catalogue: label + points per sale;
- *     add / edit / delete custom items) */
+/** Marketing officer leaderboard + management — a full data grid:
+ *  search, date-range + type filters, sortable columns, pagination,
+ *  CSV/PDF export, and dialogs to add/edit officers, award points, and
+ *  manage the point catalogue (points + AFR per sale).
+ *
+ *  AFR = Approximate Fund Raising: the fund value each sale brings the
+ *  company; accrued per officer so we can see who raised how much.
+ *  Points can be fractional (e.g. 0.20 / FB activity). */
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Award, Crown, Medal, Trophy, Trash2, X, Loader2, AlertCircle, Users, SlidersHorizontal, Check,
+  Plus, Award, Crown, Medal, Trophy, Trash2, Pencil, X, Loader2, AlertCircle,
+  Users, SlidersHorizontal, Check, Search, ChevronDown, ArrowUp, ArrowDown,
+  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet,
 } from "lucide-react";
 import { Badge, Card } from "@/components/admin/ui";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
 import {
-  addOfficer, deleteOfficer, awardPoints,
+  addOfficer, updateOfficer, deleteOfficer, awardPoints,
   addPointItem, updatePointItem, deletePointItem,
 } from "@/app/actions/admin-marketing";
 
 export type Officer = {
-  id: string;
-  name: string;
-  officer_type: string;
-  position: string | null;
-  district: string | null;
-  officer_code: string | null;
-  mobile: string | null;
-  points: number;
+  id: string; name: string; officer_type: string; position: string | null;
+  district: string | null; officer_code: string | null; mobile: string | null;
+  points: number; afr: number;
 };
-export type PointItem = { id: string; label: string; points: number };
+export type PointItem = { id: string; label: string; points: number; afr: number };
+export type Entry = { officer_id: string; points: number; afr: number; created_at: string };
+
+type Range = "30d" | "thisyear" | "lastyear" | "lifetime";
+type SortKey = "points" | "afr" | "name";
 
 const TYPE_TONE: Record<string, "info" | "success" | "warning" | "neutral"> = {
   MD: "success", HM: "warning", AMO: "info", MO: "neutral",
@@ -38,15 +41,114 @@ const RANK_ICON = [Crown, Medal, Trophy];
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
 const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
 
+const RANGES: { key: Range; label: string }[] = [
+  { key: "30d", label: "Last 30 days" },
+  { key: "thisyear", label: "This year" },
+  { key: "lastyear", label: "Last year" },
+  { key: "lifetime", label: "Lifetime" },
+];
+
+const fmtPts = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
+function fmtBDT(n: number) {
+  n = Number(n) || 0;
+  if (n >= 1e7) return "৳ " + (n / 1e7).toFixed(2).replace(/\.?0+$/, "") + " Cr";
+  if (n >= 1e5) return "৳ " + (n / 1e5).toFixed(2).replace(/\.?0+$/, "") + " L";
+  return "৳ " + Math.round(n).toLocaleString("en-IN");
+}
+
+function rangeBounds(range: Range): [number | null, number | null] {
+  const now = new Date();
+  if (range === "30d") return [Date.now() - 30 * 86400000, null];
+  if (range === "thisyear") return [new Date(now.getFullYear(), 0, 1).getTime(), null];
+  if (range === "lastyear") return [new Date(now.getFullYear() - 1, 0, 1).getTime(), new Date(now.getFullYear(), 0, 1).getTime()];
+  return [null, null];
+}
+
 export default function MarketingOfficers({
-  officers,
-  items,
+  officers, items, entries,
 }: {
-  officers: Officer[];
-  items: PointItem[];
+  officers: Officer[]; items: PointItem[]; entries: Entry[];
 }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<null | "officer" | "points" | "values">(null);
+  const [editing, setEditing] = useState<Officer | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [range, setRange] = useState<Range>("lifetime");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("points");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [perPage, setPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+
+  // Per-officer points/AFR for the chosen range (lifetime uses totals).
+  const periodMap = useMemo(() => {
+    if (range === "lifetime") return null;
+    const [start, end] = rangeBounds(range);
+    const m = new Map<string, { points: number; afr: number }>();
+    for (const e of entries) {
+      const t = new Date(e.created_at).getTime();
+      if (start != null && t < start) continue;
+      if (end != null && t >= end) continue;
+      const cur = m.get(e.officer_id) || { points: 0, afr: 0 };
+      cur.points += Number(e.points) || 0;
+      cur.afr += Number(e.afr) || 0;
+      m.set(e.officer_id, cur);
+    }
+    return m;
+  }, [entries, range]);
+
+  // Build the computed list (points/afr for the range).
+  const computed = useMemo(
+    () =>
+      officers.map((o) => {
+        const p = periodMap ? periodMap.get(o.id) : null;
+        return {
+          ...o,
+          rPoints: range === "lifetime" ? Number(o.points) || 0 : p?.points ?? 0,
+          rAfr: range === "lifetime" ? Number(o.afr) || 0 : p?.afr ?? 0,
+        };
+      }),
+    [officers, periodMap, range],
+  );
+
+  // Global rank by points (independent of table sort/filter).
+  const rankMap = useMemo(() => {
+    const m = new Map<string, number>();
+    [...computed].sort((a, b) => b.rPoints - a.rPoints).forEach((o, i) => m.set(o.id, i + 1));
+    return m;
+  }, [computed]);
+
+  // Filter → sort.
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    let list = computed.filter((o) => {
+      if (typeFilter !== "all" && o.officer_type !== typeFilter) return false;
+      if (term && !`${o.name} ${o.officer_code ?? ""}`.toLowerCase().includes(term)) return false;
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      let v = 0;
+      if (sortKey === "points") v = a.rPoints - b.rPoints;
+      else if (sortKey === "afr") v = a.rAfr - b.rAfr;
+      else v = a.name.localeCompare(b.name);
+      return sortDir === "asc" ? v : -v;
+    });
+    return list;
+  }, [computed, typeFilter, search, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * perPage, safePage * perPage);
+
+  useEffect(() => { setPage(1); }, [search, range, typeFilter, perPage, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "name" ? "asc" : "desc"); }
+  }
+
+  const refresh = () => router.refresh();
 
   return (
     <Card pad={false}>
@@ -57,16 +159,31 @@ export default function MarketingOfficers({
           <span className="rounded-full bg-bg-soft px-2 py-0.5 text-xs text-fg-muted">{officers.length}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setDialog("values")} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
+          <button onClick={() => setDialog("values")} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
             <SlidersHorizontal className="h-4 w-4 text-brand-blue" /> Point values
           </button>
-          <button onClick={() => setDialog("points")} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
+          <button onClick={() => setDialog("points")} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
             <Award className="h-4 w-4 text-brand-blue" /> Award points
           </button>
-          <button onClick={() => setDialog("officer")} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3.5 py-2 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark">
+          <button onClick={() => { setEditing(null); setDialog("officer"); }} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3 py-2 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark">
             <Plus className="h-4 w-4" /> Add officer
           </button>
         </div>
+      </div>
+
+      {/* Toolbar: search · range · type · export */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+        <div className="flex min-w-[180px] flex-1 items-center gap-2 rounded-xl border border-border bg-bg-soft px-3 py-2">
+          <Search className="h-4 w-4 text-fg-faint" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or ID…" className="w-full bg-transparent text-sm text-fg outline-none" />
+        </div>
+        <Select value={range} onChange={(v) => setRange(v as Range)} options={RANGES.map((r) => ({ value: r.key, label: r.label }))} />
+        <Select
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[{ value: "all", label: "All roles" }, ...OFFICER_TYPES.map((t) => ({ value: t.code, label: t.label }))]}
+        />
+        <ExportMenu rows={filtered} range={range} />
       </div>
 
       {officers.length === 0 ? (
@@ -74,54 +191,174 @@ export default function MarketingOfficers({
           No officers yet — add your MO / AMO / MD / HM team to build the leaderboard.
         </p>
       ) : (
-        <div className="overflow-x-auto border-t border-border">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-[11px] uppercase tracking-wide text-fg-faint">
-                <th className="px-4 py-3 font-semibold">#</th>
-                <th className="px-4 py-3 font-semibold">Officer</th>
-                <th className="px-4 py-3 font-semibold">Type</th>
-                <th className="px-4 py-3 font-semibold">Position</th>
-                <th className="px-4 py-3 font-semibold">District</th>
-                <th className="px-4 py-3 text-right font-semibold">Points</th>
-                <th className="px-4 py-3 text-right font-semibold"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {officers.map((o, i) => {
-                const Icon = RANK_ICON[i];
-                return (
-                  <tr key={o.id} className="border-b border-border/60 last:border-0 hover:bg-bg-soft/50">
-                    <td className="px-4 py-3">
-                      {Icon ? (
-                        <span className={`grid h-7 w-7 place-items-center rounded-full ${i === 0 ? "bg-brand-blue text-white" : i === 1 ? "bg-bg-soft text-fg" : "bg-brand-red text-white"}`}>
-                          <Icon className="h-3.5 w-3.5" />
-                        </span>
-                      ) : (
-                        <span className="grid h-7 w-7 place-items-center rounded-full bg-bg-soft text-xs font-bold text-fg-muted">{i + 1}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-fg">{o.name}</div>
-                      {o.officer_code && <div className="text-xs text-fg-faint">{o.officer_code}</div>}
-                    </td>
-                    <td className="px-4 py-3"><Badge tone={TYPE_TONE[o.officer_type] ?? "neutral"}>{o.officer_type}</Badge></td>
-                    <td className="px-4 py-3 text-fg-muted">{o.position || "—"}</td>
-                    <td className="px-4 py-3 text-fg-muted">{o.district || "—"}</td>
-                    <td className="px-4 py-3 text-right font-bold text-fg">{o.points.toLocaleString("en-US")}</td>
-                    <td className="px-4 py-3 text-right"><DeleteBtn id={o.id} name={o.name} onDone={() => router.refresh()} /></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="overflow-x-auto border-t border-border">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-[11px] uppercase tracking-wide text-fg-faint">
+                  <th className="px-4 py-3 font-semibold">#</th>
+                  <SortableTh label="Officer" active={sortKey === "name"} dir={sortDir} onClick={() => toggleSort("name")} />
+                  <th className="px-4 py-3 font-semibold">Type</th>
+                  <th className="px-4 py-3 font-semibold">Position</th>
+                  <th className="px-4 py-3 font-semibold">District</th>
+                  <SortableTh label="AFR" active={sortKey === "afr"} dir={sortDir} onClick={() => toggleSort("afr")} align="right" />
+                  <SortableTh label="Points" active={sortKey === "points"} dir={sortDir} onClick={() => toggleSort("points")} align="right" />
+                  <th className="px-4 py-3 text-right font-semibold"><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((o) => {
+                  const rank = rankMap.get(o.id) ?? 0;
+                  const Icon = RANK_ICON[rank - 1];
+                  return (
+                    <tr key={o.id} className="border-b border-border/60 last:border-0 hover:bg-bg-soft/50">
+                      <td className="px-4 py-3">
+                        {Icon ? (
+                          <span className={`grid h-7 w-7 place-items-center rounded-full ${rank === 1 ? "bg-brand-blue text-white" : rank === 2 ? "bg-bg-soft text-fg" : "bg-brand-red text-white"}`}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
+                        ) : (
+                          <span className="grid h-7 w-7 place-items-center rounded-full bg-bg-soft text-xs font-bold text-fg-muted">{rank}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-fg">{o.name}</div>
+                        {o.officer_code && <div className="text-xs text-fg-faint">{o.officer_code}</div>}
+                      </td>
+                      <td className="px-4 py-3"><Badge tone={TYPE_TONE[o.officer_type] ?? "neutral"}>{o.officer_type}</Badge></td>
+                      <td className="px-4 py-3 text-fg-muted">{o.position || "—"}</td>
+                      <td className="px-4 py-3 text-fg-muted">{o.district || "—"}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-fg">{fmtBDT(o.rAfr)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-fg">{fmtPts(o.rPoints)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1 text-fg-faint">
+                          <button onClick={() => { setEditing(o); setDialog("officer"); }} title="Edit" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue"><Pencil className="h-4 w-4" /></button>
+                          <DeleteBtn id={o.id} name={o.name} onDone={refresh} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {pageRows.length === 0 && (
+                  <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-fg-muted">No officers match your filters.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer: per-page + pagination */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-sm">
+            <div className="flex items-center gap-2 text-fg-muted">
+              <span>Rows per page</span>
+              <Select value={String(perPage)} onChange={(v) => setPerPage(parseInt(v))} options={[10, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))} compact />
+              <span className="text-fg-faint">· {filtered.length} total</span>
+            </div>
+            <Pagination page={safePage} totalPages={totalPages} onPage={setPage} />
+          </div>
+        </>
       )}
 
-      {dialog === "officer" && <AddOfficerDialog onClose={() => setDialog(null)} onDone={() => { setDialog(null); router.refresh(); }} />}
-      {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onDone={() => { setDialog(null); router.refresh(); }} />}
-      {dialog === "values" && <ManagePointsDialog items={items} onClose={() => { setDialog(null); router.refresh(); }} />}
+      {dialog === "officer" && <OfficerDialog officer={editing} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
+      {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
+      {dialog === "values" && <ManagePointsDialog items={items} onClose={() => { setDialog(null); refresh(); }} />}
     </Card>
+  );
+}
+
+// ── small UI helpers ──────────────────────────────────────────────
+function Select({ value, onChange, options, compact }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; compact?: boolean }) {
+  return (
+    <div className="relative">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={`appearance-none rounded-xl border border-border bg-bg ${compact ? "py-1.5 pl-2.5 pr-7" : "py-2 pl-3 pr-8"} text-sm font-medium text-fg outline-none focus:border-brand-blue/50`}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
+    </div>
+  );
+}
+
+function SortableTh({ label, active, dir, onClick, align }: { label: string; active: boolean; dir: "asc" | "desc"; onClick: () => void; align?: "right" }) {
+  return (
+    <th className={`px-4 py-3 font-semibold ${align === "right" ? "text-right" : ""}`}>
+      <button onClick={onClick} className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""} ${active ? "text-brand-blue" : "hover:text-fg"}`}>
+        {label}
+        {active ? (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+      </button>
+    </th>
+  );
+}
+
+function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return <div />;
+  const win = 5;
+  let start = Math.max(1, page - Math.floor(win / 2));
+  const end = Math.min(totalPages, start + win - 1);
+  start = Math.max(1, end - win + 1);
+  const nums = [];
+  for (let i = start; i <= end; i++) nums.push(i);
+  const btn = "grid h-8 min-w-8 place-items-center rounded-lg border border-border px-2 text-sm font-medium disabled:opacity-40";
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => onPage(page - 1)} disabled={page <= 1} className={btn} aria-label="Previous"><ChevronLeft className="h-4 w-4" /></button>
+      {nums.map((n) => (
+        <button key={n} onClick={() => onPage(n)} className={`${btn} ${n === page ? "bg-brand-blue text-white border-brand-blue" : "hover:bg-bg-soft"}`}>{n}</button>
+      ))}
+      <button onClick={() => onPage(page + 1)} disabled={page >= totalPages} className={btn} aria-label="Next"><ChevronRight className="h-4 w-4" /></button>
+    </div>
+  );
+}
+
+function ExportMenu({ rows, range }: { rows: (Officer & { rPoints: number; rAfr: number })[]; range: Range }) {
+  const [open, setOpen] = useState(false);
+  const data = () =>
+    rows.map((o, i) => ({
+      "#": i + 1, Name: o.name, ID: o.officer_code ?? "", Type: o.officer_type,
+      Position: o.position ?? "", District: o.district ?? "",
+      AFR: Math.round(o.rAfr), Points: Math.round(o.rPoints * 100) / 100,
+    }));
+
+  function exportCSV() {
+    const d = data();
+    const headers = Object.keys(d[0] ?? { "#": "", Name: "", ID: "", Type: "", Position: "", District: "", AFR: "", Points: "" });
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csv = [headers.join(","), ...d.map((r) => headers.map((h) => esc((r as Record<string, unknown>)[h])).join(","))].join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `marketing-officers-${range}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setOpen(false);
+  }
+  function exportPDF() {
+    const d = data();
+    const headers = ["#", "Name", "ID", "Type", "Position", "District", "AFR", "Points"];
+    const rowsHtml = d.map((r) => `<tr>${headers.map((h) => `<td>${String((r as Record<string, unknown>)[h] ?? "")}</td>`).join("")}</tr>`).join("");
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Marketing officers</title>
+      <style>body{font-family:system-ui,'Noto Sans Bengali',sans-serif;padding:24px;color:#0b1220}h1{font-size:18px}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}th{background:#1847A1;color:#fff}</style>
+      </head><body><h1>Marketing officers — ${range}</h1><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rowsHtml}</tbody></table>
+      <script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.close();
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
+        <Download className="h-4 w-4 text-brand-blue" /> Export
+      </button>
+      {open && (
+        <>
+          <button aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
+          <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-bg shadow-lg">
+            <button onClick={exportCSV} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-fg hover:bg-bg-soft"><FileSpreadsheet className="h-4 w-4 text-brand-blue" /> CSV / Excel</button>
+            <button onClick={exportPDF} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-fg hover:bg-bg-soft"><FileText className="h-4 w-4 text-brand-red" /> PDF (print)</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -133,12 +370,11 @@ function DeleteBtn({ id, name, onDone }: { id: string; name: string; onDone: () 
         if (!window.confirm(`Remove “${name}” from the leaderboard?`)) return;
         start(async () => {
           const res = await deleteOfficer(id);
-          if (res.ok) onDone();
-          else window.alert(res.error);
+          if (res.ok) onDone(); else window.alert(res.error);
         });
       }}
       disabled={pending}
-      className="rounded-md p-1.5 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50"
+      className="rounded-md p-1.5 hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50"
       aria-label={`Delete ${name}`}
     >
       {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -168,8 +404,17 @@ function ErrorBanner({ msg }: { msg: string }) {
   );
 }
 
-function AddOfficerDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ name: "", officer_type: "MO" as OfficerType, position: "", officer_code: "", district: "", mobile: "", reference: "" });
+function OfficerDialog({ officer, onClose, onDone }: { officer: Officer | null; onClose: () => void; onDone: () => void }) {
+  const editing = !!officer;
+  const [f, setF] = useState({
+    name: officer?.name ?? "",
+    officer_type: (officer?.officer_type as OfficerType) ?? "MO",
+    position: officer?.position ?? "",
+    officer_code: officer?.officer_code ?? "",
+    district: officer?.district ?? "",
+    mobile: officer?.mobile ?? "",
+    reference: "",
+  });
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
@@ -177,14 +422,13 @@ function AddOfficerDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
   function submit() {
     setErr(null);
     start(async () => {
-      const res = await addOfficer(f);
-      if (res.ok) onDone();
-      else setErr(res.error);
+      const res = editing ? await updateOfficer(officer!.id, f) : await addOfficer(f);
+      if (res.ok) onDone(); else setErr(res.error);
     });
   }
 
   return (
-    <Modal title="Add marketing officer" onClose={onClose}>
+    <Modal title={editing ? "Edit officer" : "Add marketing officer"} onClose={onClose}>
       {err && <ErrorBanner msg={err} />}
       <div className="space-y-3">
         <div><label className={labelCls}>Name *</label><input className={inputCls} value={f.name} onChange={set("name")} placeholder="Full name" /></div>
@@ -206,18 +450,14 @@ function AddOfficerDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
           <div><label className={labelCls}>Reference</label><input className={inputCls} value={f.reference} onChange={set("reference")} placeholder="Optional" /></div>
         </div>
         <button onClick={submit} disabled={pending} className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add officer
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editing ? "Save changes" : "Add officer"}
         </button>
       </div>
     </Modal>
   );
 }
 
-function AwardPointsDialog({
-  officers, items, onClose, onDone,
-}: {
-  officers: Officer[]; items: PointItem[]; onClose: () => void; onDone: () => void;
-}) {
+function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Officer[]; items: PointItem[]; onClose: () => void; onDone: () => void }) {
   const [officerId, setOfficerId] = useState(officers[0]?.id ?? "");
   const [itemId, setItemId] = useState(items[0]?.id ?? "");
   const [qty, setQty] = useState(1);
@@ -225,14 +465,14 @@ function AwardPointsDialog({
   const [pending, start] = useTransition();
 
   const item = useMemo(() => items.find((p) => p.id === itemId), [items, itemId]);
-  const total = (item?.points ?? 0) * Math.max(1, qty || 1);
+  const totalPts = Math.round((item?.points ?? 0) * Math.max(1, qty || 1) * 100) / 100;
+  const totalAfr = (item?.afr ?? 0) * Math.max(1, qty || 1);
 
   function submit() {
     setErr(null);
     start(async () => {
       const res = await awardPoints({ officerId, itemId, quantity: qty });
-      if (res.ok) onDone();
-      else setErr(res.error);
+      if (res.ok) onDone(); else setErr(res.error);
     });
   }
 
@@ -248,22 +488,28 @@ function AwardPointsDialog({
           <div>
             <label className={labelCls}>Officer *</label>
             <select className={inputCls} value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
-              {officers.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.officer_type}) · {o.points} pts</option>)}
+              {officers.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.officer_type}) · {fmtPts(Number(o.points) || 0)} pts</option>)}
             </select>
           </div>
           <div>
             <label className={labelCls}>Point item *</label>
             <select className={inputCls} value={itemId} onChange={(e) => setItemId(e.target.value)}>
-              {items.map((p) => <option key={p.id} value={p.id}>{p.label} — {p.points} pts/unit</option>)}
+              {items.map((p) => <option key={p.id} value={p.id}>{p.label} — {fmtPts(p.points)} pts/unit</option>)}
             </select>
           </div>
           <div>
             <label className={labelCls}>Quantity (units sold)</label>
             <input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} />
           </div>
-          <div className="flex items-center justify-between rounded-xl bg-brand-blue-tint px-4 py-3">
-            <span className="text-sm font-semibold text-brand-blue-dark">Points to add</span>
-            <span className="text-xl font-extrabold text-brand-blue-dark">+{total.toLocaleString("en-US")}</span>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-brand-blue-tint px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase text-brand-blue-dark/70">Points</div>
+              <div className="text-xl font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div>
+            </div>
+            <div className="rounded-xl bg-bg-soft px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase text-fg-muted">AFR (fund)</div>
+              <div className="text-lg font-extrabold text-fg">{fmtBDT(totalAfr)}</div>
+            </div>
           </div>
           <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Add points
@@ -277,27 +523,30 @@ function AwardPointsDialog({
 function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: () => void }) {
   const [list, setList] = useState<PointItem[]>(items);
   const [newLabel, setNewLabel] = useState("");
-  const [newPoints, setNewPoints] = useState(1);
+  const [newPoints, setNewPoints] = useState("1");
+  const [newAfr, setNewAfr] = useState("0");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   function add() {
     const label = newLabel.trim();
     if (!label) return;
+    const p = Math.max(0, parseFloat(newPoints) || 0);
+    const afr = Math.max(0, parseFloat(newAfr) || 0);
     setErr(null);
     start(async () => {
-      const res = await addPointItem(label, newPoints);
+      const res = await addPointItem(label, p, afr);
       if (res.ok && res.data) {
-        setList((l) => [...l, { id: res.data!.id, label, points: Math.max(0, newPoints) }]);
-        setNewLabel(""); setNewPoints(1);
+        setList((l) => [...l, { id: res.data!.id, label, points: p, afr }]);
+        setNewLabel(""); setNewPoints("1"); setNewAfr("0");
       } else if (!res.ok) setErr(res.error);
     });
   }
-  function savePoints(id: string, points: number) {
+  function save(id: string, points: number, afr: number) {
     setErr(null);
     start(async () => {
-      const res = await updatePointItem(id, { points });
-      if (res.ok) setList((l) => l.map((x) => (x.id === id ? { ...x, points } : x)));
+      const res = await updatePointItem(id, { points, afr });
+      if (res.ok) setList((l) => l.map((x) => (x.id === id ? { ...x, points, afr } : x)));
       else setErr(res.error);
     });
   }
@@ -313,16 +562,17 @@ function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: (
   return (
     <Modal title="Point values per sale" onClose={onClose}>
       {err && <ErrorBanner msg={err} />}
-      <p className="mb-3 text-xs text-fg-muted">Set how many points each sale type is worth. These drive the “Award points” calculator.</p>
+      <p className="mb-3 text-xs text-fg-muted">Points (decimals OK, e.g. 0.20) and AFR (approx. fund raised per unit) drive the “Award points” calculator.</p>
       <div className="space-y-2">
-        {list.map((it) => <PointItemRow key={it.id} item={it} onSave={savePoints} onDelete={remove} pending={pending} />)}
+        {list.map((it) => <PointItemRow key={it.id} item={it} onSave={save} onDelete={remove} pending={pending} />)}
       </div>
-      <div className="mt-4 border-t border-border pt-3">
+      <div className="mt-4 space-y-2 border-t border-border pt-3">
         <label className={labelCls}>Add custom item</label>
+        <input className={inputCls} value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. FB activity (per post)" />
         <div className="flex gap-2">
-          <input className={inputCls} value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. Promise City plot (per katha)" />
-          <input type="number" min={0} className="w-20 shrink-0 rounded-xl border border-border bg-bg-soft px-2 py-2.5 text-center text-sm text-fg outline-none focus:border-brand-blue/50" value={newPoints} onChange={(e) => setNewPoints(Math.max(0, parseInt(e.target.value) || 0))} />
-          <button onClick={add} disabled={pending} className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-brand-blue text-white disabled:opacity-60" aria-label="Add item">
+          <div className="flex-1"><div className="text-[10px] text-fg-faint">Points/unit</div><input type="number" step="0.01" min={0} className={inputCls} value={newPoints} onChange={(e) => setNewPoints(e.target.value)} /></div>
+          <div className="flex-1"><div className="text-[10px] text-fg-faint">AFR ৳/unit</div><input type="number" step="any" min={0} className={inputCls} value={newAfr} onChange={(e) => setNewAfr(e.target.value)} /></div>
+          <button onClick={add} disabled={pending} className="mt-4 grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-brand-blue text-white disabled:opacity-60" aria-label="Add item">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           </button>
         </div>
@@ -331,29 +581,19 @@ function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: (
   );
 }
 
-function PointItemRow({
-  item, onSave, onDelete, pending,
-}: {
-  item: PointItem; onSave: (id: string, p: number) => void; onDelete: (id: string) => void; pending: boolean;
-}) {
-  const [pts, setPts] = useState(item.points);
-  const dirty = pts !== item.points;
+function PointItemRow({ item, onSave, onDelete, pending }: { item: PointItem; onSave: (id: string, p: number, afr: number) => void; onDelete: (id: string) => void; pending: boolean }) {
+  const [pts, setPts] = useState(String(item.points));
+  const [afr, setAfr] = useState(String(item.afr));
+  const dirty = parseFloat(pts) !== item.points || parseFloat(afr) !== item.afr;
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-bg-soft px-3 py-2">
-      <span className="min-w-0 flex-1 truncate text-sm text-fg">{item.label}</span>
-      <input
-        type="number" min={0}
-        className="w-16 shrink-0 rounded-lg border border-border bg-bg px-2 py-1.5 text-center text-sm text-fg outline-none focus:border-brand-blue/50"
-        value={pts}
-        onChange={(e) => setPts(Math.max(0, parseInt(e.target.value) || 0))}
-      />
-      <span className="shrink-0 text-[11px] text-fg-faint">pts</span>
-      <button onClick={() => onSave(item.id, pts)} disabled={pending || !dirty} title="Save" className={`shrink-0 rounded-md p-1.5 ${dirty ? "text-brand-blue hover:bg-brand-blue-tint" : "text-fg-faint"} disabled:opacity-40`}>
-        <Check className="h-4 w-4" />
-      </button>
-      <button onClick={() => { if (window.confirm(`Delete “${item.label}”?`)) onDelete(item.id); }} disabled={pending} title="Delete" className="shrink-0 rounded-md p-1.5 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40">
-        <Trash2 className="h-4 w-4" />
-      </button>
+    <div className="rounded-xl bg-bg-soft px-3 py-2">
+      <div className="mb-1.5 text-sm text-fg">{item.label}</div>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1"><input type="number" step="0.01" min={0} className="w-16 rounded-lg border border-border bg-bg px-2 py-1.5 text-center text-sm text-fg outline-none focus:border-brand-blue/50" value={pts} onChange={(e) => setPts(e.target.value)} /><span className="text-[11px] text-fg-faint">pts</span></div>
+        <div className="flex flex-1 items-center gap-1"><span className="text-[11px] text-fg-faint">৳</span><input type="number" step="any" min={0} className="w-full rounded-lg border border-border bg-bg px-2 py-1.5 text-sm text-fg outline-none focus:border-brand-blue/50" value={afr} onChange={(e) => setAfr(e.target.value)} placeholder="AFR fund/unit" /></div>
+        <button onClick={() => onSave(item.id, Math.max(0, parseFloat(pts) || 0), Math.max(0, parseFloat(afr) || 0))} disabled={pending || !dirty} title="Save" className={`shrink-0 rounded-md p-1.5 ${dirty ? "text-brand-blue hover:bg-brand-blue-tint" : "text-fg-faint"} disabled:opacity-40`}><Check className="h-4 w-4" /></button>
+        <button onClick={() => { if (window.confirm(`Delete “${item.label}”?`)) onDelete(item.id); }} disabled={pending} title="Delete" className="shrink-0 rounded-md p-1.5 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40"><Trash2 className="h-4 w-4" /></button>
+      </div>
     </div>
   );
 }

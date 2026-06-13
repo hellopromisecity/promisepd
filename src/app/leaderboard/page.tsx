@@ -26,7 +26,7 @@ export async function getLeaderboardRows(): Promise<LeaderRow[]> {
       sub:
         [o.position, o.district].filter(Boolean).join(" · ") ||
         officerTypeLabel(o.officer_type),
-      points: o.points ?? 0,
+      points: Number(o.points) || 0,
     }));
   } catch {
     return [];
