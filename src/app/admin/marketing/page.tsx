@@ -54,7 +54,7 @@ export default async function MarketingOverviewPage() {
       .order("created_at", { ascending: true }),
     admin
       .from("marketing_point_entries")
-      .select("officer_id, points, afr, income, created_at")
+      .select("officer_id, points, afr, income, sale_date, created_at")
       .gte("created_at", since.toISOString()),
   ]);
 
@@ -68,7 +68,8 @@ export default async function MarketingOverviewPage() {
     id: i.id, label: i.label, points: Number(i.points) || 0, afr: Number(i.afr) || 0, income: Number(i.income) || 0,
   }));
   const entries: Entry[] = (entriesRes.data ?? []).map((e) => ({
-    officer_id: e.officer_id, points: Number(e.points) || 0, afr: Number(e.afr) || 0, income: Number(e.income) || 0, created_at: e.created_at,
+    officer_id: e.officer_id, points: Number(e.points) || 0, afr: Number(e.afr) || 0, income: Number(e.income) || 0,
+    created_at: e.sale_date ? new Date(e.sale_date).toISOString() : e.created_at,
   }));
 
   return (

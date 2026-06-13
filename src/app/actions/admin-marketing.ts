@@ -328,6 +328,9 @@ export async function awardPoints(input: {
   officerId: string;
   itemId: string;
   quantity: number;
+  saleDate?: string;
+  clientName?: string;
+  clientId?: string;
   note?: string;
 }): Promise<ActionResult<{ points: number }>> {
   return runAction(async () => {
@@ -358,6 +361,8 @@ export async function awardPoints(input: {
     if (readErr) throw new Error(readErr.message);
     if (!officer) throw new AuthzError("Officer not found");
 
+    const clientName = clean(input.clientName);
+    const clientId = clean(input.clientId);
     const { error: entryErr } = await admin.from("marketing_point_entries").insert({
       officer_id: input.officerId,
       item_label: item.label,
@@ -365,6 +370,9 @@ export async function awardPoints(input: {
       points: added,
       afr: afrAdded,
       income: incomeAdded,
+      sale_date: cleanDate(input.saleDate),
+      client_name: clientName,
+      client_id: clientId,
       note: clean(input.note),
       created_by: me.id,
     });
@@ -384,7 +392,7 @@ export async function awardPoints(input: {
       action: "award",
       entity: "marketing_points",
       entityId: input.officerId,
-      detail: `+${added} pts to “${officer.name}” (${item.label} ×${qty})`,
+      detail: `+${added} pts to “${officer.name}” (${item.label} ×${qty})${clientName ? ` · client ${clientName}${clientId ? ` #${clientId}` : ""}` : ""}`,
     });
     revalidateLeaderboard();
     return { data: { points: added }, message: `+${added} points added.` };

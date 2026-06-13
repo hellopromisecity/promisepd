@@ -381,6 +381,9 @@ export type Database = {
           points: number;
           afr: number;
           income: number;
+          sale_date: string | null;
+          client_name: string | null;
+          client_id: string | null;
           note: string | null;
           created_by: string | null;
           created_at: string;
@@ -394,6 +397,9 @@ export type Database = {
           points: number;
           afr?: number;
           income?: number;
+          sale_date?: string | null;
+          client_name?: string | null;
+          client_id?: string | null;
           note?: string | null;
           created_by?: string | null;
           created_at?: string;

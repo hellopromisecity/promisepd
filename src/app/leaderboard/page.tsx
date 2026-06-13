@@ -48,7 +48,7 @@ export async function getLeaderboardData(): Promise<{ officers: LbOfficer[]; ent
         .eq("active", true),
       admin
         .from("marketing_point_entries")
-        .select("officer_id, points, income, created_at")
+        .select("officer_id, points, income, sale_date, created_at")
         .gte("created_at", since.toISOString()),
     ]);
 
@@ -66,7 +66,7 @@ export async function getLeaderboardData(): Promise<{ officers: LbOfficer[]; ent
       officer_id: e.officer_id,
       points: Number(e.points) || 0,
       income: Number(e.income) || 0,
-      created_at: e.created_at,
+      created_at: e.sale_date ? new Date(e.sale_date).toISOString() : e.created_at,
     }));
     return { officers, entries };
   } catch {

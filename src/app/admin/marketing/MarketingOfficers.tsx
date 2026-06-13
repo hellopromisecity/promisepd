@@ -454,6 +454,9 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
   const [officerId, setOfficerId] = useState(officers[0]?.id ?? "");
   const [itemId, setItemId] = useState(items[0]?.id ?? "");
   const [qty, setQty] = useState(1);
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [clientName, setClientName] = useState("");
+  const [clientId, setClientId] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -466,7 +469,7 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
   function submit() {
     setErr(null);
     start(async () => {
-      const res = await awardPoints({ officerId, itemId, quantity: qty });
+      const res = await awardPoints({ officerId, itemId, quantity: qty, saleDate, clientName, clientId });
       if (res.ok) onDone(); else setErr(res.error);
     });
   }
@@ -492,9 +495,19 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
               {items.map((p) => <option key={p.id} value={p.id}>{p.label} — {fmtPts(p.points)} pts</option>)}
             </select>
           </div>
-          <div>
-            <label className={labelCls}>Quantity (units sold)</label>
-            <input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Quantity (units sold)</label>
+              <input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} />
+            </div>
+            <div>
+              <label className={labelCls}>Sale date</label>
+              <input type="date" className={inputCls} value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={labelCls}>Client name</label><input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Buyer's name" /></div>
+            <div><label className={labelCls}>Client ID / NID</label><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Optional" /></div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-brand-blue-tint px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-brand-blue-dark/70">Points</div><div className="text-lg font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div></div>
