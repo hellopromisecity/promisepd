@@ -7,7 +7,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { isGroup, type NavEntry } from "@/lib/admin-nav";
 import type { Member } from "@/lib/auth";
@@ -31,8 +31,27 @@ export default function AdminSidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const isActive = (href: string) =>
-    href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+
+  // Only the single most-specific matching link is "active".  Collect
+  // every leaf href, keep the longest one the current path matches
+  // (exact, or a sub-path), so /admin/marketing/followup highlights only
+  // "Client follow-up" — not the "/admin/marketing" overview as well.
+  const activeHref = useMemo(() => {
+    const hrefs: string[] = [];
+    for (const e of nav) {
+      if (isGroup(e)) e.children.forEach((c) => hrefs.push(c.href));
+      else hrefs.push(e.href);
+    }
+    let best = "";
+    for (const h of hrefs) {
+      if ((pathname === h || pathname.startsWith(h + "/")) && h.length > best.length) {
+        best = h;
+      }
+    }
+    return best;
+  }, [nav, pathname]);
+
+  const isActive = (href: string) => href === activeHref;
 
   return (
     <aside
