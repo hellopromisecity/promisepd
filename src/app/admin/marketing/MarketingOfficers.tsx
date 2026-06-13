@@ -31,7 +31,7 @@ export type Officer = {
 export type PointItem = { id: string; label: string; points: number; afr: number; income: number };
 export type Entry = { officer_id: string; points: number; afr: number; income: number; created_at: string };
 
-type Range = "30d" | "thisyear" | "lastyear" | "lifetime";
+type Range = "30d" | "thisyear" | "lastyear" | "lifetime" | "custom";
 type SortKey = "points" | "afr" | "income" | "name";
 
 const TYPE_TONE: Record<string, "info" | "success" | "warning" | "neutral"> = {
@@ -46,6 +46,7 @@ const RANGES: { key: Range; label: string }[] = [
   { key: "thisyear", label: "This year" },
   { key: "lastyear", label: "Last year" },
   { key: "lifetime", label: "Lifetime" },
+  { key: "custom", label: "Custom range" },
 ];
 
 const fmtPts = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
@@ -56,8 +57,10 @@ function fmtBDT(n: number) {
   return "৳ " + Math.round(n).toLocaleString("en-IN");
 }
 
-function rangeBounds(range: Range): [number | null, number | null] {
+function rangeBounds(range: Range, customFrom = "", customTo = ""): [number | null, number | null] {
   const now = new Date();
+  if (range === "custom")
+    return [customFrom ? new Date(customFrom).getTime() : null, customTo ? new Date(customTo).getTime() + 86400000 : null];
   if (range === "30d") return [Date.now() - 30 * 86400000, null];
   if (range === "thisyear") return [new Date(now.getFullYear(), 0, 1).getTime(), null];
   if (range === "lastyear") return [new Date(now.getFullYear() - 1, 0, 1).getTime(), new Date(now.getFullYear(), 0, 1).getTime()];
@@ -75,6 +78,8 @@ export default function MarketingOfficers({
 
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<Range>("lifetime");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("points");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -83,7 +88,7 @@ export default function MarketingOfficers({
 
   const periodMap = useMemo(() => {
     if (range === "lifetime") return null;
-    const [start, end] = rangeBounds(range);
+    const [start, end] = rangeBounds(range, customFrom, customTo);
     const m = new Map<string, { points: number; afr: number; income: number }>();
     for (const e of entries) {
       const t = new Date(e.created_at).getTime();
@@ -96,7 +101,7 @@ export default function MarketingOfficers({
       m.set(e.officer_id, cur);
     }
     return m;
-  }, [entries, range]);
+  }, [entries, range, customFrom, customTo]);
 
   const computed = useMemo(
     () =>
@@ -140,7 +145,7 @@ export default function MarketingOfficers({
   const safePage = Math.min(page, totalPages);
   const pageRows = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
-  useEffect(() => { setPage(1); }, [search, range, typeFilter, perPage, sortKey, sortDir]);
+  useEffect(() => { setPage(1); }, [search, range, customFrom, customTo, typeFilter, perPage, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -176,6 +181,12 @@ export default function MarketingOfficers({
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or ID…" className="w-full bg-transparent text-sm text-fg outline-none" />
         </div>
         <Select value={range} onChange={(v) => setRange(v as Range)} options={RANGES.map((r) => ({ value: r.key, label: r.label }))} />
+        {range === "custom" && (
+          <>
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="rounded-xl border border-border bg-bg px-2.5 py-2 text-sm text-fg outline-none focus:border-brand-blue/50" aria-label="From date" />
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="rounded-xl border border-border bg-bg px-2.5 py-2 text-sm text-fg outline-none focus:border-brand-blue/50" aria-label="To date" />
+          </>
+        )}
         <Select value={typeFilter} onChange={setTypeFilter} options={[{ value: "all", label: "All roles" }, ...OFFICER_TYPES.map((t) => ({ value: t.code, label: t.label }))]} />
         <ExportMenu rows={filtered} range={range} />
       </div>
@@ -507,7 +518,7 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Client name</label><input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Buyer's name" /></div>
-            <div><label className={labelCls}>Client ID / NID</label><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Optional" /></div>
+            <div><label className={labelCls}>Client ID</label><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Optional" /></div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-brand-blue-tint px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-brand-blue-dark/70">Points</div><div className="text-lg font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div></div>

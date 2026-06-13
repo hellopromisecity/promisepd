@@ -19,7 +19,7 @@ import AddFollowupForm, {
   type StaffOption,
   type ProjectOption,
 } from "../AddFollowupForm";
-import FollowupRow, { type FollowupRowData } from "../FollowupRow";
+import FollowupTable, { type FollowupItem } from "../FollowupTable";
 import { STATUS_META, FOLLOWUP_STATUSES, type FollowupStatus } from "../status";
 import ConvertLeadButton from "../ConvertLeadButton";
 
@@ -32,8 +32,13 @@ export const dynamic = "force-dynamic";
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-type FollowupRecord = FollowupRowData & { created_by: string | null };
+type FollowupRecord = FollowupItem;
 type RecentSubmission = { id: string; name: string; interest: string | null; created_at: string };
+type Submission = { id: string; name: string; phone: string | null; interest: string | null; created_at: string };
+
+/** Dedup key — same person if name + digits-only mobile match. */
+const leadKey = (name: string | null, mobile: string | null) =>
+  `${(name || "").trim().toLowerCase()}|${(mobile || "").replace(/\D/g, "")}`;
 
 export default async function FollowupPage() {
   const me = await getCurrentUser();
@@ -53,30 +58,26 @@ export default async function FollowupPage() {
 
   let query = admin
     .from("client_followups")
-    .select("id, client_name, mobile, interest, status, next_followup, assigned_to, created_by")
+    .select("id, client_name, mobile, interest, status, next_followup, assigned_to, created_by, created_at")
     .order("next_followup", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
   if (!canSeeAll) {
     query = query.or(`created_by.eq.${me.id},assigned_to.eq.${me.id}`);
   }
 
-  const [followupsRes, staffRes, submissionsCountRes, recentRes] = await Promise.all([
+  const [followupsRes, staffRes, subsRes] = await Promise.all([
     query,
     admin.from("profiles").select("id, name").in("role", STAFF_ROLES).order("name", { ascending: true }),
-    admin.from("contact_submissions").select("*", { count: "exact", head: true }),
-    admin
-      .from("contact_submissions")
-      .select("id, name, interest, created_at")
-      .order("created_at", { ascending: false })
-      .limit(8),
+    admin.from("contact_submissions").select("id, name, phone, interest, created_at").order("created_at", { ascending: false }),
   ]);
 
   const followups = (followupsRes.data ?? []) as FollowupRecord[];
   const staff: StaffOption[] = (staffRes.data ?? []).map((p) => ({ id: p.id, name: p.name || "Unnamed" }));
   const projects: ProjectOption[] = PROJECTS.map((p) => ({ slug: p.slug, name: p.name }));
-  const recent = (recentRes.data ?? []) as RecentSubmission[];
+  const subs = (subsRes.data ?? []) as Submission[];
+  const recent: RecentSubmission[] = subs.slice(0, 8).map((s) => ({ id: s.id, name: s.name, interest: s.interest, created_at: s.created_at }));
 
-  // Pipeline counts from the (role-scoped) follow-ups.
+  // Pipeline counts from the (role-scoped) follow-ups (per record).
   const counts: Record<FollowupStatus, number> = {
     new: 0, contacted: 0, interested: 0, negotiation: 0, closed_won: 0, closed_lost: 0,
   };
@@ -85,8 +86,14 @@ export default async function FollowupPage() {
     if (s in counts) counts[s] += 1;
   }
   const maxCount = Math.max(1, ...Object.values(counts));
-  const submissionsCount = submissionsCountRes.count ?? 0;
-  const totalLeads = submissionsCount + followups.length;
+
+  // Unique-people counts (dedupe by name + mobile across enquiries + follow-ups).
+  const inboundUnique = new Set(subs.map((s) => leadKey(s.name, s.phone))).size;
+  const trackedUnique = new Set(followups.map((f) => leadKey(f.client_name, f.mobile))).size;
+  const totalLeads = new Set([
+    ...subs.map((s) => leadKey(s.name, s.phone)),
+    ...followups.map((f) => leadKey(f.client_name, f.mobile)),
+  ]).size;
 
   return (
     <div className="space-y-6">
@@ -109,9 +116,9 @@ export default async function FollowupPage() {
 
       {/* Lead KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Total leads" value={totalLeads.toLocaleString("en-US")} sub="enquiries + follow-ups" icon={Megaphone} />
-        <StatCard label="Inbound enquiries" value={submissionsCount.toLocaleString("en-US")} sub="from the contact form" icon={Inbox} tone="neutral" />
-        <StatCard label="Tracked follow-ups" value={followups.length.toLocaleString("en-US")} sub="in the pipeline" icon={Users} tone="info" />
+        <StatCard label="Total leads" value={totalLeads.toLocaleString("en-US")} sub="unique people" icon={Megaphone} />
+        <StatCard label="Inbound enquiries" value={inboundUnique.toLocaleString("en-US")} sub="unique, from the form" icon={Inbox} tone="neutral" />
+        <StatCard label="Tracked follow-ups" value={trackedUnique.toLocaleString("en-US")} sub="unique in pipeline" icon={Users} tone="info" />
         <StatCard label="Closed won" value={counts.closed_won.toLocaleString("en-US")} sub="deals secured" icon={ListChecks} tone="success" />
       </div>
 
@@ -177,8 +184,7 @@ export default async function FollowupPage() {
         </Card>
       </div>
 
-      {/* Follow-up pipeline table */}
-      <h2 className="pt-2 text-sm font-bold text-fg">Follow-up pipeline</h2>
+      {/* Follow-up pipeline — searchable / sortable / paginated grid + delete */}
       {followups.length === 0 ? (
         <EmptyState
           icon={Users}
@@ -190,40 +196,7 @@ export default async function FollowupPage() {
           }
         />
       ) : (
-        <TableShell>
-          <thead>
-            <tr>
-              <th className={thCls}>Client</th>
-              <th className={thCls}>Mobile</th>
-              <th className={thCls}>Interest</th>
-              <th className={thCls}>Status</th>
-              <th className={thCls}>Next follow-up</th>
-              <th className={thCls}>Assigned to</th>
-            </tr>
-          </thead>
-          <tbody>
-            {followups.map((row) => {
-              const owns = row.created_by === me.id || row.assigned_to === me.id;
-              const editable = canSeeAll || owns;
-              return (
-                <FollowupRow
-                  key={row.id}
-                  row={{
-                    id: row.id,
-                    client_name: row.client_name,
-                    mobile: row.mobile,
-                    interest: row.interest,
-                    status: row.status,
-                    next_followup: row.next_followup,
-                    assigned_to: row.assigned_to,
-                  }}
-                  staff={staff}
-                  editable={editable}
-                />
-              );
-            })}
-          </tbody>
-        </TableShell>
+        <FollowupTable items={followups} staff={staff} canSeeAll={canSeeAll} meId={me.id} />
       )}
     </div>
   );

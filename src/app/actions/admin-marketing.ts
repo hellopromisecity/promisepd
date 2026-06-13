@@ -219,6 +219,33 @@ export async function convertLead(
   });
 }
 
+/** Delete a follow-up.  Managers/admins delete any; staff only their own. */
+export async function deleteFollowup(id: string): Promise<ActionResult> {
+  return runAction(async () => {
+    const me = await requireStaff();
+    if (!id) throw new Error("Missing follow-up id.");
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    if (!isManager(me.role)) {
+      const { data: row } = await admin
+        .from("client_followups")
+        .select("created_by, assigned_to")
+        .eq("id", id)
+        .maybeSingle();
+      if (!row || (row.created_by !== me.id && row.assigned_to !== me.id)) {
+        throw new AuthzError("You can only delete your own follow-ups.");
+      }
+    }
+
+    const { error } = await admin.from("client_followups").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    await logAudit({ action: "delete", entity: "client_followup", entityId: id });
+    bothPaths();
+    return { message: "Follow-up deleted." };
+  });
+}
+
 // ── Marketing officers + points (leaderboard) ─────────────────────
 
 const VALID_TYPES = new Set(OFFICER_TYPES.map((t) => t.code));

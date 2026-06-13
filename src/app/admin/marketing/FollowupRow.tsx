@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { Badge, tdCls } from "@/components/admin/ui";
-import { updateFollowup } from "@/app/actions/admin-marketing";
+import { updateFollowup, deleteFollowup } from "@/app/actions/admin-marketing";
 import { STATUS_META, FOLLOWUP_STATUSES, type FollowupStatus } from "./status";
 import type { StaffOption } from "./AddFollowupForm";
 
@@ -34,14 +34,27 @@ export default function FollowupRow({
   row,
   staff,
   editable,
+  canDelete = false,
 }: {
   row: FollowupRowData;
   staff: StaffOption[];
   editable: boolean;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [deleting, startDelete] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function onDelete() {
+    if (!window.confirm(`Delete the follow-up for “${row.client_name}”?`)) return;
+    setError(null);
+    startDelete(async () => {
+      const res = await deleteFollowup(row.id);
+      if (res.ok) router.refresh();
+      else setError(res.error);
+    });
+  }
 
   // Local optimistic mirror so the controls reflect the chosen value.
   const [status, setStatus] = useState(row.status);
@@ -164,6 +177,14 @@ export default function FollowupRow({
           </span>
         ) : (
           <span className="text-fg-faint">Unassigned</span>
+        )}
+      </td>
+
+      <td className={`${tdCls} text-right`}>
+        {canDelete && (
+          <button onClick={onDelete} disabled={deleting} aria-label="Delete follow-up" className="rounded-md p-1.5 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50">
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </button>
         )}
       </td>
     </tr>
