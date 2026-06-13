@@ -4,7 +4,7 @@ import LeaderboardView from "@/components/LeaderboardView";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 import { LEADERBOARD_EN } from "@/lib/pages.en";
-import { getLeaderboardRows } from "@/app/leaderboard/page";
+import { getLeaderboardData } from "@/app/leaderboard/page";
 
 export const revalidate = 120;
 
@@ -52,12 +52,12 @@ export default async function EnLeaderboardPage() {
     { name: "Home", url: `${SITE_URL}/en` },
     { name: "Leaderboard", url: `${SITE_URL}/en/leaderboard` },
   ]);
-  const rows = await getLeaderboardRows();
+  const { officers, entries } = await getLeaderboardData();
 
   return (
     <>
       <JsonLd data={breadcrumb} />
-      <LeaderboardView rows={rows} />
+      <LeaderboardView officers={officers} entries={entries} />
     </>
   );
 }

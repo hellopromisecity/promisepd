@@ -347,6 +347,7 @@ export type Database = {
           reference: string | null;
           points: number;
           afr_total: number;
+          income_total: number;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -362,6 +363,7 @@ export type Database = {
           reference?: string | null;
           points?: number;
           afr_total?: number;
+          income_total?: number;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -378,6 +380,7 @@ export type Database = {
           quantity: number;
           points: number;
           afr: number;
+          income: number;
           note: string | null;
           created_by: string | null;
           created_at: string;
@@ -390,6 +393,7 @@ export type Database = {
           quantity?: number;
           points: number;
           afr?: number;
+          income?: number;
           note?: string | null;
           created_by?: string | null;
           created_at?: string;
@@ -403,6 +407,7 @@ export type Database = {
           label: string;
           points: number;
           afr: number;
+          income: number;
           sort: number;
           active: boolean;
           created_at: string;
@@ -412,6 +417,7 @@ export type Database = {
           label: string;
           points?: number;
           afr?: number;
+          income?: number;
           sort?: number;
           active?: boolean;
           created_at?: string;

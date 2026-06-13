@@ -341,17 +341,18 @@ export async function awardPoints(input: {
 
     const { data: item, error: itemErr } = await admin
       .from("marketing_point_items")
-      .select("label, points, afr")
+      .select("label, points, afr, income")
       .eq("id", input.itemId)
       .maybeSingle();
     if (itemErr) throw new Error(itemErr.message);
     if (!item) throw new AuthzError("Point item not found");
     const added = round2(Number(item.points || 0) * qty);
     const afrAdded = round2(Number(item.afr || 0) * qty);
+    const incomeAdded = round2(Number(item.income || 0) * qty);
 
     const { data: officer, error: readErr } = await admin
       .from("marketing_officers")
-      .select("points, afr_total, name")
+      .select("points, afr_total, income_total, name")
       .eq("id", input.officerId)
       .maybeSingle();
     if (readErr) throw new Error(readErr.message);
@@ -363,6 +364,7 @@ export async function awardPoints(input: {
       quantity: qty,
       points: added,
       afr: afrAdded,
+      income: incomeAdded,
       note: clean(input.note),
       created_by: me.id,
     });
@@ -373,6 +375,7 @@ export async function awardPoints(input: {
       .update({
         points: round2(Number(officer.points || 0) + added),
         afr_total: round2(Number(officer.afr_total || 0) + afrAdded),
+        income_total: round2(Number(officer.income_total || 0) + incomeAdded),
       })
       .eq("id", input.officerId);
     if (updErr) throw new Error(updErr.message);
@@ -390,7 +393,7 @@ export async function awardPoints(input: {
 
 // ── Point catalogue (admin-editable points per item / sale) ───────
 
-export async function addPointItem(label: string, points: number, afr = 0): Promise<ActionResult<{ id: string }>> {
+export async function addPointItem(label: string, points: number, afr = 0, income = 0): Promise<ActionResult<{ id: string }>> {
   return runAction(async () => {
     await requireManager();
     const admin = getAdmin();
@@ -401,7 +404,7 @@ export async function addPointItem(label: string, points: number, afr = 0): Prom
 
     const { data, error } = await admin
       .from("marketing_point_items")
-      .insert({ label: l, points: p, afr: Math.max(0, round2(afr)), sort: 99 })
+      .insert({ label: l, points: p, afr: Math.max(0, round2(afr)), income: Math.max(0, round2(income)), sort: 99 })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -414,7 +417,7 @@ export async function addPointItem(label: string, points: number, afr = 0): Prom
 
 export async function updatePointItem(
   id: string,
-  input: { label?: string; points?: number; afr?: number },
+  input: { label?: string; points?: number; afr?: number; income?: number },
 ): Promise<ActionResult> {
   return runAction(async () => {
     await requireManager();
@@ -422,10 +425,11 @@ export async function updatePointItem(
     const admin = getAdmin();
     if (!admin) throw new Error("Database is not configured.");
 
-    const patch: { label?: string; points?: number; afr?: number } = {};
+    const patch: { label?: string; points?: number; afr?: number; income?: number } = {};
     if (typeof input.label === "string" && input.label.trim()) patch.label = input.label.trim();
     if (input.points != null) patch.points = Math.max(0, round2(input.points));
     if (input.afr != null) patch.afr = Math.max(0, round2(input.afr));
+    if (input.income != null) patch.income = Math.max(0, round2(input.income));
     if (!Object.keys(patch).length) throw new Error("Nothing to update.");
 
     const { error } = await admin.from("marketing_point_items").update(patch).eq("id", id);
@@ -434,6 +438,34 @@ export async function updatePointItem(
     await logAudit({ action: "update", entity: "point_item", entityId: id, detail: `Updated point item (${JSON.stringify(patch)})` });
     revalidatePath("/admin/marketing");
     return { message: "Point item updated." };
+  });
+}
+
+/** Save every point item's values at once (one Save button for all). */
+export async function savePointItems(
+  items: { id: string; points: number; afr: number; income: number }[],
+): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    for (const it of items) {
+      if (!it.id) continue;
+      const { error } = await admin
+        .from("marketing_point_items")
+        .update({
+          points: Math.max(0, round2(it.points)),
+          afr: Math.max(0, round2(it.afr)),
+          income: Math.max(0, round2(it.income)),
+        })
+        .eq("id", it.id);
+      if (error) throw new Error(error.message);
+    }
+
+    await logAudit({ action: "update", entity: "point_item", detail: `Saved ${items.length} point items` });
+    revalidatePath("/admin/marketing");
+    return { message: "All point values saved." };
   });
 }
 
