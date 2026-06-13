@@ -18,6 +18,7 @@ import {
 } from "@/lib/admin-guard";
 import { isManager } from "@/lib/auth";
 import { FOLLOWUP_STATUSES, type FollowupStatus } from "@/app/admin/marketing/status";
+import { pointsForProject, OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
 
 function isStatus(v: unknown): v is FollowupStatus {
   return typeof v === "string" && (FOLLOWUP_STATUSES as readonly string[]).includes(v);
@@ -215,5 +216,159 @@ export async function convertLead(
     });
     bothPaths();
     return { message: "Lead converted to follow-up" };
+  });
+}
+
+// ── Marketing officers + points (leaderboard) ─────────────────────
+
+const VALID_TYPES = new Set(OFFICER_TYPES.map((t) => t.code));
+
+function revalidateLeaderboard() {
+  revalidatePath("/admin/marketing");
+  revalidatePath("/leaderboard");
+  revalidatePath("/en/leaderboard");
+}
+
+export type OfficerInput = {
+  name: string;
+  officer_type: OfficerType;
+  position?: string;
+  officer_code?: string;
+  district?: string;
+  mobile?: string;
+  reference?: string;
+};
+
+/** Add a marketing officer (MO / AMO / MD / HM). */
+export async function addOfficer(input: OfficerInput): Promise<ActionResult<{ id: string }>> {
+  return runAction(async () => {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    const name = (input.name ?? "").trim();
+    if (!name) throw new Error("Officer name is required.");
+    const type = VALID_TYPES.has(input.officer_type) ? input.officer_type : "MO";
+
+    const { data, error } = await admin
+      .from("marketing_officers")
+      .insert({
+        name,
+        officer_type: type,
+        position: clean(input.position),
+        officer_code: clean(input.officer_code),
+        district: clean(input.district),
+        mobile: clean(input.mobile),
+        reference: clean(input.reference),
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "create", entity: "marketing_officer", entityId: data.id, detail: `Added ${type} “${name}”` });
+    revalidateLeaderboard();
+    return { data: { id: data.id }, message: "Officer added." };
+  });
+}
+
+export async function updateOfficer(id: string, input: OfficerInput): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    if (!id) throw new Error("Missing officer id.");
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    const name = (input.name ?? "").trim();
+    if (!name) throw new Error("Officer name is required.");
+    const type = VALID_TYPES.has(input.officer_type) ? input.officer_type : "MO";
+
+    const { error } = await admin
+      .from("marketing_officers")
+      .update({
+        name,
+        officer_type: type,
+        position: clean(input.position),
+        officer_code: clean(input.officer_code),
+        district: clean(input.district),
+        mobile: clean(input.mobile),
+        reference: clean(input.reference),
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "update", entity: "marketing_officer", entityId: id, detail: `Updated officer “${name}”` });
+    revalidateLeaderboard();
+    return { message: "Officer updated." };
+  });
+}
+
+export async function deleteOfficer(id: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    if (!id) throw new Error("Missing officer id.");
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    const { data: o } = await admin.from("marketing_officers").select("name").eq("id", id).maybeSingle();
+    const { error } = await admin.from("marketing_officers").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "delete", entity: "marketing_officer", entityId: id, detail: o ? `Deleted officer “${o.name}”` : `Deleted officer ${id}` });
+    revalidateLeaderboard();
+    return { message: "Officer deleted." };
+  });
+}
+
+/** Award points: officer + project (auto value) × quantity → added to the
+ *  officer's running total and recorded as a point entry. */
+export async function awardPoints(input: {
+  officerId: string;
+  projectSlug?: string;
+  quantity: number;
+  note?: string;
+}): Promise<ActionResult<{ points: number }>> {
+  return runAction(async () => {
+    const me = await requireManager();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    if (!input.officerId) throw new Error("Pick an officer.");
+    const qty = Math.max(1, Math.floor(Number(input.quantity) || 1));
+    const slug = clean(input.projectSlug);
+    if (!slug) throw new Error("Pick a project.");
+    const added = pointsForProject(slug) * qty;
+
+    const { data: officer, error: readErr } = await admin
+      .from("marketing_officers")
+      .select("points, name")
+      .eq("id", input.officerId)
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (!officer) throw new AuthzError("Officer not found");
+
+    const { error: entryErr } = await admin.from("marketing_point_entries").insert({
+      officer_id: input.officerId,
+      project_slug: slug,
+      quantity: qty,
+      points: added,
+      note: clean(input.note),
+      created_by: me.id,
+    });
+    if (entryErr) throw new Error(entryErr.message);
+
+    const { error: updErr } = await admin
+      .from("marketing_officers")
+      .update({ points: (officer.points ?? 0) + added })
+      .eq("id", input.officerId);
+    if (updErr) throw new Error(updErr.message);
+
+    await logAudit({
+      action: "award",
+      entity: "marketing_points",
+      entityId: input.officerId,
+      detail: `+${added} pts to “${officer.name}” (${slug} ×${qty})`,
+    });
+    revalidateLeaderboard();
+    return { data: { points: added }, message: `+${added} points added.` };
   });
 }

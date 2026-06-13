@@ -335,6 +335,62 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["org_settings"]["Insert"]>;
         Relationships: [];
       };
+      marketing_officers: {
+        Row: {
+          id: string;
+          name: string;
+          officer_type: string;
+          position: string | null;
+          officer_code: string | null;
+          district: string | null;
+          mobile: string | null;
+          reference: string | null;
+          points: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          officer_type?: string;
+          position?: string | null;
+          officer_code?: string | null;
+          district?: string | null;
+          mobile?: string | null;
+          reference?: string | null;
+          points?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_officers"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_point_entries: {
+        Row: {
+          id: string;
+          officer_id: string;
+          project_slug: string | null;
+          quantity: number;
+          points: number;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          officer_id: string;
+          project_slug?: string | null;
+          quantity?: number;
+          points: number;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_point_entries"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

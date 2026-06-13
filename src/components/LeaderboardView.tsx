@@ -23,6 +23,8 @@ import { useLocale } from "./LocaleProvider";
 
 const PLACEHOLDER_ROWS = Array.from({ length: 8 }, (_, i) => ({ rank: i + 1 }));
 
+export type LeaderRow = { name: string; sub: string; points: number };
+
 const RANK_DECOR: Record<
   number,
   { icon: typeof Trophy; bg: string; ring: string; text: string }
@@ -32,7 +34,8 @@ const RANK_DECOR: Record<
   3: { icon: Award, bg: "bg-brand-red", ring: "ring-brand-red/30", text: "text-white" },
 };
 
-export default function LeaderboardView() {
+export default function LeaderboardView({ rows = [] }: { rows?: LeaderRow[] }) {
+  const hasData = rows.length > 0;
   const isEn = useLocale() === "en";
   const L = LEADERBOARD_EN;
   const lp = (href: string) => (isEn ? `/en${href}` : href);
@@ -125,11 +128,13 @@ export default function LeaderboardView() {
               <div className="text-right">{isEn ? L.thEarnings : "আয়"}</div>
             </div>
 
-            {PLACEHOLDER_ROWS.map((row) => {
-              const decor = RANK_DECOR[row.rank];
+            {(hasData ? rows : PLACEHOLDER_ROWS).map((item, idx) => {
+              const rank = idx + 1;
+              const decor = RANK_DECOR[rank];
+              const r = hasData ? (item as LeaderRow) : null;
               return (
                 <div
-                  key={row.rank}
+                  key={rank}
                   className="px-5 sm:px-6 py-4 grid grid-cols-[3rem_1fr_5rem_6rem] sm:grid-cols-[3rem_1fr_8rem_8rem] gap-3 items-center border-t border-border"
                 >
                   <div>
@@ -141,17 +146,34 @@ export default function LeaderboardView() {
                       </div>
                     ) : (
                       <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-bg-soft text-fg-muted font-bold text-sm">
-                        {num(row.rank)}
+                        {num(rank)}
                       </div>
                     )}
                   </div>
 
-                  <div className="space-y-1.5">
-                    <div className="h-3 w-32 rounded-full bg-bg-soft-2" />
-                    <div className="h-2.5 w-20 rounded-full bg-bg-soft" />
-                  </div>
-                  <div className="ml-auto h-4 w-12 rounded-full bg-bg-soft-2" />
-                  <div className="ml-auto h-4 w-16 rounded-full bg-bg-soft-2" />
+                  {r ? (
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-fg">{r.name}</div>
+                      <div className="truncate text-xs text-fg-muted">{r.sub}</div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-32 rounded-full bg-bg-soft-2" />
+                      <div className="h-2.5 w-20 rounded-full bg-bg-soft" />
+                    </div>
+                  )}
+
+                  {r ? (
+                    <div className="ml-auto text-right font-bold text-fg">{num(r.points)}</div>
+                  ) : (
+                    <div className="ml-auto h-4 w-12 rounded-full bg-bg-soft-2" />
+                  )}
+
+                  {r ? (
+                    <div className="ml-auto text-right text-fg-faint">—</div>
+                  ) : (
+                    <div className="ml-auto h-4 w-16 rounded-full bg-bg-soft-2" />
+                  )}
                 </div>
               );
             })}
@@ -190,11 +212,13 @@ export default function LeaderboardView() {
                 {isEn ? L.ctaContactBtn : "সরাসরি যোগাযোগ"}
               </Link>
             </div>
-            <p className="mt-6 text-[11px] text-fg-faint">
-              {isEn
-                ? L.note
-                : "* লাইভ র‍্যাঙ্কিং ডেটা শীঘ্রই সংযুক্ত হবে — পার্টনার প্রোগ্রাম সক্রিয় হলে।"}
-            </p>
+            {!hasData && (
+              <p className="mt-6 text-[11px] text-fg-faint">
+                {isEn
+                  ? L.note
+                  : "* লাইভ র‍্যাঙ্কিং ডেটা শীঘ্রই সংযুক্ত হবে — পার্টনার প্রোগ্রাম সক্রিয় হলে।"}
+              </p>
+            )}
           </div>
         </div>
       </section>

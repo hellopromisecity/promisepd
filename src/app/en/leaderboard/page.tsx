@@ -4,6 +4,9 @@ import LeaderboardView from "@/components/LeaderboardView";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 import { LEADERBOARD_EN } from "@/lib/pages.en";
+import { getLeaderboardRows } from "@/app/leaderboard/page";
+
+export const revalidate = 120;
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
@@ -44,16 +47,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function EnLeaderboardPage() {
+export default async function EnLeaderboardPage() {
   const breadcrumb = breadcrumbSchema([
     { name: "Home", url: `${SITE_URL}/en` },
     { name: "Leaderboard", url: `${SITE_URL}/en/leaderboard` },
   ]);
+  const rows = await getLeaderboardRows();
 
   return (
     <>
       <JsonLd data={breadcrumb} />
-      <LeaderboardView />
+      <LeaderboardView rows={rows} />
     </>
   );
 }

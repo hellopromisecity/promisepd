@@ -22,6 +22,9 @@ import {
 } from "@/components/admin/ui";
 import { STATUS_META, FOLLOWUP_STATUSES, type FollowupStatus } from "./status";
 import ConvertLeadButton from "./ConvertLeadButton";
+import { PROJECTS } from "@/lib/site";
+import { pointsForProject } from "@/lib/marketing";
+import MarketingOfficers, { type Officer, type ProjectOpt } from "./MarketingOfficers";
 
 export const metadata: Metadata = {
   title: "Marketing",
@@ -59,7 +62,7 @@ export default async function MarketingOverviewPage() {
 
   // Count inbound submissions + tracked follow-ups, the status breakdown, and
   // the most recent contact submissions — all in parallel.
-  const [submissionsCountRes, followupsCountRes, statusRowsRes, recentRes] =
+  const [submissionsCountRes, followupsCountRes, statusRowsRes, recentRes, officersRes] =
     await Promise.all([
       admin.from("contact_submissions").select("*", { count: "exact", head: true }),
       admin.from("client_followups").select("*", { count: "exact", head: true }),
@@ -69,7 +72,18 @@ export default async function MarketingOverviewPage() {
         .select("id, name, interest, created_at")
         .order("created_at", { ascending: false })
         .limit(8),
+      admin
+        .from("marketing_officers")
+        .select("id, name, officer_type, position, district, officer_code, mobile, points")
+        .order("points", { ascending: false }),
     ]);
+
+  const officers = (officersRes.data ?? []) as Officer[];
+  const projectOpts: ProjectOpt[] = PROJECTS.map((p) => ({
+    slug: p.slug,
+    name: p.name,
+    points: pointsForProject(p.slug),
+  }));
 
   const submissionsCount = submissionsCountRes.count ?? 0;
   const followupsCount = followupsCountRes.count ?? 0;
@@ -137,6 +151,9 @@ export default async function MarketingOverviewPage() {
           tone="success"
         />
       </div>
+
+      {/* Marketing officer leaderboard — add officers + award points */}
+      <MarketingOfficers officers={officers} projects={projectOpts} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Pipeline by status */}

@@ -1,8 +1,37 @@
 import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
-import LeaderboardView from "@/components/LeaderboardView";
+import LeaderboardView, { type LeaderRow } from "@/components/LeaderboardView";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { officerTypeLabel } from "@/lib/marketing";
+
+// Re-rendered when points change (awardPoints calls revalidatePath), and
+// at most every few minutes otherwise — stays cached/fast.
+export const revalidate = 120;
+
+/** Top marketing officers, ranked by points, for the public board. */
+export async function getLeaderboardRows(): Promise<LeaderRow[]> {
+  try {
+    const admin = createAdminClient();
+    if (!admin) return [];
+    const { data } = await admin
+      .from("marketing_officers")
+      .select("name, officer_type, position, district, points")
+      .eq("active", true)
+      .order("points", { ascending: false })
+      .limit(50);
+    return (data ?? []).map((o) => ({
+      name: o.name,
+      sub:
+        [o.position, o.district].filter(Boolean).join(" · ") ||
+        officerTypeLabel(o.officer_type),
+      points: o.points ?? 0,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
@@ -41,16 +70,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LeaderboardPage() {
+export default async function LeaderboardPage() {
   const breadcrumb = breadcrumbSchema([
     { name: "হোম", url: SITE_URL },
     { name: "লিডারবোর্ড", url: `${SITE_URL}/leaderboard` },
   ]);
+  const rows = await getLeaderboardRows();
 
   return (
     <>
       <JsonLd data={breadcrumb} />
-      <LeaderboardView />
+      <LeaderboardView rows={rows} />
     </>
   );
 }
