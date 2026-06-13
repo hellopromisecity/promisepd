@@ -70,8 +70,8 @@ export const DIVISION_EN: Record<
     ],
   },
   "interior-3d-design": {
-    name: "Engineering Plan & Interior Design",
-    tagline: "See your dream before it is built",
+    name: "Ahbab Interior and Architects",
+    tagline: "Engineering Plans & Interior Design",
     heroTitle: "Your story on four walls — we turn it into art.",
     description:
       "Interior design, engineering plans and photorealistic 3D rendering for homes, offices and shops — custom solutions to match your taste, needs and budget.",

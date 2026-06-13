@@ -304,10 +304,10 @@ export const DIVISIONS: Division[] = [
     // Interior & 3D uses ASH for an elegant, neutral design-canvas feel
     // — balances the palette (2 red + 2 blue + 1 ash across the 5 divisions).
     slug: "interior-3d-design",
-    nameEn: "Engineering Plan & Interior Design",
-    nameBn: "ইঞ্জিনিয়ারিং প্ল্যান ও ইন্টেরিয়র ডিজাইন",
-    shortBn: "ইঞ্জিনিয়ারিং ও ইন্টেরিয়র",
-    tagline: "নির্মাণের আগেই দেখুন আপনার স্বপ্ন",
+    nameEn: "Ahbab Interior and Architects",
+    nameBn: "আহবাব ইন্টেরিয়র অ্যান্ড আর্কিটেক্টস",
+    shortBn: "আহবাব ইন্টেরিয়র",
+    tagline: "ইঞ্জিনিয়ারিং প্ল্যান ও ইন্টেরিয়র ডিজাইন",
     heroTitle: "চার দেয়ালে আপনার গল্প — আমরা শিল্প করে তুলি।",
     description:
       "বাড়ি, অফিস ও দোকানের ইন্টেরিয়র ডিজাইন, ইঞ্জিনিয়ারিং প্ল্যান ও ফটোরিয়ালিস্টিক 3D রেন্ডারিং — আপনার রুচি, প্রয়োজন ও বাজেট অনুযায়ী কাস্টম সমাধান।",
