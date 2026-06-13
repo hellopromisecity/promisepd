@@ -8,6 +8,7 @@
  *  Returns null when nobody is logged in or Supabase isn't configured —
  *  callers (server components, the account page) treat null as "guest". */
 
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 export type Role = "member" | "staff" | "manager" | "admin";
@@ -49,7 +50,10 @@ export type Member = {
   createdAt: string | null;
 };
 
-export async function getCurrentUser(): Promise<Member | null> {
+/** Wrapped in React `cache` so the layout, page and any components in
+ *  one request share a SINGLE auth + profile round-trip instead of
+ *  repeating it (a big latency win on the auth-gated /admin pages). */
+export const getCurrentUser = cache(async (): Promise<Member | null> => {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
 
   try {
@@ -86,4 +90,4 @@ export async function getCurrentUser(): Promise<Member | null> {
   } catch {
     return null;
   }
-}
+});

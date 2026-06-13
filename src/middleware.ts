@@ -71,8 +71,17 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run on everything except Next internals and static asset files.
+  // Only run on the auth-gated areas and the auth pages themselves.
+  // Public marketing pages skip the middleware entirely, so they never
+  // pay for a Supabase auth round-trip — they stay instant.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|txt|xml)$).*)",
+    "/admin/:path*",
+    "/account/:path*",
+    "/login",
+    "/signup",
+    "/en/admin/:path*",
+    "/en/account/:path*",
+    "/en/login",
+    "/en/signup",
   ],
 };
