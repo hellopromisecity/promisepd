@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Trash2, Loader2 } from "lucide-react";
 import { Badge, TableShell, thCls, tdCls } from "@/components/admin/ui";
 import { deleteTransaction } from "@/app/actions/admin-finance";
+import { confirmDialog } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Toast";
 
 export type TxnListRow = {
   id: string;
@@ -71,14 +73,15 @@ export default function TxnTable({
     });
   }
 
-  function remove(id: string) {
-    if (!window.confirm("Delete this transaction? This can’t be undone.")) return;
+  async function remove(id: string) {
+    const ok = await confirmDialog({ title: "Delete transaction", message: "Delete this transaction? This can’t be undone.", confirmText: "Delete", danger: true });
+    if (!ok) return;
     setPendingId(id);
     start(async () => {
       const res = await deleteTransaction(id);
       setPendingId(null);
       if (res.ok) router.refresh();
-      else window.alert(res.error);
+      else toast(res.error, "error");
     });
   }
 

@@ -10,6 +10,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, SquarePen, Trash2, ExternalLink, Link2, Loader2 } from "lucide-react";
 import { deletePost } from "@/app/actions/admin-blog";
+import { confirmDialog } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Toast";
 
 export type BlogRow = {
   id: string;
@@ -57,14 +59,15 @@ export default function BlogList({ rows, newButton }: { rows: BlogRow[]; newButt
     });
   }, [rows, tab, q]);
 
-  function onDelete(row: BlogRow) {
-    if (!window.confirm(`Delete “${row.title}”? This can’t be undone.`)) return;
+  async function onDelete(row: BlogRow) {
+    const ok = await confirmDialog({ title: "Delete article", message: `Delete “${row.title}”? This can’t be undone.`, confirmText: "Delete", danger: true });
+    if (!ok) return;
     setBusyId(row.id);
     startTransition(async () => {
       const res = await deletePost(row.id);
       setBusyId(null);
       if (res.ok) router.refresh();
-      else window.alert(res.error);
+      else toast(res.error, "error");
     });
   }
 

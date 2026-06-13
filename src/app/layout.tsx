@@ -11,6 +11,8 @@ import RegisterSW from "@/components/RegisterSW";
 import SkipLink from "@/components/SkipLink";
 import SiteChrome from "@/components/SiteChrome";
 import NextTopLoader from "nextjs-toploader";
+import DialogHost from "@/components/ui/Dialog";
+import ToastHost from "@/components/ui/Toast";
 import JsonLd from "@/components/JsonLd";
 import {
   organizationSchema,
@@ -168,6 +170,9 @@ export default function RootLayout({
           <PWAInstallPrompt />
         </SiteChrome>
         <RegisterSW />
+        {/* Site-wide branded dialog + toast (replace native confirm/alert). */}
+        <DialogHost />
+        <ToastHost />
       </body>
     </html>
   );

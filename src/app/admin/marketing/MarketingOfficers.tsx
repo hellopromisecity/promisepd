@@ -22,6 +22,8 @@ import {
   addOfficer, updateOfficer, deleteOfficer, awardPoints,
   addPointItem, deletePointItem, savePointItems,
 } from "@/app/actions/admin-marketing";
+import { confirmDialog } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Toast";
 
 export type Officer = {
   id: string; name: string; officer_type: string; position: string | null;
@@ -370,11 +372,12 @@ function DeleteBtn({ id, name, onDone }: { id: string; name: string; onDone: () 
   const [pending, start] = useTransition();
   return (
     <button
-      onClick={() => {
-        if (!window.confirm(`Remove “${name}” from the leaderboard?`)) return;
+      onClick={async () => {
+        const ok = await confirmDialog({ title: "Remove officer", message: `Remove “${name}” from the leaderboard?`, confirmText: "Remove", danger: true });
+        if (!ok) return;
         start(async () => {
           const res = await deleteOfficer(id);
-          if (res.ok) onDone(); else window.alert(res.error);
+          if (res.ok) onDone(); else toast(res.error, "error");
         });
       }}
       disabled={pending}
@@ -604,7 +607,7 @@ function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: (
           <div key={d.id} className="rounded-xl bg-bg-soft px-3 py-2.5">
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-sm text-fg">{d.label}</span>
-              <button onClick={() => { if (window.confirm(`Delete “${d.label}”?`)) remove(d.id); }} disabled={pending} className="shrink-0 rounded-md p-1 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
+              <button onClick={async () => { if (await confirmDialog({ title: "Delete item", message: `Delete “${d.label}”?`, confirmText: "Delete", danger: true })) remove(d.id); }} disabled={pending} className="shrink-0 rounded-md p-1 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <label className="block"><span className="text-[10px] text-fg-faint">Points</span><input type="number" step="0.01" min={0} className={num} value={d.points} onChange={(e) => setField(d.id, "points", e.target.value)} /></label>

@@ -20,6 +20,8 @@ import {
   Table as TableIcon, Link2, Image as ImageIcon, Upload, Code2, Loader2,
 } from "lucide-react";
 import { uploadImage } from "@/app/actions/upload-image";
+import { promptDialog } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Toast";
 
 const EDITOR_CLASS =
   "[&_.ProseMirror]:min-h-[360px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:px-4 [&_.ProseMirror]:py-3 [&_.ProseMirror]:text-fg [&_.ProseMirror]:leading-relaxed " +
@@ -66,16 +68,16 @@ export default function RichEditor({
     },
   });
 
-  const insertImageUrl = useCallback(() => {
+  const insertImageUrl = useCallback(async () => {
     if (!editor) return;
-    const url = window.prompt("Image URL");
+    const url = await promptDialog({ title: "Insert image", message: "Image URL", placeholder: "https://…" });
     if (url) editor.chain().focus().setImage({ src: url }).run();
   }, [editor]);
 
-  const setLink = useCallback(() => {
+  const setLink = useCallback(async () => {
     if (!editor) return;
     const prev = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", prev ?? "https://");
+    const url = await promptDialog({ title: "Add link", message: "Link URL", defaultValue: prev ?? "https://" });
     if (url === null) return;
     if (url === "") editor.chain().focus().extendMarkRange("link").unsetLink().run();
     else editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
@@ -91,7 +93,7 @@ export default function RichEditor({
         fd.append("folder", "blog");
         const res = await uploadImage(fd);
         if (res.ok) editor.chain().focus().setImage({ src: res.url }).run();
-        else window.alert(res.error);
+        else toast(res.error, "error");
       } finally {
         setUploading(false);
       }

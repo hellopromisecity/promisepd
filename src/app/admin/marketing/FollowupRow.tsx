@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import { Badge, tdCls } from "@/components/admin/ui";
 import { updateFollowup, deleteFollowup } from "@/app/actions/admin-marketing";
+import { confirmDialog } from "@/components/ui/Dialog";
 import { STATUS_META, FOLLOWUP_STATUSES, type FollowupStatus } from "./status";
 import type { StaffOption } from "./AddFollowupForm";
 
@@ -46,8 +47,9 @@ export default function FollowupRow({
   const [deleting, startDelete] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function onDelete() {
-    if (!window.confirm(`Delete the follow-up for “${row.client_name}”?`)) return;
+  async function onDelete() {
+    const ok = await confirmDialog({ title: "Delete follow-up", message: `Delete the follow-up for “${row.client_name}”?`, confirmText: "Delete", danger: true });
+    if (!ok) return;
     setError(null);
     startDelete(async () => {
       const res = await deleteFollowup(row.id);
