@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Bengali } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -75,7 +76,7 @@ export const metadata: Metadata = {
   },
   // Replace these placeholders once GSC / Bing verification codes are issued.
   verification: {
-    google: undefined,
+    google: "NkITNKPeTvXuOKX7wA6wttEgfSiT60fXf68MwbpqfOA",
     other: { "msvalidate.01": [] },
   },
   category: "Real Estate",
@@ -138,6 +139,11 @@ export default function RootLayout({
         <JsonLd data={localBusinessSchema()} />
       </head>
       <body className="min-h-screen bg-bg text-fg antialiased selection:bg-brand-blue selection:text-white">
+        {/* Google Analytics 4 (gtag.js) — site-wide visitor tracking. */}
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-0MJZL8TN5Y" strategy="afterInteractive" />
+        <Script id="ga4-init" strategy="afterInteractive">
+          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-0MJZL8TN5Y');`}
+        </Script>
         {/* Skip link for keyboard / screen-reader users — only visible on focus. */}
         {/* Instant top progress bar on every navigation — gives click
             feedback so dynamic pages never feel "stuck" while loading. */}

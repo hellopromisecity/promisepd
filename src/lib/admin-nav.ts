@@ -6,6 +6,7 @@
 
 import {
   LayoutDashboard,
+  BarChart3,
   Users,
   CalendarCheck,
   Wallet,
@@ -41,6 +42,7 @@ export const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
 /** Full nav, in display order (mirrors the agreed dashboard sections). */
 export const ADMIN_NAV: NavEntry[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard, min: "staff" },
+  { label: "Analytics", href: "/admin/analytics", icon: BarChart3, min: "admin" },
   { label: "Staff", href: "/admin/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/admin/attendance", icon: CalendarCheck, min: "staff" },
   {
