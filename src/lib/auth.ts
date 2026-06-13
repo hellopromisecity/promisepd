@@ -19,6 +19,26 @@ export const isStaff = (role: Role) => STAFF_ROLES.includes(role);
 export const isManager = (role: Role) => role === "manager" || role === "admin";
 export const isAdmin = (role: Role) => role === "admin";
 
+/** Owner / super-admin accounts, set via the SUPER_ADMIN_EMAILS env var
+ *  (comma-separated emails, optionally mobiles).  These are ALWAYS admin
+ *  regardless of their profiles.role — so the owner can't be locked out
+ *  by a DB edit, and the email lives only in the environment (never in
+ *  the repo, never sent to the browser).  Server-only. */
+const SUPER_ADMINS = new Set(
+  (process.env.SUPER_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+function isSuperAdmin(email: string | null, mobile: string | null): boolean {
+  if (SUPER_ADMINS.size === 0) return false;
+  return (
+    (!!email && SUPER_ADMINS.has(email.toLowerCase())) ||
+    (!!mobile && SUPER_ADMINS.has(mobile.toLowerCase()))
+  );
+}
+
 export type Member = {
   id: string;
   name: string;
@@ -46,14 +66,20 @@ export async function getCurrentUser(): Promise<Member | null> {
       .maybeSingle();
 
     const meta = (user.user_metadata ?? {}) as Record<string, string | null>;
-    const role = (profile?.role ?? "member") as Role;
+    const email = profile?.email ?? meta.email ?? null;
+    const mobile = profile?.mobile || meta.mobile || "";
+
+    // Env-designated owner is always admin; otherwise use the DB role.
+    const role: Role = isSuperAdmin(email, mobile)
+      ? "admin"
+      : ((profile?.role ?? "member") as Role);
 
     return {
       id: user.id,
       name: profile?.name || meta.name || "",
-      mobile: profile?.mobile || meta.mobile || "",
+      mobile,
       username: profile?.username ?? meta.username ?? null,
-      email: profile?.email ?? meta.email ?? null,
+      email,
       role,
       createdAt: profile?.created_at ?? user.created_at ?? null,
     };

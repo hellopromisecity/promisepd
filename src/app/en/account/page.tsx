@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AccountView from "@/components/AccountView";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isStaff } from "@/lib/auth";
 
 const PAGE_TITLE = "My account — PromisePD";
 
@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountPageEn() {
   const member = await getCurrentUser();
   if (!member) redirect("/en/login?next=/en/account");
+  if (isStaff(member.role)) redirect("/admin");
 
   return (
     <section className="relative pt-24 pb-10 min-h-[80svh]">

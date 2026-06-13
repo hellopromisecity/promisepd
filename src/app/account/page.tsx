@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AccountView from "@/components/AccountView";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isStaff } from "@/lib/auth";
 
 const PAGE_TITLE = "আমার অ্যাকাউন্ট — PromisePD";
 
@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const member = await getCurrentUser();
   if (!member) redirect("/login?next=/account");
+  // Staff / managers / admins get the full dashboard, not the member page.
+  if (isStaff(member.role)) redirect("/admin");
 
   return (
     <section className="relative pt-24 pb-10 min-h-[80svh]">
