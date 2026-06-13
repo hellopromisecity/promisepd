@@ -5,9 +5,7 @@ import { Megaphone, ListChecks } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PageHeader, EmptyState } from "@/components/admin/ui";
-import { PROJECTS } from "@/lib/site";
-import { pointsForProject } from "@/lib/marketing";
-import MarketingOfficers, { type Officer, type ProjectOpt } from "./MarketingOfficers";
+import MarketingOfficers, { type Officer, type PointItem } from "./MarketingOfficers";
 
 export const metadata: Metadata = {
   title: "Marketing",
@@ -38,26 +36,30 @@ export default async function MarketingOverviewPage() {
     );
   }
 
-  const { data } = await admin
-    .from("marketing_officers")
-    .select("id, name, officer_type, position, district, officer_code, mobile, points")
-    .order("points", { ascending: false });
+  const [officersRes, itemsRes] = await Promise.all([
+    admin
+      .from("marketing_officers")
+      .select("id, name, officer_type, position, district, officer_code, mobile, points")
+      .order("points", { ascending: false }),
+    admin
+      .from("marketing_point_items")
+      .select("id, label, points")
+      .eq("active", true)
+      .order("sort", { ascending: true })
+      .order("created_at", { ascending: true }),
+  ]);
 
-  const officers = (data ?? []) as Officer[];
-  const projectOpts: ProjectOpt[] = PROJECTS.map((p) => ({
-    slug: p.slug,
-    name: p.name,
-    points: pointsForProject(p.slug),
-  }));
+  const officers = (officersRes.data ?? []) as Officer[];
+  const items = (itemsRes.data ?? []) as PointItem[];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Marketing"
-        subtitle="Officer leaderboard — ranked by points. Add officers and award points per project."
+        subtitle="Officer leaderboard — ranked by points. Add officers and award points per sale."
         action={followupsLink}
       />
-      <MarketingOfficers officers={officers} projects={projectOpts} />
+      <MarketingOfficers officers={officers} items={items} />
     </div>
   );
 }

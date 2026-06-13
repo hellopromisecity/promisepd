@@ -1,19 +1,23 @@
 "use client";
 
-/** Marketing officer leaderboard + management.  Lists the 4 officer types
- *  ranked by points, with two dialogs:
+/** Marketing officer leaderboard + management.  Three dialogs:
  *   - Add officer (name, type, position + contact fields)
- *   - Award points (pick officer + project → project's value × qty is
- *     auto-computed and added to the officer's total). */
+ *   - Award points (officer + point item × quantity → item value auto-
+ *     computed and added to the officer's total)
+ *   - Point values (admin-editable catalogue: label + points per sale;
+ *     add / edit / delete custom items) */
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Award, Crown, Medal, Trophy, Trash2, X, Loader2, AlertCircle, Users,
+  Plus, Award, Crown, Medal, Trophy, Trash2, X, Loader2, AlertCircle, Users, SlidersHorizontal, Check,
 } from "lucide-react";
 import { Badge, Card } from "@/components/admin/ui";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
-import { addOfficer, deleteOfficer, awardPoints } from "@/app/actions/admin-marketing";
+import {
+  addOfficer, deleteOfficer, awardPoints,
+  addPointItem, updatePointItem, deletePointItem,
+} from "@/app/actions/admin-marketing";
 
 export type Officer = {
   id: string;
@@ -25,22 +29,24 @@ export type Officer = {
   mobile: string | null;
   points: number;
 };
-export type ProjectOpt = { slug: string; name: string; points: number };
+export type PointItem = { id: string; label: string; points: number };
 
 const TYPE_TONE: Record<string, "info" | "success" | "warning" | "neutral"> = {
   MD: "success", HM: "warning", AMO: "info", MO: "neutral",
 };
 const RANK_ICON = [Crown, Medal, Trophy];
+const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
+const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
 
 export default function MarketingOfficers({
   officers,
-  projects,
+  items,
 }: {
   officers: Officer[];
-  projects: ProjectOpt[];
+  items: PointItem[];
 }) {
   const router = useRouter();
-  const [dialog, setDialog] = useState<null | "officer" | "points">(null);
+  const [dialog, setDialog] = useState<null | "officer" | "points" | "values">(null);
 
   return (
     <Card pad={false}>
@@ -50,7 +56,10 @@ export default function MarketingOfficers({
           <h2 className="text-sm font-bold text-fg">Marketing officers</h2>
           <span className="rounded-full bg-bg-soft px-2 py-0.5 text-xs text-fg-muted">{officers.length}</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setDialog("values")} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
+            <SlidersHorizontal className="h-4 w-4 text-brand-blue" /> Point values
+          </button>
           <button onClick={() => setDialog("points")} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40">
             <Award className="h-4 w-4 text-brand-blue" /> Award points
           </button>
@@ -110,7 +119,8 @@ export default function MarketingOfficers({
       )}
 
       {dialog === "officer" && <AddOfficerDialog onClose={() => setDialog(null)} onDone={() => { setDialog(null); router.refresh(); }} />}
-      {dialog === "points" && <AwardPointsDialog officers={officers} projects={projects} onClose={() => setDialog(null)} onDone={() => { setDialog(null); router.refresh(); }} />}
+      {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onDone={() => { setDialog(null); router.refresh(); }} />}
+      {dialog === "values" && <ManagePointsDialog items={items} onClose={() => { setDialog(null); router.refresh(); }} />}
     </Card>
   );
 }
@@ -149,9 +159,6 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     </div>
   );
 }
-
-const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
-const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
 
 function ErrorBanner({ msg }: { msg: string }) {
   return (
@@ -207,23 +214,23 @@ function AddOfficerDialog({ onClose, onDone }: { onClose: () => void; onDone: ()
 }
 
 function AwardPointsDialog({
-  officers, projects, onClose, onDone,
+  officers, items, onClose, onDone,
 }: {
-  officers: Officer[]; projects: ProjectOpt[]; onClose: () => void; onDone: () => void;
+  officers: Officer[]; items: PointItem[]; onClose: () => void; onDone: () => void;
 }) {
   const [officerId, setOfficerId] = useState(officers[0]?.id ?? "");
-  const [slug, setSlug] = useState(projects[0]?.slug ?? "");
+  const [itemId, setItemId] = useState(items[0]?.id ?? "");
   const [qty, setQty] = useState(1);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const project = useMemo(() => projects.find((p) => p.slug === slug), [projects, slug]);
-  const total = (project?.points ?? 0) * Math.max(1, qty || 1);
+  const item = useMemo(() => items.find((p) => p.id === itemId), [items, itemId]);
+  const total = (item?.points ?? 0) * Math.max(1, qty || 1);
 
   function submit() {
     setErr(null);
     start(async () => {
-      const res = await awardPoints({ officerId, projectSlug: slug, quantity: qty });
+      const res = await awardPoints({ officerId, itemId, quantity: qty });
       if (res.ok) onDone();
       else setErr(res.error);
     });
@@ -234,6 +241,8 @@ function AwardPointsDialog({
       {err && <ErrorBanner msg={err} />}
       {officers.length === 0 ? (
         <p className="text-sm text-fg-muted">Add an officer first, then award points.</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-fg-muted">No point items yet — add some under “Point values” first.</p>
       ) : (
         <div className="space-y-3">
           <div>
@@ -243,13 +252,13 @@ function AwardPointsDialog({
             </select>
           </div>
           <div>
-            <label className={labelCls}>Project *</label>
-            <select className={inputCls} value={slug} onChange={(e) => setSlug(e.target.value)}>
-              {projects.map((p) => <option key={p.slug} value={p.slug}>{p.name} — {p.points} pts/unit</option>)}
+            <label className={labelCls}>Point item *</label>
+            <select className={inputCls} value={itemId} onChange={(e) => setItemId(e.target.value)}>
+              {items.map((p) => <option key={p.id} value={p.id}>{p.label} — {p.points} pts/unit</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Quantity (units sold/promoted)</label>
+            <label className={labelCls}>Quantity (units sold)</label>
             <input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} />
           </div>
           <div className="flex items-center justify-between rounded-xl bg-brand-blue-tint px-4 py-3">
@@ -262,5 +271,89 @@ function AwardPointsDialog({
         </div>
       )}
     </Modal>
+  );
+}
+
+function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: () => void }) {
+  const [list, setList] = useState<PointItem[]>(items);
+  const [newLabel, setNewLabel] = useState("");
+  const [newPoints, setNewPoints] = useState(1);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function add() {
+    const label = newLabel.trim();
+    if (!label) return;
+    setErr(null);
+    start(async () => {
+      const res = await addPointItem(label, newPoints);
+      if (res.ok && res.data) {
+        setList((l) => [...l, { id: res.data!.id, label, points: Math.max(0, newPoints) }]);
+        setNewLabel(""); setNewPoints(1);
+      } else if (!res.ok) setErr(res.error);
+    });
+  }
+  function savePoints(id: string, points: number) {
+    setErr(null);
+    start(async () => {
+      const res = await updatePointItem(id, { points });
+      if (res.ok) setList((l) => l.map((x) => (x.id === id ? { ...x, points } : x)));
+      else setErr(res.error);
+    });
+  }
+  function remove(id: string) {
+    setErr(null);
+    start(async () => {
+      const res = await deletePointItem(id);
+      if (res.ok) setList((l) => l.filter((x) => x.id !== id));
+      else setErr(res.error);
+    });
+  }
+
+  return (
+    <Modal title="Point values per sale" onClose={onClose}>
+      {err && <ErrorBanner msg={err} />}
+      <p className="mb-3 text-xs text-fg-muted">Set how many points each sale type is worth. These drive the “Award points” calculator.</p>
+      <div className="space-y-2">
+        {list.map((it) => <PointItemRow key={it.id} item={it} onSave={savePoints} onDelete={remove} pending={pending} />)}
+      </div>
+      <div className="mt-4 border-t border-border pt-3">
+        <label className={labelCls}>Add custom item</label>
+        <div className="flex gap-2">
+          <input className={inputCls} value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. Promise City plot (per katha)" />
+          <input type="number" min={0} className="w-20 shrink-0 rounded-xl border border-border bg-bg-soft px-2 py-2.5 text-center text-sm text-fg outline-none focus:border-brand-blue/50" value={newPoints} onChange={(e) => setNewPoints(Math.max(0, parseInt(e.target.value) || 0))} />
+          <button onClick={add} disabled={pending} className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-brand-blue text-white disabled:opacity-60" aria-label="Add item">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PointItemRow({
+  item, onSave, onDelete, pending,
+}: {
+  item: PointItem; onSave: (id: string, p: number) => void; onDelete: (id: string) => void; pending: boolean;
+}) {
+  const [pts, setPts] = useState(item.points);
+  const dirty = pts !== item.points;
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-bg-soft px-3 py-2">
+      <span className="min-w-0 flex-1 truncate text-sm text-fg">{item.label}</span>
+      <input
+        type="number" min={0}
+        className="w-16 shrink-0 rounded-lg border border-border bg-bg px-2 py-1.5 text-center text-sm text-fg outline-none focus:border-brand-blue/50"
+        value={pts}
+        onChange={(e) => setPts(Math.max(0, parseInt(e.target.value) || 0))}
+      />
+      <span className="shrink-0 text-[11px] text-fg-faint">pts</span>
+      <button onClick={() => onSave(item.id, pts)} disabled={pending || !dirty} title="Save" className={`shrink-0 rounded-md p-1.5 ${dirty ? "text-brand-blue hover:bg-brand-blue-tint" : "text-fg-faint"} disabled:opacity-40`}>
+        <Check className="h-4 w-4" />
+      </button>
+      <button onClick={() => { if (window.confirm(`Delete “${item.label}”?`)) onDelete(item.id); }} disabled={pending} title="Delete" className="shrink-0 rounded-md p-1.5 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40">
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
   );
 }

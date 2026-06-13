@@ -372,6 +372,7 @@ export type Database = {
           id: string;
           officer_id: string;
           project_slug: string | null;
+          item_label: string | null;
           quantity: number;
           points: number;
           note: string | null;
@@ -382,6 +383,7 @@ export type Database = {
           id?: string;
           officer_id: string;
           project_slug?: string | null;
+          item_label?: string | null;
           quantity?: number;
           points: number;
           note?: string | null;
@@ -389,6 +391,26 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["marketing_point_entries"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_point_items: {
+        Row: {
+          id: string;
+          label: string;
+          points: number;
+          sort: number;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          label: string;
+          points?: number;
+          sort?: number;
+          active?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_point_items"]["Insert"]>;
         Relationships: [];
       };
     };

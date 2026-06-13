@@ -18,7 +18,7 @@ import {
 } from "@/lib/admin-guard";
 import { isManager } from "@/lib/auth";
 import { FOLLOWUP_STATUSES, type FollowupStatus } from "@/app/admin/marketing/status";
-import { pointsForProject, OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
+import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
 
 function isStatus(v: unknown): v is FollowupStatus {
   return typeof v === "string" && (FOLLOWUP_STATUSES as readonly string[]).includes(v);
@@ -319,11 +319,11 @@ export async function deleteOfficer(id: string): Promise<ActionResult> {
   });
 }
 
-/** Award points: officer + project (auto value) × quantity → added to the
- *  officer's running total and recorded as a point entry. */
+/** Award points: officer + point item (admin-set value) × quantity →
+ *  added to the officer's running total and recorded as a point entry. */
 export async function awardPoints(input: {
   officerId: string;
-  projectSlug?: string;
+  itemId: string;
   quantity: number;
   note?: string;
 }): Promise<ActionResult<{ points: number }>> {
@@ -333,10 +333,17 @@ export async function awardPoints(input: {
     if (!admin) throw new Error("Database is not configured.");
 
     if (!input.officerId) throw new Error("Pick an officer.");
+    if (!input.itemId) throw new Error("Pick a point item.");
     const qty = Math.max(1, Math.floor(Number(input.quantity) || 1));
-    const slug = clean(input.projectSlug);
-    if (!slug) throw new Error("Pick a project.");
-    const added = pointsForProject(slug) * qty;
+
+    const { data: item, error: itemErr } = await admin
+      .from("marketing_point_items")
+      .select("label, points")
+      .eq("id", input.itemId)
+      .maybeSingle();
+    if (itemErr) throw new Error(itemErr.message);
+    if (!item) throw new AuthzError("Point item not found");
+    const added = (item.points ?? 0) * qty;
 
     const { data: officer, error: readErr } = await admin
       .from("marketing_officers")
@@ -348,7 +355,7 @@ export async function awardPoints(input: {
 
     const { error: entryErr } = await admin.from("marketing_point_entries").insert({
       officer_id: input.officerId,
-      project_slug: slug,
+      item_label: item.label,
       quantity: qty,
       points: added,
       note: clean(input.note),
@@ -366,9 +373,70 @@ export async function awardPoints(input: {
       action: "award",
       entity: "marketing_points",
       entityId: input.officerId,
-      detail: `+${added} pts to “${officer.name}” (${slug} ×${qty})`,
+      detail: `+${added} pts to “${officer.name}” (${item.label} ×${qty})`,
     });
     revalidateLeaderboard();
     return { data: { points: added }, message: `+${added} points added.` };
+  });
+}
+
+// ── Point catalogue (admin-editable points per item / sale) ───────
+
+export async function addPointItem(label: string, points: number): Promise<ActionResult<{ id: string }>> {
+  return runAction(async () => {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+    const l = (label ?? "").trim();
+    if (!l) throw new Error("Item name is required.");
+    const p = Math.max(0, Math.floor(Number(points) || 0));
+
+    const { data, error } = await admin
+      .from("marketing_point_items")
+      .insert({ label: l, points: p, sort: 99 })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "create", entity: "point_item", entityId: data.id, detail: `Added point item “${l}” (${p} pts)` });
+    revalidatePath("/admin/marketing");
+    return { data: { id: data.id }, message: "Point item added." };
+  });
+}
+
+export async function updatePointItem(id: string, input: { label?: string; points?: number }): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    if (!id) throw new Error("Missing item id.");
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    const patch: { label?: string; points?: number } = {};
+    if (typeof input.label === "string" && input.label.trim()) patch.label = input.label.trim();
+    if (input.points != null) patch.points = Math.max(0, Math.floor(Number(input.points) || 0));
+    if (!Object.keys(patch).length) throw new Error("Nothing to update.");
+
+    const { error } = await admin.from("marketing_point_items").update(patch).eq("id", id);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "update", entity: "point_item", entityId: id, detail: `Updated point item (${JSON.stringify(patch)})` });
+    revalidatePath("/admin/marketing");
+    return { message: "Point item updated." };
+  });
+}
+
+export async function deletePointItem(id: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    if (!id) throw new Error("Missing item id.");
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database is not configured.");
+
+    const { error } = await admin.from("marketing_point_items").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "delete", entity: "point_item", entityId: id, detail: `Deleted point item ${id}` });
+    revalidatePath("/admin/marketing");
+    return { message: "Point item deleted." };
   });
 }
