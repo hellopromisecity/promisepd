@@ -9,6 +9,7 @@ import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import RegisterSW from "@/components/RegisterSW";
 import SkipLink from "@/components/SkipLink";
 import SiteChrome from "@/components/SiteChrome";
+import NextTopLoader from "nextjs-toploader";
 import JsonLd from "@/components/JsonLd";
 import {
   organizationSchema,
@@ -138,6 +139,15 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-bg text-fg antialiased selection:bg-brand-blue selection:text-white">
         {/* Skip link for keyboard / screen-reader users — only visible on focus. */}
+        {/* Instant top progress bar on every navigation — gives click
+            feedback so dynamic pages never feel "stuck" while loading. */}
+        <NextTopLoader
+          color="#1847A1"
+          height={3}
+          showSpinner={false}
+          shadow="0 0 10px #1847A1,0 0 5px #1847A1"
+          zIndex={2000}
+        />
         <SkipLink />
         <SiteChrome>
           <Navbar />
