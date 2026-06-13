@@ -1,0 +1,447 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* === Brand palette — EXACT codes provided by client ===
+     Red    #E11924 (logo red)
+     Ash    #C0C7D1 (logo silver/grey)
+     Blue   #1847A1 (logo royal blue)
+     Every soft / tint / dark below is a strict tint or shade of these three. */
+
+  --color-bg: #ffffff;
+  --color-bg-soft: #f7f9ff;
+  --color-bg-soft-2: #eef2ff;
+  --color-fg: #0b1220;
+  --color-fg-soft: #1f2a44;
+  --color-fg-muted: #5a6478;
+  --color-fg-faint: #646d82;
+  --color-border: #e6e9f2;
+  --color-border-strong: #d5dbeb;
+
+  /* RED scale — base #E11924 */
+  --color-brand-red: #e11924;
+  --color-brand-red-soft: #ff4757;
+  --color-brand-red-tint: #ffe4e7;
+  --color-brand-red-dark: #b01421;
+
+  /* BLUE scale — base #1847A1 */
+  --color-brand-blue: #1847a1;
+  --color-brand-blue-soft: #3463c7;
+  --color-brand-blue-tint: #dce6f8;
+  --color-brand-blue-dark: #133680;
+
+  /* ASH scale — base #C0C7D1 */
+  --color-brand-ash: #c0c7d1;
+  --color-brand-ash-soft: #dce0e7;
+  --color-brand-ash-tint: #f2f4f7;
+  --color-brand-ash-dark: #7c8696;
+
+  --font-sans: var(--font-bn), "Noto Sans Bengali", "Hind Siliguri", "Nirmala UI", "Vrinda", "SolaimanLipi", "Kalpurush", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --animate-blob: blob 24s ease-in-out infinite;
+  --animate-blob-slow: blob 36s ease-in-out infinite;
+  --animate-aurora: aurora 16s ease infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-shine: shine 3.5s linear infinite;
+  --animate-marquee: marquee 45s linear infinite;
+  --animate-marquee-reverse: marquee-reverse 45s linear infinite;
+  --animate-pulse-ring: pulseRing 2.5s ease-out infinite;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Every gradient on the site is built from #1847A1 (brand blue,
+     PRIMARY) · #E11924 (brand red, ACCENT) · #C0C7D1 (ash, NEUTRAL).
+     Blue leads in the default direction so the brand stays anchored
+     in its primary colour. */
+  --grad-rb: linear-gradient(135deg, #1847a1 0%, #e11924 100%);
+  --grad-rb-soft: linear-gradient(135deg, #3463c7 0%, #ff4757 100%);
+  --grad-br: linear-gradient(135deg, #e11924 0%, #1847a1 100%);
+  --grad-r: linear-gradient(135deg, #e11924 0%, #ff4757 100%);
+  --grad-b: linear-gradient(135deg, #1847a1 0%, #3463c7 100%);
+  --grad-a: linear-gradient(135deg, #7c8696 0%, #c0c7d1 100%);
+  --grad-ab: linear-gradient(135deg, #c0c7d1 0%, #1847a1 100%);
+  --grad-ar: linear-gradient(135deg, #c0c7d1 0%, #e11924 100%);
+
+  /* Shadows lead with BLUE (primary brand) — the logo's dominant
+     colour — and use red only as a subtle warmth in the falloff. */
+  --shadow-card: 0 2px 14px -4px rgba(15, 23, 42, 0.06),
+    0 6px 28px -10px rgba(24, 71, 161, 0.12);
+  --shadow-card-hover: 0 8px 28px -6px rgba(24, 71, 161, 0.18),
+    0 18px 48px -16px rgba(225, 25, 36, 0.06);
+  --shadow-brand: 0 14px 36px -10px rgba(24, 71, 161, 0.55),
+    0 12px 32px -16px rgba(225, 25, 36, 0.13);
+  --shadow-brand-red: 0 12px 32px -8px rgba(225, 25, 36, 0.23),
+    0 12px 32px -16px rgba(24, 71, 161, 0.5);
+}
+
+html,
+body {
+  background: #ffffff;
+  color: #0b1220;
+  font-family: var(--font-sans);
+  /* Body baseline: 16px / 1.7 — Bangla benefits from a more generous
+     leading than Latin because its conjuncts and matras sit above
+     and below the baseline.  1.7 keeps long-form copy comfortably
+     readable without feeling double-spaced. */
+  font-size: 1rem;
+  line-height: 1.7;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga", "clig", "calt";
+  font-variant-ligatures: common-ligatures contextual;
+  /* Avoid orphans / widows in body paragraphs; modern browsers only,
+     no impact on legacy. */
+  text-wrap: pretty;
+}
+
+/* Headings get tight leading + balanced wrapping so short multi-line
+   titles break visually evenly instead of leaving one word alone. */
+h1,
+h2,
+h3,
+h4 {
+  font-feature-settings: "kern", "liga", "calt";
+  letter-spacing: -0.005em;
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+h1 {
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+h2 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+h3,
+h4 {
+  font-weight: 700;
+}
+
+/* Numbers — prices, stats, dates — use tabular figures so columns of
+   numbers don't shift width as digits change.  Also a slashed zero
+   for clear distinction from O in mixed Latin contexts. */
+.tnum,
+.font-bold,
+.font-semibold,
+[class*="text-"][class*="xl"] {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* Selection uses BRAND BLUE (primary) — was red before; the swap
+   matches the logo where blue is dominant and red is the accent. */
+::selection {
+  background: #1847a1;
+  color: #fff;
+}
+
+/* === Light mesh background — atmospheric brand wash ===
+   Mixed to match the logo's colour weighting: ~70 % blue, ~20 % red,
+   ~10 % ash neutral.  Three blue radials carry the room, a single
+   red radial provides accent warmth, and a soft ash spot adds the
+   neutral mid-tone so the whole canvas reads as the logo's circle. */
+.mesh-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    /* 3 × BLUE — primary, spread across the canvas */
+    radial-gradient(at 18% 12%, rgba(24, 71, 161, 0.14) 0px, transparent 55%),
+    radial-gradient(at 82% 8%, rgba(24, 71, 161, 0.12) 0px, transparent 55%),
+    radial-gradient(at 12% 82%, rgba(24, 71, 161, 0.13) 0px, transparent 55%),
+    /* extra BLUE spot — the whole canvas stays in one brand hue */
+    radial-gradient(at 75% 78%, rgba(24, 71, 161, 0.07) 0px, transparent 50%),
+    /* 1 × ASH — neutral mid-tone */
+    radial-gradient(at 50% 45%, rgba(192, 199, 209, 0.10) 0px, transparent 60%);
+  filter: blur(40px) saturate(120%);
+  z-index: -1;
+}
+
+.mesh-bg-soft {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(at 25% 25%, rgba(24, 71, 161, 0.08) 0px, transparent 60%),
+    radial-gradient(at 75% 75%, rgba(24, 71, 161, 0.06) 0px, transparent 60%),
+    radial-gradient(at 60% 30%, rgba(192, 199, 209, 0.10) 0px, transparent 55%);
+  z-index: -1;
+}
+
+/* === Gradient text — BLUE → red (primary leads) === */
+.text-grad,
+.text-grad-rb {
+  background: linear-gradient(135deg, #1847a1 0%, #e11924 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-grad {
+  background-size: 200% 200%;
+  animation: aurora 10s ease infinite;
+}
+
+/* === Cards === */
+.card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card);
+  transition:
+    transform 0.35s ease,
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-border-strong);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 24px -8px rgba(15, 23, 42, 0.08);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 8px 32px -10px rgba(15, 23, 42, 0.12);
+}
+
+/* === Gradient border (red→blue) === */
+.grad-border {
+  position: relative;
+  background: #ffffff;
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card);
+}
+.grad-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #1847a1, #e11924);
+  background-size: 250% 250%;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: aurora 8s linear infinite;
+  pointer-events: none;
+}
+
+/* === Link underline === */
+.link-underline {
+  position: relative;
+}
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #1847a1, #e11924);
+  transition: width 0.3s ease;
+}
+.link-underline:hover::after,
+.link-underline[data-active="true"]::after {
+  width: 100%;
+}
+
+/* === Button shine === */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 80%
+  );
+  animation: shine 3.5s linear infinite;
+  z-index: -1;
+}
+
+/* === Grid background (subtle blue tint) === */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(24, 71, 161, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 71, 161, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+}
+
+/* === Noise overlay === */
+.noise {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+  opacity: 0.025;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* === Custom scrollbar — notched / textured brand thumb ===
+   Diagonal striped pattern in red + blue gives the thumb a "khawra-khawra"
+   (notched, rugged) feel while staying strictly on-brand. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #f2f4f7;
+  border-left: 1px solid #e6e9f2;
+}
+::-webkit-scrollbar-thumb {
+  /* Blue is the wider, dominant stripe; red is a thin accent slash
+     to keep the brand's secondary colour present without overpowering. */
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #1847a1 0,
+    #1847a1 7px,
+    #e11924 7px,
+    #e11924 10px
+  );
+  border-radius: 8px;
+  border: 2px solid #f2f4f7;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #3463c7 0,
+    #3463c7 7px,
+    #ff4757 7px,
+    #ff4757 10px
+  );
+}
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #1847a1 #f2f4f7;
+}
+
+/* === WhatsApp pulse — WhatsApp green === */
+.wa-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 2px solid #25d366;
+  animation: pulseRing 2.5s ease-out infinite;
+  pointer-events: none;
+}
+
+/* === Keyframes === */
+@keyframes blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    border-radius: 60% 40% 50% 50% / 50% 60% 40% 50%;
+  }
+  25% {
+    transform: translate(60px, -80px) scale(1.15) rotate(45deg);
+    border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%;
+  }
+  50% {
+    transform: translate(-40px, 60px) scale(0.9) rotate(120deg);
+    border-radius: 50% 50% 70% 30% / 40% 60% 50% 50%;
+  }
+  75% {
+    transform: translate(80px, 40px) scale(1.1) rotate(240deg);
+    border-radius: 70% 30% 50% 50% / 50% 50% 40% 60%;
+  }
+}
+
+@keyframes aurora {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-18px);
+  }
+}
+
+@keyframes shine {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 200%;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

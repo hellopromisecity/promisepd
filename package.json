@@ -1,0 +1,47 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
+    "@tiptap/extension-image": "^3.26.1",
+    "@tiptap/extension-link": "^3.26.1",
+    "@tiptap/extension-table": "^3.26.1",
+    "@tiptap/extension-table-cell": "^3.26.1",
+    "@tiptap/extension-table-header": "^3.26.1",
+    "@tiptap/extension-table-row": "^3.26.1",
+    "@tiptap/extension-text-align": "^3.26.1",
+    "@tiptap/extension-underline": "^3.26.1",
+    "@tiptap/pm": "^3.26.1",
+    "@tiptap/react": "^3.26.1",
+    "@tiptap/starter-kit": "^3.26.1",
+    "framer-motion": "^12.38.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.14.0",
+    "next": "16.2.6",
+    "next-themes": "^0.4.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "resend": "^6.12.3",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "pdf-to-img": "^6.1.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
