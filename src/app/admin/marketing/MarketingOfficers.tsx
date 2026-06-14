@@ -464,6 +464,92 @@ function OfficerDialog({ officer, onClose, onDone }: { officer: Officer | null; 
   );
 }
 
+/** Searchable officer picker for the award dialog — filters the (now
+ *  large) officer list by name, mobile, or ID number.  ID search matches
+ *  the digits only, so "2026001" finds "MI-2026001" without the prefix. */
+function OfficerPicker({ officers, value, onChange }: { officers: Officer[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = officers.find((o) => o.id === value);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return officers;
+    const digits = term.replace(/\D/g, "");
+    return officers.filter((o) => {
+      if (o.name.toLowerCase().includes(term)) return true;
+      if ((o.officer_code ?? "").toLowerCase().includes(term)) return true;
+      if (digits) {
+        const codeNum = (o.officer_code ?? "").replace(/\D/g, "");
+        const mob = (o.mobile ?? "").replace(/\D/g, "");
+        if (codeNum.includes(digits) || mob.includes(digits)) return true;
+      }
+      return false;
+    });
+  }, [officers, query]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`${inputCls} flex items-center justify-between gap-2 text-left`}
+      >
+        <span className={`truncate ${selected ? "text-fg" : "text-fg-faint"}`}>
+          {selected
+            ? `${selected.name} (${selected.officer_type})${selected.officer_code ? " · " + selected.officer_code : ""}`
+            : "Select an officer…"}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-fg-faint transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <>
+          <button aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
+          <div className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-xl border border-border bg-bg shadow-xl">
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-fg-faint" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, mobile or ID number…"
+                className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint"
+              />
+            </div>
+            <ul className="max-h-64 overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <li className="px-3 py-3 text-center text-sm text-fg-muted">No officer matches “{query}”.</li>
+              ) : (
+                filtered.map((o) => (
+                  <li key={o.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onChange(o.id); setOpen(false); setQuery(""); }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-bg-soft ${o.id === value ? "bg-brand-blue-tint" : ""}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-fg">
+                          {o.name} <span className="font-normal text-fg-faint">({o.officer_type})</span>
+                        </div>
+                        <div className="truncate text-[11px] text-fg-faint">
+                          {[o.officer_code, o.mobile, o.district].filter(Boolean).join(" · ") || "—"}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-xs font-bold text-fg-muted">{fmtPts(Number(o.points) || 0)} pts</span>
+                      {o.id === value && <Check className="h-4 w-4 shrink-0 text-brand-blue" />}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Officer[]; items: PointItem[]; onClose: () => void; onDone: () => void }) {
   const [officerId, setOfficerId] = useState(officers[0]?.id ?? "");
   const [itemId, setItemId] = useState(items[0]?.id ?? "");
@@ -499,9 +585,7 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
         <div className="space-y-3">
           <div>
             <label className={labelCls}>Officer *</label>
-            <select className={inputCls} value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
-              {officers.map((o) => <option key={o.id} value={o.id}>{o.name} ({o.officer_type}) · {fmtPts(Number(o.points) || 0)} pts</option>)}
-            </select>
+            <OfficerPicker officers={officers} value={officerId} onChange={setOfficerId} />
           </div>
           <div>
             <label className={labelCls}>Point item *</label>
