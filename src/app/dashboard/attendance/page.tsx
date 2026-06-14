@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarCheck, Clock, UserX, CalendarDays } from "lucide-react";
+import { CalendarCheck, Clock, UserX, CalendarDays, Upload } from "lucide-react";
 import { getCurrentUser, isManager, isStaff } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import {
@@ -13,6 +14,7 @@ import {
   tdCls,
   type Tone,
 } from "@/components/admin/ui";
+import { buildStaffDirectory, refForMember, type StaffAccount } from "@/lib/staff-directory";
 import AttendanceRow from "./AttendanceRow";
 import SelfCheck from "./SelfCheck";
 import AttendanceDate from "./AttendanceDate";
@@ -76,30 +78,32 @@ export default async function AttendancePage({
     );
   }
 
-  // ----- Manager / admin: whole-team view for today -----
+  // ----- Manager / admin: whole-team view for the selected date -----
   if (isManager(me.role)) {
-    const { data: staff } = await admin
-      .from("profiles")
-      .select("id, name, mobile, role")
-      .in("role", ["staff", "manager", "admin"])
-      .order("name", { ascending: true });
+    // Every employee on the roster (login or not) + any extra accounts.
+    // `employee_code` only exists once migration 0016 is applied — fall
+    // back to the base columns so this never errors out.
+    const selProfiles = (cols: string) =>
+      admin.from("profiles").select(cols).order("name", { ascending: true });
+    let pres = await selProfiles("id, name, mobile, role, employee_code");
+    if (pres.error?.code === "42703") pres = await selProfiles("id, name, mobile, role");
+    const accounts = (pres.error ? [] : pres.data ?? []) as unknown as StaffAccount[];
+    const directory = buildStaffDirectory(accounts);
 
-    const team = staff ?? [];
-
-    const { data: todayRows } = await admin
+    // Attendance for the day, keyed by staff_ref.
+    const { data: dayRows } = await admin
       .from("attendance")
-      .select("member_id, status, check_in, check_out, note")
+      .select("staff_ref, status, check_in, check_out, note")
       .eq("date", selDate);
-
-    const byMember = new Map(
-      (todayRows ?? []).map((r) => [r.member_id, r]),
+    const byRef = new Map(
+      (dayRows ?? []).map((r) => [(r as { staff_ref: string | null }).staff_ref ?? "", r]),
     );
 
     let present = 0;
     let late = 0;
     let absent = 0;
-    for (const m of team) {
-      const st = byMember.get(m.id)?.status;
+    for (const d of directory) {
+      const st = byRef.get(d.ref)?.status;
       if (st === "present") present++;
       else if (st === "late") late++;
       else if (st === "absent") absent++;
@@ -110,26 +114,37 @@ export default async function AttendancePage({
         <PageHeader
           title="Attendance"
           subtitle={`Team status · ${fmtDate(selDate)}${selDate !== today ? "" : " (today)"}`}
-          action={<AttendanceDate value={selDate} today={today} />}
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <AttendanceDate value={selDate} today={today} />
+              <Link
+                href="/dashboard/attendance/import"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-1.5 text-sm font-semibold text-brand-blue hover:bg-brand-blue-tint"
+              >
+                <Upload className="h-4 w-4" /> Import (ZKTeco)
+              </Link>
+            </div>
+          }
         />
 
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Present today" value={present} icon={CalendarCheck} tone="success" />
+          <StatCard label="Present" value={present} icon={CalendarCheck} tone="success" />
           <StatCard label="Late" value={late} icon={Clock} tone="warning" />
           <StatCard label="Absent" value={absent} icon={UserX} tone="danger" />
         </div>
 
-        {team.length === 0 ? (
+        {directory.length === 0 ? (
           <EmptyState
             icon={CalendarCheck}
             title="No staff yet"
-            message="Staff, managers and admins will appear here."
+            message="Employees from the roster and registered accounts will appear here."
           />
         ) : (
           <TableShell>
             <thead>
               <tr>
-                <th className={thCls}>Member</th>
+                <th className={thCls}>Employee</th>
+                <th className={thCls}>Code</th>
                 <th className={thCls}>Check in</th>
                 <th className={thCls}>Check out</th>
                 <th className={thCls}>Status</th>
@@ -137,22 +152,24 @@ export default async function AttendancePage({
               </tr>
             </thead>
             <tbody>
-              {team.map((m) => {
-                const row = byMember.get(m.id);
+              {directory.map((d) => {
+                const row = byRef.get(d.ref);
                 const status = (row?.status as AttendanceStatus | undefined) ?? null;
+                const meta = [d.designation, d.district].filter(Boolean).join(" · ");
                 return (
-                  <tr key={m.id}>
+                  <tr key={d.ref}>
                     <td className={tdCls}>
                       <div className="flex items-center gap-3">
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-blue-tint text-xs font-bold text-brand-blue">
-                          {(m.name?.[0] ?? "?").toUpperCase()}
+                          {(d.name?.[0] ?? "?").toUpperCase()}
                         </span>
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-fg">{m.name || "Unnamed"}</p>
-                          <p className="truncate text-xs capitalize text-fg-muted">{m.role}</p>
+                          <p className="truncate font-semibold text-fg">{d.name || "Unnamed"}</p>
+                          <p className="truncate text-xs text-fg-muted">{meta || d.mobile}</p>
                         </div>
                       </div>
                     </td>
+                    <td className={`${tdCls} whitespace-nowrap font-mono text-xs text-fg-muted`}>{d.code || "—"}</td>
                     <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>{fmtTime(row?.check_in ?? null)}</td>
                     <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>{fmtTime(row?.check_out ?? null)}</td>
                     <td className={tdCls}>
@@ -164,8 +181,9 @@ export default async function AttendancePage({
                     </td>
                     <td className={tdCls}>
                       <AttendanceRow
-                        memberId={m.id}
-                        name={m.name || "this member"}
+                        staffRef={d.ref}
+                        memberId={d.account?.id ?? null}
+                        name={d.name || "this member"}
                         date={selDate}
                         current={status}
                         note={row?.note ?? null}
@@ -186,10 +204,11 @@ export default async function AttendancePage({
   since.setDate(since.getDate() - 30);
   const sinceStr = since.toLocaleDateString("en-CA");
 
+  const myRef = refForMember({ id: me.id, mobile: me.mobile });
   const { data: mine } = await admin
     .from("attendance")
     .select("id, date, check_in, check_out, status, note")
-    .eq("member_id", me.id)
+    .eq("staff_ref", myRef)
     .gte("date", sinceStr)
     .order("date", { ascending: false });
 

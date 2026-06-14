@@ -7,7 +7,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Check } from "lucide-react";
-import { setAttendance } from "@/app/actions/admin-staff";
+import { setStaffAttendance } from "@/app/actions/admin-staff";
 
 type AttendanceStatus = "present" | "late" | "absent" | "leave";
 
@@ -19,13 +19,15 @@ const OPTIONS: { value: AttendanceStatus; label: string }[] = [
 ];
 
 export default function AttendanceRow({
+  staffRef,
   memberId,
   name,
   date,
   current,
   note,
 }: {
-  memberId: string;
+  staffRef: string;
+  memberId: string | null;
   name: string;
   date: string;
   current: AttendanceStatus | "holiday" | null;
@@ -44,7 +46,7 @@ export default function AttendanceRow({
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const res = await setAttendance(memberId, date, next, noteText || undefined);
+      const res = await setStaffAttendance(staffRef, date, next, noteText || undefined, { memberId, name });
       if (!res.ok) {
         setError(res.error);
         return;

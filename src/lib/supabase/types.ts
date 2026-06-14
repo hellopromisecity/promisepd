@@ -108,7 +108,8 @@ export type Database = {
       attendance: {
         Row: {
           id: string;
-          member_id: string;
+          member_id: string | null;
+          staff_ref: string | null;
           date: string;
           check_in: string | null;
           check_out: string | null;
@@ -119,7 +120,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          member_id: string;
+          member_id?: string | null;
+          staff_ref?: string | null;
           date: string;
           check_in?: string | null;
           check_out?: string | null;

@@ -19,6 +19,8 @@ import {
   type ActionResult,
 } from "@/lib/admin-guard";
 import type { Role } from "@/lib/auth";
+import { refForMember } from "@/lib/staff-directory";
+import { STAFF_ROSTER } from "@/lib/staff-roster";
 
 const ROLES: Role[] = ["member", "staff", "manager", "admin"];
 const ATTENDANCE_STATUSES = ["present", "late", "absent", "leave", "holiday"] as const;
@@ -295,41 +297,42 @@ export async function deleteStaff(id: string): Promise<ActionResult> {
   });
 }
 
-/** Set (upsert) a staff member's attendance for a given date.
- *  Manager+ only — used by the team view. */
-export async function setAttendance(
-  memberId: string,
+/** Set (upsert) one employee's attendance for a date, keyed by the
+ *  stable staff_ref (roster employee code, or uid:<id>).  Works for
+ *  roster employees with NO login account.  Manager+ only. */
+export async function setStaffAttendance(
+  ref: string,
   date: string,
   status: AttendanceStatus,
   note?: string,
+  opts?: { memberId?: string | null; name?: string | null },
 ): Promise<ActionResult> {
   return runAction(async () => {
     await requireManager();
-    if (!memberId) throw new Error("Missing member");
+    if (!ref) throw new Error("Missing staff");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid date");
     if (!ATTENDANCE_STATUSES.includes(status)) throw new Error("Invalid status");
 
     const admin = getAdmin();
     if (!admin) throw new Error("Data unavailable");
 
-    const { error } = await admin
-      .from("attendance")
-      .upsert(
-        {
-          member_id: memberId,
-          date,
-          status,
-          note: note?.trim() || null,
-        },
-        { onConflict: "member_id,date" },
-      );
+    const { error } = await admin.from("attendance").upsert(
+      {
+        staff_ref: ref,
+        member_id: opts?.memberId ?? null,
+        date,
+        status,
+        note: note?.trim() || null,
+      },
+      { onConflict: "staff_ref,date" },
+    );
     if (error) throw new Error(error.message);
 
     await logAudit({
       action: "update",
       entity: "attendance",
-      entityId: memberId,
-      detail: `Marked ${status} on ${date}`,
+      entityId: ref,
+      detail: `Marked ${opts?.name ?? ref} ${status} on ${date}`,
     });
     revalidatePath("/dashboard/attendance");
     return { message: "Attendance saved." };
@@ -348,12 +351,13 @@ export async function setOwnCheck(kind: "in" | "out"): Promise<ActionResult> {
 
     const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
     const nowIso = new Date().toISOString();
+    const ref = refForMember({ id: me.id, mobile: me.mobile });
 
     // Fetch the caller's own row for today (if any).
     const { data: existing, error: readErr } = await admin
       .from("attendance")
       .select("id, check_in, check_out, status")
-      .eq("member_id", me.id)
+      .eq("staff_ref", ref)
       .eq("date", today)
       .maybeSingle();
     if (readErr) throw new Error(readErr.message);
@@ -364,12 +368,13 @@ export async function setOwnCheck(kind: "in" | "out"): Promise<ActionResult> {
       const late = new Date().getHours() >= 10;
       const { error } = await admin.from("attendance").upsert(
         {
+          staff_ref: ref,
           member_id: me.id,
           date: today,
           check_in: nowIso,
           status: late ? "late" : "present",
         },
-        { onConflict: "member_id,date" },
+        { onConflict: "staff_ref,date" },
       );
       if (error) throw new Error(error.message);
       await logAudit({
@@ -384,7 +389,7 @@ export async function setOwnCheck(kind: "in" | "out"): Promise<ActionResult> {
       const { error } = await admin
         .from("attendance")
         .update({ check_out: nowIso })
-        .eq("member_id", me.id)
+        .eq("staff_ref", ref)
         .eq("date", today);
       if (error) throw new Error(error.message);
       await logAudit({
@@ -397,5 +402,257 @@ export async function setOwnCheck(kind: "in" | "out"): Promise<ActionResult> {
 
     revalidatePath("/dashboard/attendance");
     return { message: kind === "in" ? "Checked in." : "Checked out." };
+  });
+}
+
+// ── ZKTeco fingerprint import ──────────────────────────────────────
+// The K40/K50/K60/K90 series export an attendance log (CSV / TSV / TXT
+// / .dat) of punches: an employee code + a date + a time per row.  We
+// fold the punches per (employee, day) — earliest = check-in, latest =
+// check-out — match the device's code to a roster employee code, and
+// upsert one attendance row per day.  Unknown codes are reported, never
+// fatal.  Dependency-free parser (no xlsx) — exports save as CSV/TXT.
+
+export type ImportSummary = {
+  imported: number;
+  rows: number;
+  unknownCodes: string[];
+  preview: { code: string; name: string; date: string; status: string }[];
+};
+
+const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/** Split a CSV/TSV/whitespace line into trimmed, unquoted cells. */
+function splitLine(line: string, delim: "," | "\t" | "ws"): string[] {
+  if (delim === "ws") return line.trim().split(/\s+/);
+  return line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ""));
+}
+
+function detectDelim(line: string): "," | "\t" | "ws" {
+  if (line.includes(",")) return ",";
+  if (line.includes("\t")) return "\t";
+  return "ws";
+}
+
+/** Build a real calendar ISO date, or null for an impossible one (so a
+ *  garbage punch is skipped instead of throwing RangeError later). */
+function isoIfValid(y: number, mo: number, d: number): string | null {
+  if (!Number.isFinite(y) || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const iso = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const t = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(t.getTime()) || t.getUTCMonth() + 1 !== mo || t.getUTCDate() !== d) return null;
+  return iso;
+}
+
+function normDate(input: string): string | null {
+  const s = (input || "").trim();
+  if (!s) return null;
+  // ISO YYYY-MM-DD (still validate the actual day/month).
+  const isoM = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoM) return isoIfValid(+isoM[1], +isoM[2], +isoM[3]);
+  // YYYY/MM/DD or YYYY.MM.DD
+  const ymd = s.match(/^(\d{4})[/.](\d{1,2})[/.](\d{1,2})/);
+  if (ymd) return isoIfValid(+ymd[1], +ymd[2], +ymd[3]);
+  // D/M/Y or M/D/Y — disambiguate: a field > 12 can only be the day.
+  const dm = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/);
+  if (dm) {
+    const a = +dm[1];
+    const b = +dm[2];
+    const y = dm[3].length === 2 ? 2000 + +dm[3] : +dm[3];
+    const monthFirst = b > 12 && a <= 12; // US M/D export
+    const day = monthFirst ? b : a;
+    const mo = monthFirst ? a : b;
+    return isoIfValid(y, mo, day);
+  }
+  return null;
+}
+
+function normTime(input: string): string | null {
+  const m = (input || "").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  const [, h, mi, se] = m;
+  return `${h.padStart(2, "0")}:${mi.padStart(2, "0")}:${(se ?? "00").padStart(2, "0")}`;
+}
+
+const ID_ALIASES = ["enrollno", "enrollnumber", "userid", "usrid", "empid", "employeeid", "employeecode", "acno", "pin", "code", "id", "user"];
+const DATE_ALIASES = ["date", "attendancedate", "punchdate"];
+const TIME_ALIASES = ["time", "punchtime", "intime", "checkin", "clockin", "onduty"];
+const DT_ALIASES = ["datetime", "timestamp", "punchdatetime"];
+
+type Punch = { code: string; date: string; earliest: string | null; latest: string | null };
+
+/** Parse the export into folded per-(code, date) punches. */
+function parsePunches(text: string): {
+  punches: Map<string, Punch>;
+  total: number;
+} {
+  const lines = text
+    .replace(/﻿/g, "")
+    .split(/\r?\n/)
+    .filter((l) => l.trim() !== "");
+  const punches = new Map<string, Punch>();
+  if (!lines.length) return { punches, total: 0 };
+
+  const delim = detectDelim(lines[0]);
+  const head = splitLine(lines[0], delim).map((c) => c.toLowerCase().replace(/[^a-z0-9]/g, ""));
+
+  // Treat row 0 as a header only if it names known columns and isn't itself data.
+  const findCol = (aliases: string[]) => head.findIndex((h) => aliases.includes(h));
+  let idCol = -1;
+  for (const a of ID_ALIASES) {
+    const i = head.indexOf(a);
+    if (i !== -1) { idCol = i; break; }
+  }
+  const dateCol = findCol(DATE_ALIASES);
+  const timeCol = findCol(TIME_ALIASES);
+  const dtCol = findCol(DT_ALIASES);
+  const hasHeader = idCol !== -1 && (dateCol !== -1 || dtCol !== -1);
+  const start = hasHeader ? 1 : 0;
+
+  let total = 0;
+  for (let i = start; i < lines.length; i++) {
+    const cells = splitLine(lines[i], delim);
+    if (!cells.length) continue;
+
+    let code = "";
+    let date: string | null = null;
+    let time: string | null = null;
+
+    if (hasHeader) {
+      code = (cells[idCol] ?? "").trim();
+      const dCell = dateCol !== -1 ? cells[dateCol] ?? "" : "";
+      const tCell = timeCol !== -1 ? cells[timeCol] ?? "" : "";
+      date = normDate(dCell);
+      time = normTime(tCell);
+      if ((!date || !time) && dtCol !== -1) {
+        const dt = cells[dtCol] ?? "";
+        if (!date) date = normDate(dt);
+        if (!time) time = normTime(dt);
+      }
+    } else {
+      // Positional / raw .dat: first cell is the code; scan the rest for
+      // a date and a time (a combined datetime cell yields both).
+      code = (cells[0] ?? "").trim();
+      for (let c = 1; c < cells.length; c++) {
+        if (!date) date = normDate(cells[c]);
+        if (!time) time = normTime(cells[c]);
+      }
+    }
+
+    if (!code || !date) continue;
+    total++;
+
+    const key = `${normCode(code)}::${date}`;
+    let cur = punches.get(key);
+    if (!cur) {
+      cur = { code, date, earliest: null, latest: null };
+      punches.set(key, cur);
+    }
+    // A timeless punch still marks the day present, but must NOT corrupt
+    // the earliest/latest fold (which drives check-in + late detection).
+    if (time) {
+      if (!cur.earliest || time < cur.earliest) cur.earliest = time;
+      if (!cur.latest || time > cur.latest) cur.latest = time;
+    }
+  }
+  return { punches, total };
+}
+
+export async function importAttendance(formData: FormData): Promise<ActionResult<ImportSummary>> {
+  return runAction(async () => {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      throw new ValidationError("Upload the device export (CSV / TXT).");
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new ValidationError("File over 8 MB — split a large export by day.");
+    }
+    const lateAfterRaw = String(formData.get("late_after") ?? "").trim();
+    const lateAfter = /^\d{2}:\d{2}$/.test(lateAfterRaw) ? `${lateAfterRaw}:00` : null;
+    const onlyDateRaw = String(formData.get("only_date") ?? "").trim();
+    const onlyDate = /^\d{4}-\d{2}-\d{2}$/.test(onlyDateRaw) ? onlyDateRaw : null;
+
+    const text = await file.text();
+    const { punches, total } = parsePunches(text);
+    if (total === 0) {
+      throw new ValidationError("No punches found — the file needs an employee code + a date per row.");
+    }
+
+    // Match device codes to roster employee codes (case/spacing/hyphen
+    // insensitive).  This is the staff_ref we key attendance on.
+    const codeToRoster = new Map<string, { idNo: string; name: string }>();
+    for (const e of STAFF_ROSTER) codeToRoster.set(normCode(e.idNo), { idNo: e.idNo, name: e.name });
+
+    const unknown = new Set<string>();
+    const rowsToWrite: {
+      staff_ref: string;
+      date: string;
+      status: AttendanceStatus;
+      check_in: string | null;
+      check_out: string | null;
+      note: string;
+    }[] = [];
+    const preview: ImportSummary["preview"] = [];
+
+    // Build a BD-local timestamp; null if the time is missing/invalid.
+    const stamp = (date: string, time: string | null): string | null => {
+      if (!time) return null;
+      const d = new Date(`${date}T${time}+06:00`);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    };
+
+    for (const p of punches.values()) {
+      if (onlyDate && p.date !== onlyDate) continue;
+      const hit = codeToRoster.get(normCode(p.code));
+      if (!hit) {
+        unknown.add(p.code);
+        continue;
+      }
+      // Late only when we actually have a check-in time after the cutoff.
+      const status: AttendanceStatus = lateAfter && p.earliest && p.earliest > lateAfter ? "late" : "present";
+      const checkIn = stamp(p.date, p.earliest);
+      const checkOut = p.latest && p.latest !== p.earliest ? stamp(p.date, p.latest) : null;
+      rowsToWrite.push({
+        staff_ref: hit.idNo,
+        date: p.date,
+        status,
+        check_in: checkIn,
+        check_out: checkOut,
+        note: "Imported from device",
+      });
+      if (preview.length < 6) preview.push({ code: hit.idNo, name: hit.name, date: p.date, status });
+    }
+
+    if (rowsToWrite.length === 0) {
+      throw new ValidationError(
+        unknown.size > 0
+          ? `No codes matched the roster. Device codes seen: ${Array.from(unknown).slice(0, 8).join(", ")}. Set each employee's code to match the device.`
+          : "Nothing to import for the chosen filters.",
+      );
+    }
+
+    const { error } = await admin.from("attendance").upsert(rowsToWrite, { onConflict: "staff_ref,date" });
+    if (error) throw new Error(error.message);
+
+    await logAudit({
+      action: "bulk_import",
+      entity: "attendance",
+      detail: `Imported ${rowsToWrite.length} attendance rows from device (${total} punches, ${unknown.size} unknown codes)`,
+    });
+    revalidatePath("/dashboard/attendance");
+
+    return {
+      data: {
+        imported: rowsToWrite.length,
+        rows: total,
+        unknownCodes: Array.from(unknown).slice(0, 50),
+        preview,
+      },
+      message: `Imported ${rowsToWrite.length} day(s) of attendance.`,
+    };
   });
 }
