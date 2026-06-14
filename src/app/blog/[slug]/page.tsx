@@ -4,8 +4,10 @@ import JsonLd from "@/components/JsonLd";
 import BlogArticle from "@/components/BlogArticle";
 import {
   BLOG_AUTHOR,
+  BLOG_COVER,
   BLOG_POSTS,
   CATEGORY_META,
+  type BlogPost,
 } from "@/lib/blog";
 import { getAllPublicPosts, getPublicPostBySlug, relatedFrom } from "@/lib/blog-db";
 import { breadcrumbSchema } from "@/lib/schema";
@@ -13,6 +15,20 @@ import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
+
+/** Best social-share image for a post: DB cover (already absolute) →
+ *  code cover (local path, made absolute) → the site default.  Used so
+ *  WhatsApp / Facebook show the post's own banner instead of a generic. */
+function ogImageFor(post: BlogPost): string {
+  if (post.cover) return post.cover;
+  const local = BLOG_COVER[post.slug];
+  return local ? absoluteUrl(local) : OG_IMAGE;
+}
+function ogImageType(url: string): string {
+  if (url.endsWith(".png")) return "image/png";
+  if (url.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
 
 /** The code-defined slugs prerender; admin-published DB posts render on
  *  demand (then ISR-cache) instead of 404ing. */
@@ -31,6 +47,7 @@ export async function generateMetadata(
   if (!post) return { title: "পোস্ট পাওয়া যায়নি" };
 
   const url = `${SITE_URL}/blog/${post.slug}`;
+  const ogImg = ogImageFor(post);
   return {
     title: post.title,
     description: post.excerpt,
@@ -45,21 +62,14 @@ export async function generateMetadata(
       publishedTime: post.iso,
       authors: [BLOG_AUTHOR.name],
       images: [
-        {
-          url: OG_IMAGE,
-          secureUrl: OG_IMAGE,
-          type: "image/jpeg",
-          width: 1200,
-          height: 630,
-          alt: post.title,
-        },
+        { url: ogImg, secureUrl: ogImg, type: ogImageType(ogImg), alt: post.title },
       ],
     },
     twitter: {
       card: "summary_large_image",
       title: post.title,
       description: post.excerpt,
-      images: [{ url: OG_IMAGE, alt: post.title }],
+      images: [{ url: ogImg, alt: post.title }],
     },
   };
 }
@@ -92,7 +102,7 @@ export default async function BlogPostPage(
     "@id": `${SITE_URL}/blog/${post.slug}#article`,
     headline: post.title,
     description: post.excerpt,
-    image: post.cover ?? OG_IMAGE,
+    image: ogImageFor(post),
     url: `${SITE_URL}/blog/${post.slug}`,
     datePublished: post.iso,
     dateModified: post.iso,

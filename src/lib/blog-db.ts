@@ -9,6 +9,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { embedVideoLinks } from "@/lib/embed";
 import {
   BLOG_POSTS,
   BLOG_PROJECTS,
@@ -118,8 +119,8 @@ function mapRow(row: DbRow): BlogPost {
     sections: [],
     // DB-only extras the components pick up:
     cover: row.cover_url ?? undefined,
-    bodyHtml: row.body || undefined,
-    bodyHtmlEn: row.body_en ?? undefined,
+    bodyHtml: row.body ? embedVideoLinks(row.body) : undefined,
+    bodyHtmlEn: row.body_en ? embedVideoLinks(row.body_en) : undefined,
     titleEn: row.title_en ?? undefined,
     excerptEn: row.excerpt_en ?? undefined,
     source: "db",

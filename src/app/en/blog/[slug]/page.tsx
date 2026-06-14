@@ -4,8 +4,10 @@ import JsonLd from "@/components/JsonLd";
 import BlogArticle from "@/components/BlogArticle";
 import {
   BLOG_AUTHOR,
+  BLOG_COVER,
   BLOG_POSTS,
   CATEGORY_META,
+  type BlogPost,
 } from "@/lib/blog";
 import { BLOG_EN } from "@/lib/blog.en";
 import { getAllPublicPosts, getPublicPostBySlug, relatedFrom } from "@/lib/blog-db";
@@ -14,6 +16,18 @@ import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
+
+/** Best social-share image for a post — DB cover → code cover → default. */
+function ogImageFor(post: BlogPost): string {
+  if (post.cover) return post.cover;
+  const local = BLOG_COVER[post.slug];
+  return local ? absoluteUrl(local) : OG_IMAGE;
+}
+function ogImageType(url: string): string {
+  if (url.endsWith(".png")) return "image/png";
+  if (url.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
 
 /** Code slugs prerender; admin-published DB posts render on demand. */
 export const dynamicParams = true;
@@ -34,6 +48,7 @@ export async function generateMetadata(
   const title = en?.title ?? post.titleEn ?? post.title;
   const description = en?.excerpt ?? post.excerptEn ?? post.excerpt;
   const url = `${SITE_URL}/en/blog/${post.slug}`;
+  const ogImg = ogImageFor(post);
   return {
     title,
     description,
@@ -51,21 +66,14 @@ export async function generateMetadata(
       publishedTime: post.iso,
       authors: [BLOG_AUTHOR.nameEn],
       images: [
-        {
-          url: OG_IMAGE,
-          secureUrl: OG_IMAGE,
-          type: "image/jpeg",
-          width: 1200,
-          height: 630,
-          alt: title,
-        },
+        { url: ogImg, secureUrl: ogImg, type: ogImageType(ogImg), alt: title },
       ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [{ url: OG_IMAGE, alt: title }],
+      images: [{ url: ogImg, alt: title }],
     },
   };
 }
@@ -105,7 +113,7 @@ export default async function EnBlogPostPage(
     "@id": `${SITE_URL}/en/blog/${post.slug}#article`,
     headline: title,
     description,
-    image: post.cover ?? OG_IMAGE,
+    image: ogImageFor(post),
     url: `${SITE_URL}/en/blog/${post.slug}`,
     datePublished: post.iso,
     dateModified: post.iso,

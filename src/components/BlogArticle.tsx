@@ -48,7 +48,12 @@ const RICH_BODY =
   "[&_blockquote]:border-l-4 [&_blockquote]:border-brand-red [&_blockquote]:bg-bg-soft [&_blockquote]:px-6 [&_blockquote]:py-4 [&_blockquote]:my-6 [&_blockquote]:rounded-r-2xl [&_blockquote]:italic " +
   "[&_pre]:bg-bg-soft [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:my-5 [&_pre]:overflow-x-auto [&_pre]:text-sm " +
   "[&_hr]:my-8 [&_hr]:border-border " +
-  "[&_table]:w-full [&_table]:my-6 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2.5 [&_th]:border [&_th]:border-border [&_th]:bg-bg-soft [&_th]:p-2.5 [&_th]:text-left [&_th]:font-bold";
+  "[&_table]:w-full [&_table]:my-6 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2.5 [&_th]:border [&_th]:border-border [&_th]:bg-bg-soft [&_th]:p-2.5 [&_th]:text-left [&_th]:font-bold " +
+  // Embedded YouTube / Facebook players (see src/lib/embed.ts).
+  "[&_.video-embed]:relative [&_.video-embed]:my-6 [&_.video-embed]:w-full [&_.video-embed]:overflow-hidden [&_.video-embed]:rounded-2xl [&_.video-embed]:bg-black [&_.video-embed]:shadow-md " +
+  "[&_.video-embed--landscape]:aspect-video " +
+  "[&_.video-embed--portrait]:aspect-[9/16] [&_.video-embed--portrait]:mx-auto [&_.video-embed--portrait]:max-w-[360px] " +
+  "[&_.video-embed_iframe]:absolute [&_.video-embed_iframe]:inset-0 [&_.video-embed_iframe]:h-full [&_.video-embed_iframe]:w-full [&_.video-embed_iframe]:border-0";
 
 export default function BlogArticle({
   post,
