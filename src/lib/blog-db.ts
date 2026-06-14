@@ -56,6 +56,31 @@ function resolveProject(name: string | null): BlogProjectKey | undefined {
   return PROJ_BY_NAME[name.trim().toLowerCase()];
 }
 
+/** A post can be tagged with several categories / projects, stored
+ *  comma-separated in the single text column (names never contain a
+ *  comma).  Split → resolve → de-dupe, preserving order. */
+function resolveCategories(raw: string | null): BlogCategoryKey[] {
+  if (!raw) return [];
+  const out: BlogCategoryKey[] = [];
+  for (const part of raw.split(",")) {
+    const v = part.trim();
+    if (!v) continue;
+    const key = CAT_BY_NAME[v.toLowerCase()] ?? "notice";
+    if (!out.includes(key)) out.push(key);
+  }
+  return out;
+}
+
+function resolveProjects(raw: string | null): BlogProjectKey[] {
+  if (!raw) return [];
+  const out: BlogProjectKey[] = [];
+  for (const part of raw.split(",")) {
+    const key = PROJ_BY_NAME[part.trim().toLowerCase()];
+    if (key && !out.includes(key)) out.push(key);
+  }
+  return out;
+}
+
 /** Strip tags + collapse whitespace — for excerpts + reading-time. */
 function plainText(html: string): string {
   return html
@@ -95,7 +120,11 @@ const SELECT =
   "slug, title, excerpt, body, cover_url, category, project, views, published_at, created_at, author_name, title_en, excerpt_en, body_en";
 
 function mapRow(row: DbRow): BlogPost {
-  const category = resolveCategory(row.category);
+  const categories = resolveCategories(row.category);
+  const projects = resolveProjects(row.project);
+  // Primary category/project (first selected) drives the card colour/badge;
+  // the arrays drive the public filters.
+  const category = categories[0] ?? resolveCategory(row.category);
   const accent = CATEGORY_META[category].accent;
   const iso = (row.published_at ?? row.created_at ?? "").slice(0, 10);
   const excerpt =
@@ -106,7 +135,9 @@ function mapRow(row: DbRow): BlogPost {
     title: row.title,
     excerpt,
     category,
-    project: resolveProject(row.project),
+    project: projects[0] ?? resolveProject(row.project),
+    categories: categories.length ? categories : undefined,
+    projects: projects.length ? projects : undefined,
     date: bnDate(iso),
     iso,
     views: Number(row.views) || 0,

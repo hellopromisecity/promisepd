@@ -313,6 +313,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["post_views"]["Insert"]>;
         Relationships: [];
       };
+      vault_credentials: {
+        Row: {
+          id: string;
+          site_name: string;
+          site_url: string | null;
+          login_url: string | null;
+          username: string | null;
+          password: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_name: string;
+          site_url?: string | null;
+          login_url?: string | null;
+          username?: string | null;
+          password?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["vault_credentials"]["Insert"]>;
+        Relationships: [];
+      };
       project_overrides: {
         Row: {
           slug: string;

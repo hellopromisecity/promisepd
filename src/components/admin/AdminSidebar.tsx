@@ -56,10 +56,15 @@ export default function AdminSidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-bg transition-transform lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-bg transition-transform lg:static lg:z-auto lg:translate-x-0 ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}
     >
+      {/* The aside itself stretches to the full content height (so the
+          background + right border run all the way down — no abrupt
+          whitespace cut-off); this inner wrapper pins the nav to the
+          viewport while you scroll. */}
+      <div className="flex h-full flex-col lg:sticky lg:top-0 lg:h-screen">
       {/* Brand */}
       <div className="flex h-16 items-center gap-2.5 border-b border-border px-4">
         <Image src="/logo.png" alt="" width={32} height={32} className="rounded-lg" />
@@ -112,6 +117,7 @@ export default function AdminSidebar({
           <span>What&apos;s new</span>
           <span className="rounded-md bg-bg-soft px-2 py-0.5 font-bold text-fg">v{CURRENT_VERSION}</span>
         </Link>
+      </div>
       </div>
     </aside>
   );

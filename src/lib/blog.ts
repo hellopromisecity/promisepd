@@ -26,6 +26,12 @@ export type BlogPost = {
   /** Only set on posts in the "projects" category — drives the
    *  specific-project filter dropdown. */
   project?: BlogProjectKey;
+  /** A DB post can be tagged with several categories / projects. When
+   *  set these drive the filters; `category`/`project` above stay as the
+   *  primary (first) one for the card colour/badge. Code posts leave
+   *  these undefined and fall back to the singular fields. */
+  categories?: BlogCategoryKey[];
+  projects?: BlogProjectKey[];
   /** Bangla-localized display date — e.g. "১৫ মে, ২০২৬". */
   date: string;
   /** ISO date for sorting + <time dateTime>. */

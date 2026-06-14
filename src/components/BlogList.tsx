@@ -45,6 +45,13 @@ const PAGINATION_WINDOW = 5;
 type CategoryFilter = "all" | BlogCategoryKey;
 type ProjectFilter = "all" | BlogProjectKey;
 
+/** A post may carry several categories / projects (DB posts) or a single
+ *  one (code posts).  These normalise both to a list for filtering. */
+const postCats = (p: BlogPost): BlogCategoryKey[] =>
+  p.categories && p.categories.length ? p.categories : [p.category];
+const postProjs = (p: BlogPost): BlogProjectKey[] =>
+  p.projects && p.projects.length ? p.projects : p.project ? [p.project] : [];
+
 export default function BlogList({
   extraPosts = [],
   viewCounts = {},
@@ -101,8 +108,8 @@ export default function BlogList({
     const pool = allSorted.filter((p) => p.slug !== featuredPost?.slug);
     const q = query.trim().toLowerCase();
     return pool.filter((p) => {
-      if (category !== "all" && p.category !== category) return false;
-      if (project !== "all" && p.project !== project) return false;
+      if (category !== "all" && !postCats(p).includes(category)) return false;
+      if (project !== "all" && !postProjs(p).includes(project)) return false;
       if (!q) return true;
       const en = isEn ? BLOG_EN[p.slug] : null;
       const title = (en?.title ?? p.title).toLowerCase();
@@ -171,7 +178,7 @@ export default function BlogList({
   }, [project, t, isEn]);
 
   const projectPostCount = useMemo(
-    () => allPosts.filter((p) => p.category === "projects").length,
+    () => allPosts.filter((p) => postProjs(p).length > 0).length,
     [allPosts],
   );
 
@@ -255,8 +262,8 @@ export default function BlogList({
                       onClick={() => onProjectChange("all")}
                     />
                     {BLOG_PROJECTS.map((p) => {
-                      const count = allPosts.filter(
-                        (post) => post.project === p.key,
+                      const count = allPosts.filter((post) =>
+                        postProjs(post).includes(p.key),
                       ).length;
                       return (
                         <FilterOption
@@ -327,8 +334,8 @@ export default function BlogList({
                     />
                     {CATEGORY_ORDER.map((key) => {
                       const meta = CATEGORY_META[key];
-                      const count = allPosts.filter(
-                        (p) => p.category === key,
+                      const count = allPosts.filter((p) =>
+                        postCats(p).includes(key),
                       ).length;
                       return (
                         <FilterOption

@@ -74,8 +74,9 @@ export default function BlogForm({
   const [metaDesc, setMetaDesc] = useState(post?.meta_description ?? "");
   const [authorName, setAuthorName] = useState(post?.author_name ?? "Promise City");
   const [authorRole, setAuthorRole] = useState(post?.author_role ?? "Real Estate Advisor");
-  const [category, setCategory] = useState(post?.category ?? (initialCategories[0]?.name ?? ""));
-  const [project, setProject] = useState(post?.project ?? "");
+  // Multiple categories / projects per post, stored comma-separated.
+  const [selectedCats, setSelectedCats] = useState<string[]>(splitCsv(post?.category));
+  const [selectedProjs, setSelectedProjs] = useState<string[]>(splitCsv(post?.project));
   const [access, setAccess] = useState<"free" | "premium">(post?.access_type === "premium" ? "premium" : "free");
   const [region, setRegion] = useState(post?.region ?? "Worldwide");
   const [tags, setTags] = useState((post?.tags ?? []).join(", "));
@@ -117,12 +118,18 @@ export default function BlogForm({
     if (!slugTouched) setSlug(slugify(v));
   }
 
+  const toggleCat = (name: string) =>
+    setSelectedCats((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]));
+  const toggleProj = (name: string) =>
+    setSelectedProjs((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]));
+
   function payload(status: BlogStatus): BlogPostInput {
     return {
       title, slug: effSlug, excerpt, body, cover_url: cover, tags,
       author_name: authorName, author_role: authorRole, status,
       scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
-      meta_title: metaTitle, meta_description: metaDesc, layout, category, project,
+      meta_title: metaTitle, meta_description: metaDesc, layout,
+      category: selectedCats.join(", "), project: selectedProjs.join(", "),
       access_type: access, region, custom_css: customCss, custom_schema: customSchema,
     };
   }
@@ -165,7 +172,7 @@ export default function BlogForm({
       const res = await createCategory(name);
       if (res.ok) {
         setCategories((c) => [...c, { id: res.data!.id, name }].sort((a, b) => a.name.localeCompare(b.name)));
-        setCategory(name);
+        setSelectedCats((s) => (s.includes(name) ? s : [...s, name]));
         setNewCat("");
       } else {
         setError(res.error);
@@ -178,7 +185,7 @@ export default function BlogForm({
       const res = await deleteCategory(id);
       if (res.ok) {
         setCategories((c) => c.filter((x) => x.id !== id));
-        if (category === name) setCategory("");
+        setSelectedCats((s) => s.filter((x) => x !== name));
       } else {
         setError(res.error);
       }
@@ -192,7 +199,7 @@ export default function BlogForm({
       const res = await createProject(name);
       if (res.ok) {
         setProjects((p) => [...p, { id: res.data!.id, name }]);
-        setProject(name);
+        setSelectedProjs((s) => (s.includes(name) ? s : [...s, name]));
         setNewProj("");
       } else {
         setError(res.error);
@@ -205,7 +212,7 @@ export default function BlogForm({
       const res = await deleteProject(id);
       if (res.ok) {
         setProjects((p) => p.filter((x) => x.id !== id));
-        if (project === name) setProject("");
+        setSelectedProjs((s) => s.filter((x) => x !== name));
       } else {
         setError(res.error);
       }
@@ -339,15 +346,15 @@ export default function BlogForm({
 
           <Card>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-fg">Category</h3>
+              <h3 className="text-sm font-bold text-fg">Categories</h3>
               <button onClick={() => setManageCats((v) => !v)} className="text-xs font-semibold text-brand-blue hover:underline">{manageCats ? "Done" : "Manage"}</button>
             </div>
-            <div className="relative mt-2">
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full appearance-none rounded-xl border border-border bg-bg-soft px-3 py-2.5 pr-9 text-sm text-fg outline-none focus:border-brand-blue/50">
-                <option value="">Uncategorised</option>
-                {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
+            <p className="mt-1 text-xs text-fg-muted">Pick one or more — tap to toggle.</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {categories.length === 0 && <span className="text-xs text-fg-faint">No categories yet — add one below.</span>}
+              {categories.map((c) => (
+                <Chip key={c.id} label={c.name} active={selectedCats.includes(c.name)} onClick={() => toggleCat(c.name)} />
+              ))}
             </div>
             {manageCats && (
               <div className="mt-3 space-y-2 border-t border-border pt-3">
@@ -374,13 +381,12 @@ export default function BlogForm({
               <h3 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Building2 className="h-4 w-4 text-brand-blue" /> Project</h3>
               <button onClick={() => setManageProj((v) => !v)} className="text-xs font-semibold text-brand-blue hover:underline">{manageProj ? "Done" : "Manage"}</button>
             </div>
-            <p className="mt-1 text-xs text-fg-muted">Which project this post is about — drives the “প্রকল্প” filter on the public blog.</p>
-            <div className="relative mt-2">
-              <select value={project} onChange={(e) => setProject(e.target.value)} className="w-full appearance-none rounded-xl border border-border bg-bg-soft px-3 py-2.5 pr-9 text-sm text-fg outline-none focus:border-brand-blue/50">
-                <option value="">No specific project</option>
-                {projects.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
+            <p className="mt-1 text-xs text-fg-muted">Tag one or more projects — drives the “প্রকল্প” filter on the public blog.</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {projects.length === 0 && <span className="text-xs text-fg-faint">No projects yet — add one below.</span>}
+              {projects.map((p) => (
+                <Chip key={p.id} label={p.name} active={selectedProjs.includes(p.name)} onClick={() => toggleProj(p.name)} />
+              ))}
             </div>
             {manageProj && (
               <div className="mt-3 space-y-2 border-t border-border pt-3">
@@ -446,9 +452,30 @@ export default function BlogForm({
   );
 }
 
+/** Comma-separated stored value → trimmed list of names. */
+function splitCsv(v: string | null | undefined): string[] {
+  return (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+}
+
 // ── small presentational helpers ──────────────────────────────────
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-border bg-bg p-4">{children}</div>;
+}
+/** Toggleable pill used for multi-selecting categories / projects. */
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+        active
+          ? "bg-brand-blue text-white shadow-[var(--shadow-brand)]"
+          : "bg-bg-soft text-fg-muted hover:bg-bg-soft-2 hover:text-fg"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 function Label({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <label className={`mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted ${className}`}>{children}</label>;

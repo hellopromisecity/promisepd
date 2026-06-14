@@ -23,6 +23,7 @@ import {
   History,
   Settings,
   Rocket,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/auth";
@@ -74,6 +75,7 @@ export const ADMIN_NAV: NavEntry[] = [
       { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "admin" },
     ],
   },
+  { label: "Vault", href: "/dashboard/vault", icon: KeyRound, min: "manager" },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "staff" },
   { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "staff" },
 ];
