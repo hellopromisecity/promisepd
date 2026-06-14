@@ -96,16 +96,8 @@ export default async function AuditLogPage({
   startOfToday.setHours(0, 0, 0, 0);
   const todayIso = startOfToday.toISOString();
 
-  const [{ count: totalEvents }, { count: loginsToday }] = await Promise.all([
-    admin.from("audit_logs").select("*", { count: "exact", head: true }),
-    admin
-      .from("audit_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("action", "login")
-      .gte("created_at", todayIso),
-  ]);
-
-  // Filtered rows, newest first, capped at 100.
+  // Filtered rows, newest first, capped at 100 — built lazily so it can
+  // join the parallel batch below.
   let query = admin
     .from("audit_logs")
     .select("id, actor_name, action, entity, detail, created_at")
@@ -114,7 +106,18 @@ export default async function AuditLogPage({
   if (action) query = query.eq("action", action);
   if (entity) query = query.eq("entity", entity);
 
-  const { data } = await query;
+  // All three run together (one round-trip).  The all-time total uses an
+  // "estimated" count (planner stats, O(1)) instead of a full count(*)
+  // scan that grows forever on the append-only audit_logs table.
+  const [{ count: totalEvents }, { count: loginsToday }, { data }] = await Promise.all([
+    admin.from("audit_logs").select("*", { count: "estimated", head: true }),
+    admin
+      .from("audit_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("action", "login")
+      .gte("created_at", todayIso),
+    query,
+  ]);
   const rows = (data ?? []) as LogRow[];
 
   return (

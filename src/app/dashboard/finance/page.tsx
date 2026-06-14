@@ -51,21 +51,25 @@ export default async function FinanceOverviewPage() {
     );
   }
 
-  const accounts = ((await fetchAccounts()) ?? []) as AccountRow[];
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  // All transactions feed the totals + per-account balances; recent 10 for the list.
-  const { data: allTxns } = await admin
-    .from("transactions")
-    .select("type, amount, account_id");
-  const txns = (allTxns ?? []) as Pick<TxnRow, "type" | "amount" | "account_id">[];
-
-  const { data: recentData } = await admin
-    .from("transactions")
-    .select("id, type, amount, category, txn_date, party, project_slug")
-    .order("txn_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
-  const recent = (recentData ?? []) as Pick<
+  // One parallel batch: accounts + a single full scan (feeds totals,
+  // per-account balances AND this-month net) + the recent-10 list.  Was
+  // four serial round-trips with two whole-table scans.
+  const [accountsRaw, allRes, recentRes] = await Promise.all([
+    fetchAccounts(),
+    admin.from("transactions").select("type, amount, account_id, txn_date"),
+    admin
+      .from("transactions")
+      .select("id, type, amount, category, txn_date, party, project_slug")
+      .order("txn_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+  const accounts = (accountsRaw ?? []) as AccountRow[];
+  const txns = (allRes.data ?? []) as Pick<TxnRow, "type" | "amount" | "account_id" | "txn_date">[];
+  const recent = (recentRes.data ?? []) as Pick<
     TxnRow,
     "id" | "type" | "amount" | "category" | "txn_date" | "party" | "project_slug"
   >[];
@@ -78,14 +82,8 @@ export default async function FinanceOverviewPage() {
     .reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const net = totalIncome - totalExpense;
 
-  // This-month net needs dated rows.
-  const { data: monthData } = await admin
-    .from("transactions")
-    .select("type, amount, txn_date");
-  const now = new Date();
-  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   let monthNet = 0;
-  for (const t of (monthData ?? []) as Pick<TxnRow, "type" | "amount" | "txn_date">[]) {
+  for (const t of txns) {
     if (!t.txn_date?.startsWith(ym)) continue;
     monthNet += (Number(t.amount) || 0) * (t.type === "income" ? 1 : -1);
   }

@@ -50,10 +50,13 @@ export default async function BankCashPage() {
     );
   }
 
-  const accounts = ((await fetchAccounts()) ?? []) as AccountRow[];
-
-  const { data: txnData } = await admin.from("transactions").select("type, amount, account_id");
-  const txns = (txnData ?? []) as Pick<TxnRow, "type" | "amount" | "account_id">[];
+  // Accounts + transactions are independent — fetch in parallel.
+  const [accountsRaw, txnRes] = await Promise.all([
+    fetchAccounts(),
+    admin.from("transactions").select("type, amount, account_id"),
+  ]);
+  const accounts = (accountsRaw ?? []) as AccountRow[];
+  const txns = (txnRes.data ?? []) as Pick<TxnRow, "type" | "amount" | "account_id">[];
   const balances = accountBalances(accounts, txns);
 
   return (

@@ -46,6 +46,9 @@ next-env.d.ts
 # Vercel
 .vercel/
 
+# Claude — keep launch.json, ignore per-user settings
+.claude/settings.local.json
 
 # Convex generated (recreated by `npx convex dev`)
 convex/_generated/
+.vercel

@@ -59,27 +59,33 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
 
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
+    // getClaims() verifies the JWT LOCALLY (no GoTrue round-trip) when the
+    // project uses asymmetric signing keys — same cryptographic guarantee
+    // as getUser(), one fewer network hop per dashboard navigation.  On a
+    // legacy HS256 secret it transparently falls back to getUser(), so the
+    // swap is always safe.  The session is refreshed by the middleware.
+    const { data: claimsData } = await supabase.auth.getClaims();
+    const claims = (claimsData?.claims ?? null) as Record<string, unknown> | null;
+    const userId = typeof claims?.sub === "string" ? claims.sub : null;
+    if (!userId) return null;
 
     const { data: profile } = await supabase
       .from("profiles")
       .select("name, mobile, username, email, role, avatar_url, created_at")
-      .eq("id", user.id)
+      .eq("id", userId)
       .maybeSingle();
 
-    const meta = (user.user_metadata ?? {}) as Record<string, string | null>;
+    const meta = (claims?.user_metadata ?? {}) as Record<string, string | null>;
+    const claimEmail = typeof claims?.email === "string" ? claims.email : null;
+    const claimPhone = typeof claims?.phone === "string" ? claims.phone : null;
     // Resolve the owner's real-world email / mobile from every place it
-    // might live — the profile row, the signup metadata, AND the auth
-    // user's own email/phone.  This matters because one person can have
-    // two accounts (a mobile/username login whose auth email is synthetic,
-    // and a real-email login); the super-admin override must recognise the
-    // owner no matter which one they signed in with, so they're never
-    // locked out of the dashboard.
-    const email = profile?.email ?? meta.email ?? user.email ?? null;
-    const mobile = profile?.mobile || meta.mobile || user.phone || "";
+    // might live — the profile row, the signup metadata, AND the token's
+    // own email/phone.  This matters because one person can have two
+    // accounts (a mobile/username login whose auth email is synthetic, and
+    // a real-email login); the super-admin override must recognise the
+    // owner no matter which one they signed in with.
+    const email = profile?.email ?? meta.email ?? claimEmail ?? null;
+    const mobile = profile?.mobile || meta.mobile || claimPhone || "";
 
     // Env-designated owner is always admin; otherwise use the DB role.
     const role: Role = isSuperAdmin(email, mobile)
@@ -87,14 +93,14 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
       : ((profile?.role ?? "member") as Role);
 
     return {
-      id: user.id,
+      id: userId,
       name: profile?.name || meta.name || "",
       mobile,
       username: profile?.username ?? meta.username ?? null,
       email,
       role,
       avatarUrl: (profile as { avatar_url?: string | null } | null)?.avatar_url ?? null,
-      createdAt: profile?.created_at ?? user.created_at ?? null,
+      createdAt: profile?.created_at ?? null,
     };
   } catch {
     return null;

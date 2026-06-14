@@ -118,10 +118,25 @@ export default async function AttendancePage({
     // exists after migration 0016 — fall back so this never errors out.
     const selProfiles = (cols: string) =>
       admin.from("profiles").select(cols).order("name", { ascending: true });
-    let pres = await selProfiles("id, name, mobile, role, employee_code");
+
+    // Resolve the window first, then fetch the roster AND the attendance
+    // for it IN PARALLEL (they share no data) — one round-trip, not two.
+    const isRange = !!sp.range;
+    const range = isRange ? resolveRange(sp.range as string, sp.from ?? "", sp.to ?? "", today) : null;
+    const selDate =
+      !isRange && sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
+    const attQuery = range
+      ? admin.from("attendance").select("staff_ref, status").gte("date", range.from).lte("date", range.to)
+      : admin.from("attendance").select("staff_ref, status").eq("date", selDate);
+
+    let [pres, attRes] = await Promise.all([
+      selProfiles("id, name, mobile, role, employee_code"),
+      attQuery,
+    ]);
     if (pres.error?.code === "42703") pres = await selProfiles("id, name, mobile, role");
     const accounts = (pres.error ? [] : pres.data ?? []) as unknown as StaffAccount[];
     const directory = buildStaffDirectory(accounts);
+    const attRows = (attRes.data ?? []) as { staff_ref: string | null; status: string }[];
 
     const importLink = (
       <Link
@@ -133,15 +148,10 @@ export default async function AttendancePage({
     );
 
     // ===== RANGE mode: read-only per-employee summary =====
-    if (sp.range) {
-      const { from, to, label } = resolveRange(sp.range, sp.from ?? "", sp.to ?? "", today);
-      const { data: rangeRows } = await admin
-        .from("attendance")
-        .select("staff_ref, status")
-        .gte("date", from)
-        .lte("date", to);
+    if (range) {
+      const { from, to, label } = range;
       const agg = new Map<string, { present: number; late: number; absent: number; leave: number }>();
-      for (const r of (rangeRows ?? []) as { staff_ref: string | null; status: string }[]) {
+      for (const r of attRows) {
         const k = r.staff_ref ?? "";
         if (!k) continue;
         const a = agg.get(k) ?? { present: 0, late: 0, absent: 0, leave: 0 };
@@ -199,15 +209,7 @@ export default async function AttendancePage({
     }
 
     // ===== DAY mode: one-click bulk-marking roster =====
-    const selDate =
-      sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
-    const { data: dayRows } = await admin
-      .from("attendance")
-      .select("staff_ref, status")
-      .eq("date", selDate);
-    const byRef = new Map(
-      (dayRows ?? []).map((r) => [(r as { staff_ref: string | null }).staff_ref ?? "", (r as { status: string }).status]),
-    );
+    const byRef = new Map(attRows.map((r) => [r.staff_ref ?? "", r.status]));
 
     const rosterRows: RosterRow[] = directory.map((d) => {
       const raw = byRef.get(d.ref);

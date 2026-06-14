@@ -97,15 +97,21 @@ export async function getAnalytics(range: DateRange): Promise<AnalyticsData | nu
     const property = `properties/${c.propertyId}`;
     const dateRanges = [{ startDate: start, endDate: end }];
 
-    const [resp] = await client.batchRunReports({
-      property,
-      requests: [
-        { dateRanges, dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], orderBys: [{ dimension: { dimensionName: "date" } }] },
-        { dateRanges, metrics: [{ name: "activeUsers" }, { name: "newUsers" }, { name: "sessions" }, { name: "screenPageViews" }] },
-        { dateRanges, dimensions: [{ name: "pagePath" }, { name: "pageTitle" }], metrics: [{ name: "screenPageViews" }], orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }], limit: 25 },
-        { dateRanges, dimensions: [{ name: "country" }], metrics: [{ name: "activeUsers" }], orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }], limit: 25 },
-      ],
-    });
+    // GA4 and Search Console are independent — run them concurrently so
+    // the wait is max(GA4, SC), not GA4 + SC.  searchConsole never throws
+    // (returns {ok:false} on error), so Promise.all stays safe.
+    const [[resp], sc] = await Promise.all([
+      client.batchRunReports({
+        property,
+        requests: [
+          { dateRanges, dimensions: [{ name: "date" }], metrics: [{ name: "activeUsers" }], orderBys: [{ dimension: { dimensionName: "date" } }] },
+          { dateRanges, metrics: [{ name: "activeUsers" }, { name: "newUsers" }, { name: "sessions" }, { name: "screenPageViews" }] },
+          { dateRanges, dimensions: [{ name: "pagePath" }, { name: "pageTitle" }], metrics: [{ name: "screenPageViews" }], orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }], limit: 25 },
+          { dateRanges, dimensions: [{ name: "country" }], metrics: [{ name: "activeUsers" }], orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }], limit: 25 },
+        ],
+      }),
+      searchConsole(c, start, end),
+    ]);
     const reports = resp.reports ?? [];
 
     const daily = (reports[0]?.rows ?? []).map((row) => ({
@@ -125,8 +131,6 @@ export async function getAnalytics(range: DateRange): Promise<AnalyticsData | nu
       country: row.dimensionValues?.[0]?.value ?? "",
       users: n(row.metricValues?.[0]?.value),
     }));
-
-    const sc = await searchConsole(c, start, end);
 
     return { totals, today, last7, daily, topPages, topCountries, topQueries: sc.topQueries, topSearchPages: sc.topSearchPages, searchConsole: sc.ok };
   } catch (e) {

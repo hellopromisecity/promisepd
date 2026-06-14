@@ -52,6 +52,18 @@ async function tableCount(table: "profiles" | "contact_submissions"): Promise<nu
   return error ? null : count;
 }
 
+/** Total published articles = code-defined posts + admin-published DB
+ *  posts (excluding any DB post that shadows a code slug). */
+async function publishedBlogCount(): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return BLOG_POSTS.length;
+  const { data, error } = await admin.from("blog_posts").select("slug").eq("status", "published");
+  if (error || !data) return BLOG_POSTS.length;
+  const codeSlugs = new Set(BLOG_POSTS.map((p) => p.slug));
+  const extra = (data as { slug: string }[]).filter((r) => !codeSlugs.has(r.slug)).length;
+  return BLOG_POSTS.length + extra;
+}
+
 async function recentLeads() {
   const admin = createAdminClient();
   if (!admin) return [] as { name: string; interest: string | null; created_at: string }[];
@@ -64,10 +76,11 @@ async function recentLeads() {
 }
 
 export default async function AdminDashboard() {
-  const [members, leads, recent] = await Promise.all([
+  const [members, leads, recent, blogCount] = await Promise.all([
     tableCount("profiles"),
     tableCount("contact_submissions"),
     recentLeads(),
+    publishedBlogCount(),
   ]);
 
   const sell = PROJECTS.map((p) => ({ name: p.name, st: sellThrough(p) })).filter(
@@ -78,7 +91,7 @@ export default async function AdminDashboard() {
     { label: "Projects", value: PROJECTS.length, sub: "live on the site", icon: Building, href: "/dashboard/projects" },
     { label: "Members", value: members, sub: "registered accounts", icon: Users, href: "/dashboard/staff" },
     { label: "Leads", value: leads, sub: "contact enquiries", icon: MessageSquare, href: "/dashboard/marketing/followup" },
-    { label: "Blog posts", value: BLOG_POSTS.length, sub: "published articles", icon: Newspaper, href: "/dashboard/blog" },
+    { label: "Blog posts", value: blogCount, sub: "published articles", icon: Newspaper, href: "/dashboard/blog" },
   ];
 
   return (

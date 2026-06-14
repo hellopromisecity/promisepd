@@ -35,19 +35,19 @@ export default async function ExpensesPage() {
     );
   }
 
-  const { data: accData } = await admin
-    .from("finance_accounts")
-    .select("id, name, type")
-    .order("name", { ascending: true });
-  const accounts = (accData ?? []) as AccountOption[];
-
-  const { data: txnData } = await admin
-    .from("transactions")
-    .select("id, type, amount, category, txn_date, party, project_slug, method, description")
-    .eq("type", "expense")
-    .order("txn_date", { ascending: false })
-    .order("created_at", { ascending: false });
-  const rows = (txnData ?? []) as TxnListRow[];
+  // Accounts (form dropdown) + expense rows are independent — fetch both
+  // in parallel instead of one after the other.
+  const [accRes, txnRes] = await Promise.all([
+    admin.from("finance_accounts").select("id, name, type").order("name", { ascending: true }),
+    admin
+      .from("transactions")
+      .select("id, type, amount, category, txn_date, party, project_slug, method, description")
+      .eq("type", "expense")
+      .order("txn_date", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ]);
+  const accounts = (accRes.data ?? []) as AccountOption[];
+  const rows = (txnRes.data ?? []) as TxnListRow[];
 
   const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const now = new Date();
