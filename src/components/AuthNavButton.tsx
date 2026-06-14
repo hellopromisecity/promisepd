@@ -33,6 +33,7 @@ export default function AuthNavButton({
   onSelect,
 }: Props) {
   const [authed, setAuthed] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
   // Where the pill links once we know the role.  Defaults to the account
   // entry (which still redirects correctly) until /api/me resolves.
   const [dest, setDest] = useState(accountHref);
@@ -46,6 +47,7 @@ export default function AuthNavButton({
         const data = await res.json();
         if (!active) return;
         setAuthed(!!data.authed);
+        setAvatar(data.avatar ?? null);
         // Staff jump straight to /dashboard (single-locale); members go
         // to their localized account page.  Either way: no extra hop.
         setDest(data.authed && data.staff ? "/dashboard" : accountHref);
@@ -82,9 +84,18 @@ export default function AuthNavButton({
         : "inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-1.5 pl-1.5 pr-4 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/50";
     return (
       <Link href={dest} onClick={onSelect} className={authedCls}>
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-red text-white shadow-sm">
-          <UserRound className="h-4 w-4" />
-        </span>
+        {avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatar}
+            alt=""
+            className="h-7 w-7 rounded-full object-cover ring-1 ring-border"
+          />
+        ) : (
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-red text-white shadow-sm">
+            <UserRound className="h-4 w-4" />
+          </span>
+        )}
         <span>{accountLabel}</span>
       </Link>
     );

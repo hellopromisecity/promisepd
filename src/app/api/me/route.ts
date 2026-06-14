@@ -13,5 +13,6 @@ export async function GET() {
     authed: true,
     staff: isStaff(member.role),
     name: member.name,
+    avatar: member.avatarUrl,
   });
 }

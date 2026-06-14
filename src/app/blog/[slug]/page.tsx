@@ -103,8 +103,8 @@ export default async function BlogPostPage(
   const popular = [...sorted]
     .filter((p) => p.slug !== post.slug)
     .sort((a, b) => b.views - a.views)
-    .slice(0, 5);
-  const recent = sorted.filter((p) => p.slug !== post.slug).slice(0, 5);
+    .slice(0, 10);
+  const recent = sorted.filter((p) => p.slug !== post.slug).slice(0, 10);
 
   const breadcrumb = breadcrumbSchema([
     { name: "হোম", url: SITE_URL },

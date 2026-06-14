@@ -68,9 +68,18 @@ export default function AdminTopbar({
             onClick={() => setMenuOpen((v) => !v)}
             className="flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 hover:bg-bg-soft"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-blue text-xs font-bold text-white">
-              {initials(member.name)}
-            </span>
+            {member.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={member.avatarUrl}
+                alt={member.name}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-blue text-xs font-bold text-white">
+                {initials(member.name)}
+              </span>
+            )}
             <span className="hidden text-left sm:block">
               <span className="block text-sm font-semibold leading-tight text-fg">
                 {member.name.split(/\s+/)[0] || "Admin"}

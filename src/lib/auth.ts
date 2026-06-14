@@ -47,6 +47,7 @@ export type Member = {
   username: string | null;
   email: string | null;
   role: Role;
+  avatarUrl: string | null;
   createdAt: string | null;
 };
 
@@ -65,7 +66,7 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("name, mobile, username, email, role, created_at")
+      .select("name, mobile, username, email, role, avatar_url, created_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -85,6 +86,7 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
       username: profile?.username ?? meta.username ?? null,
       email,
       role,
+      avatarUrl: (profile as { avatar_url?: string | null } | null)?.avatar_url ?? null,
       createdAt: profile?.created_at ?? user.created_at ?? null,
     };
   } catch {

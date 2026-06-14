@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Newspaper } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
+import { getViewCounts } from "@/lib/blog-db";
 import { EmptyState, PageHeader } from "@/components/admin/ui";
 import BlogList, { type BlogRow } from "./BlogList";
 
@@ -42,10 +43,13 @@ export default async function BlogAdminPage() {
     );
   }
 
-  const { data } = await admin
-    .from("blog_posts")
-    .select("id, slug, title, body, category, access_type, status, published, published_at, scheduled_at, created_at, views")
-    .order("created_at", { ascending: false });
+  const [{ data }, counts] = await Promise.all([
+    admin
+      .from("blog_posts")
+      .select("id, slug, title, body, category, access_type, status, published, published_at, scheduled_at, created_at, views")
+      .order("created_at", { ascending: false }),
+    getViewCounts(),
+  ]);
 
   const rows: BlogRow[] = (data ?? []).map((p) => ({
     id: p.id,
@@ -55,7 +59,8 @@ export default async function BlogAdminPage() {
     accessType: p.access_type,
     status: p.status || (p.published ? "published" : "draft"),
     date: p.published_at ?? p.scheduled_at ?? p.created_at,
-    views: p.views ?? 0,
+    // Real total = the post's base count + the dynamically-tracked views.
+    views: (p.views ?? 0) + (counts[p.slug] ?? 0),
     links: countLinks(p.body ?? ""),
   }));
 
