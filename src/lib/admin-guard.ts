@@ -18,6 +18,17 @@ export class AuthzError extends Error {
   }
 }
 
+/** A user-facing validation problem (bad input), as opposed to an
+ *  unexpected server fault.  runAction() passes its message straight
+ *  through so forms show "Slug is required" instead of the generic
+ *  "Something went wrong." */
+export class ValidationError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "ValidationError";
+  }
+}
+
 export const getAdmin = createAdminClient;
 
 async function requireRole(check: (r: Role) => boolean): Promise<Member> {
@@ -70,7 +81,11 @@ export async function runAction<T>(
     const { data, message } = await fn();
     return { ok: true, data, message };
   } catch (e) {
-    if (e instanceof AuthzError) return { ok: false, error: e.message };
+    // Expected, user-facing problems surface their own message…
+    if (e instanceof AuthzError || e instanceof ValidationError) {
+      return { ok: false, error: e.message };
+    }
+    // …everything else is an unexpected fault — log it, show a generic note.
     console.error("[admin action]", e);
     return { ok: false, error: "Something went wrong. Please try again." };
   }

@@ -251,6 +251,7 @@ export type Database = {
           layout: string;
           author_role: string | null;
           category: string | null;
+          project: string | null;
           access_type: string;
           region: string | null;
           custom_css: string | null;
@@ -280,6 +281,7 @@ export type Database = {
           layout?: string;
           author_role?: string | null;
           category?: string | null;
+          project?: string | null;
           access_type?: string;
           region?: string | null;
           custom_css?: string | null;
@@ -297,6 +299,12 @@ export type Database = {
         Row: { id: string; name: string; slug: string; created_at: string };
         Insert: { id?: string; name: string; slug: string; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["blog_categories"]["Insert"]>;
+        Relationships: [];
+      };
+      blog_projects: {
+        Row: { id: string; name: string; slug: string; sort: number; created_at: string };
+        Insert: { id?: string; name: string; slug: string; sort?: number; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["blog_projects"]["Insert"]>;
         Relationships: [];
       };
       project_overrides: {

@@ -4,7 +4,7 @@ import { Newspaper } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { EmptyState, PageHeader } from "@/components/admin/ui";
-import BlogForm, { type BlogFormPost, type CategoryOption } from "../BlogForm";
+import BlogForm, { type BlogFormPost, type CategoryOption, type ProjectOption } from "../BlogForm";
 
 export const metadata: Metadata = {
   title: "Edit post",
@@ -36,18 +36,30 @@ export default async function EditBlogPostPage({
     );
   }
 
-  const [{ data, error }, cats] = await Promise.all([
-    admin
-      .from("blog_posts")
-      .select(
-        "id, slug, title, excerpt, body, cover_url, tags, author_name, author_role, status, scheduled_at, meta_title, meta_description, layout, category, access_type, region, custom_css, custom_schema, title_en, excerpt_en, body_en",
-      )
-      .eq("id", id)
-      .maybeSingle(),
+  // `project` is added by migration 0013 — if it isn't applied yet the
+  // select 42703's, so fall back to a column set without it.
+  const WITH_PROJECT =
+    "id, slug, title, excerpt, body, cover_url, tags, author_name, author_role, status, scheduled_at, meta_title, meta_description, layout, category, project, access_type, region, custom_css, custom_schema, title_en, excerpt_en, body_en";
+  const WITHOUT_PROJECT = WITH_PROJECT.replace(", project", "");
+
+  const [postRes, cats, projs] = await Promise.all([
+    admin.from("blog_posts").select(WITH_PROJECT).eq("id", id).maybeSingle(),
     admin.from("blog_categories").select("id, name").order("name"),
+    admin.from("blog_projects").select("id, name").order("sort"),
   ]);
+
+  let { data, error } = postRes;
+  if (error?.code === "42703") {
+    ({ data, error } = await admin.from("blog_posts").select(WITHOUT_PROJECT).eq("id", id).maybeSingle());
+  }
 
   if (error || !data) notFound();
 
-  return <BlogForm post={data as BlogFormPost} categories={(cats.data ?? []) as CategoryOption[]} />;
+  return (
+    <BlogForm
+      post={data as BlogFormPost}
+      categories={(cats.data ?? []) as CategoryOption[]}
+      projects={(projs.data ?? []) as ProjectOption[]}
+    />
+  );
 }

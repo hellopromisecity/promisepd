@@ -9,17 +9,19 @@ import { useMemo, useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Save, Send, CalendarClock, Upload, Loader2, Plus, Trash2,
-  Link2, AlertCircle, Globe, Lock, ChevronDown,
+  Link2, AlertCircle, Globe, Lock, ChevronDown, Building2,
 } from "lucide-react";
 import RichEditor from "@/components/admin/RichEditor";
 import { uploadImage } from "@/app/actions/upload-image";
 import {
   createPost, updatePost, createCategory, deleteCategory,
+  createProject, deleteProject,
   type BlogPostInput, type BlogStatus,
 } from "@/app/actions/admin-blog";
 import { slugify } from "./slug";
 
 export type CategoryOption = { id: string; name: string };
+export type ProjectOption = { id: string; name: string };
 
 export type BlogFormPost = {
   id: string;
@@ -37,6 +39,7 @@ export type BlogFormPost = {
   meta_description: string | null;
   layout: string | null;
   category: string | null;
+  project: string | null;
   access_type: string | null;
   region: string | null;
   custom_css: string | null;
@@ -52,9 +55,11 @@ const PERMALINK_PREFIX = "promisepd.com/blog/";
 export default function BlogForm({
   post,
   categories: initialCategories,
+  projects: initialProjects = [],
 }: {
   post?: BlogFormPost;
   categories: CategoryOption[];
+  projects?: ProjectOption[];
 }) {
   const router = useRouter();
   const editing = !!post;
@@ -70,6 +75,7 @@ export default function BlogForm({
   const [authorName, setAuthorName] = useState(post?.author_name ?? "Promise City");
   const [authorRole, setAuthorRole] = useState(post?.author_role ?? "Real Estate Advisor");
   const [category, setCategory] = useState(post?.category ?? (initialCategories[0]?.name ?? ""));
+  const [project, setProject] = useState(post?.project ?? "");
   const [access, setAccess] = useState<"free" | "premium">(post?.access_type === "premium" ? "premium" : "free");
   const [region, setRegion] = useState(post?.region ?? "Worldwide");
   const [tags, setTags] = useState((post?.tags ?? []).join(", "));
@@ -84,10 +90,15 @@ export default function BlogForm({
   const [manageCats, setManageCats] = useState(false);
   const [newCat, setNewCat] = useState("");
 
+  const [projects, setProjects] = useState(initialProjects);
+  const [manageProj, setManageProj] = useState(false);
+  const [newProj, setNewProj] = useState("");
+
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [catPending, startCatTransition] = useTransition();
+  const [projPending, startProjTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const effSlug = slug || slugify(title);
@@ -111,7 +122,7 @@ export default function BlogForm({
       title, slug: effSlug, excerpt, body, cover_url: cover, tags,
       author_name: authorName, author_role: authorRole, status,
       scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
-      meta_title: metaTitle, meta_description: metaDesc, layout, category,
+      meta_title: metaTitle, meta_description: metaDesc, layout, category, project,
       access_type: access, region, custom_css: customCss, custom_schema: customSchema,
     };
   }
@@ -168,6 +179,33 @@ export default function BlogForm({
       if (res.ok) {
         setCategories((c) => c.filter((x) => x.id !== id));
         if (category === name) setCategory("");
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  function addProject() {
+    const name = newProj.trim();
+    if (!name) return;
+    startProjTransition(async () => {
+      const res = await createProject(name);
+      if (res.ok) {
+        setProjects((p) => [...p, { id: res.data!.id, name }]);
+        setProject(name);
+        setNewProj("");
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  function removeProject(id: string, name: string) {
+    startProjTransition(async () => {
+      const res = await deleteProject(id);
+      if (res.ok) {
+        setProjects((p) => p.filter((x) => x.id !== id));
+        if (project === name) setProject("");
       } else {
         setError(res.error);
       }
@@ -327,6 +365,43 @@ export default function BlogForm({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between">
+              <h3 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Building2 className="h-4 w-4 text-brand-blue" /> Project</h3>
+              <button onClick={() => setManageProj((v) => !v)} className="text-xs font-semibold text-brand-blue hover:underline">{manageProj ? "Done" : "Manage"}</button>
+            </div>
+            <p className="mt-1 text-xs text-fg-muted">Which project this post is about — drives the “প্রকল্প” filter on the public blog.</p>
+            <div className="relative mt-2">
+              <select value={project} onChange={(e) => setProject(e.target.value)} className="w-full appearance-none rounded-xl border border-border bg-bg-soft px-3 py-2.5 pr-9 text-sm text-fg outline-none focus:border-brand-blue/50">
+                <option value="">No specific project</option>
+                {projects.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
+            </div>
+            {manageProj && (
+              <div className="mt-3 space-y-2 border-t border-border pt-3">
+                <div className="flex gap-2">
+                  <input value={newProj} onChange={(e) => setNewProj(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addProject(); } }} placeholder="New project name" className="w-full rounded-lg border border-border bg-bg-soft px-2.5 py-2 text-sm text-fg outline-none focus:border-brand-blue/50" />
+                  <button onClick={addProject} disabled={projPending} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-blue text-white disabled:opacity-60" aria-label="Add project">
+                    {projPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </button>
+                </div>
+                {projects.length === 0 ? (
+                  <p className="text-xs text-fg-faint">No projects yet — add one above, or run migration 0013 to seed the defaults.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {projects.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between rounded-lg bg-bg-soft px-2.5 py-1.5 text-sm text-fg">
+                        {p.name}
+                        <button onClick={() => removeProject(p.id, p.name)} disabled={projPending} className="text-fg-faint hover:text-brand-red" aria-label={`Delete ${p.name}`}><Trash2 className="h-3.5 w-3.5" /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </Card>

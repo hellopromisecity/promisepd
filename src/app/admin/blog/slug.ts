@@ -5,12 +5,19 @@
  *  of a "use server" module must be an async Server Function, and this
  *  is a plain synchronous utility used on both sides. */
 
-/** lowercase, spaces→-, strip non-url chars, collapse repeats. */
+/** lowercase, spaces→-, strip non-url chars, collapse repeats.
+ *
+ *  Unicode-aware: keeps any *letter* or *number* in any script — so a
+ *  pure-Bangla title like "বার্ষিক ভ্রমণ গাইডলাইন – ২০২৬" yields
+ *  "বার্ষিক-ভ্রমণ-গাইডলাইন-২০২৬" instead of an empty string.  Only
+ *  punctuation / symbols (–, —, ?, :, emoji …) get stripped.  Modern
+ *  browsers + Next.js dynamic routes handle these percent-encoded
+ *  Unicode slugs fine, and Bangla-first content stays readable. */
 export function slugify(raw: string): string {
   return raw
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .replace(/[\s-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }

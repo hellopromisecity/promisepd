@@ -121,8 +121,11 @@ export default function RichEditor({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-bg">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-bg-soft px-2 py-1.5">
+    <div className="rounded-2xl border border-border bg-bg">
+      {/* Toolbar pins just below the admin topbar (h-16) so the formatting
+          controls stay reachable while editing a long article — no more
+          scrolling back to the top to bold or add a heading. */}
+      <div className="sticky top-16 z-20 flex flex-wrap items-center gap-0.5 rounded-t-2xl border-b border-border bg-bg-soft px-2 py-1.5 shadow-sm">
         <Btn onClick={() => editor.chain().focus().undo().run()} title="Undo"><Undo2 className="h-4 w-4" /></Btn>
         <Btn onClick={() => editor.chain().focus().redo().run()} title="Redo"><Redo2 className="h-4 w-4" /></Btn>
         <Sep />
@@ -179,8 +182,13 @@ export default function RichEditor({
       />
 
       {mode === "rich" ? (
-        <div className={EDITOR_CLASS}>
-          <EditorContent editor={editor} />
+        // Self-scrolling pane: long content gets its own right-hand
+        // scrollbar instead of stretching the whole page, keeping the
+        // toolbar above it always in view.
+        <div className="max-h-[65vh] overflow-y-auto rounded-b-2xl">
+          <div className={EDITOR_CLASS}>
+            <EditorContent editor={editor} />
+          </div>
         </div>
       ) : (
         <textarea
@@ -190,7 +198,7 @@ export default function RichEditor({
             onChange(e.target.value);
           }}
           spellCheck={false}
-          className="min-h-[360px] w-full resize-y bg-bg px-4 py-3 font-mono text-sm text-fg outline-none"
+          className="min-h-[360px] max-h-[65vh] w-full resize-y rounded-b-2xl bg-bg px-4 py-3 font-mono text-sm text-fg outline-none"
         />
       )}
     </div>
