@@ -56,6 +56,11 @@ export type Database = {
           email: string | null;
           role: string;
           avatar_url: string | null;
+          employee_code: string | null;
+          salary: number;
+          allowance: number;
+          deduction: number;
+          status: string;
           created_at: string;
         };
         Insert: {
@@ -66,6 +71,11 @@ export type Database = {
           email?: string | null;
           role?: string;
           avatar_url?: string | null;
+          employee_code?: string | null;
+          salary?: number;
+          allowance?: number;
+          deduction?: number;
+          status?: string;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;

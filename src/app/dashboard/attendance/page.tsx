@@ -15,6 +15,7 @@ import {
 } from "@/components/admin/ui";
 import AttendanceRow from "./AttendanceRow";
 import SelfCheck from "./SelfCheck";
+import AttendanceDate from "./AttendanceDate";
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +48,19 @@ function fmtTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const me = await getCurrentUser();
   if (!me || !isStaff(me.role)) redirect("/account");
 
   const today = todayStr();
+  const sp = await searchParams;
+  // Managers can review/mark any past date via ?date=; default today.
+  const selDate =
+    sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
   const admin = getAdmin();
 
   if (!admin) {
@@ -80,7 +89,7 @@ export default async function AttendancePage() {
     const { data: todayRows } = await admin
       .from("attendance")
       .select("member_id, status, check_in, check_out, note")
-      .eq("date", today);
+      .eq("date", selDate);
 
     const byMember = new Map(
       (todayRows ?? []).map((r) => [r.member_id, r]),
@@ -98,7 +107,11 @@ export default async function AttendancePage() {
 
     return (
       <div className="space-y-6">
-        <PageHeader title="Attendance" subtitle={`Team status · ${fmtDate(today)}`} />
+        <PageHeader
+          title="Attendance"
+          subtitle={`Team status · ${fmtDate(selDate)}${selDate !== today ? "" : " (today)"}`}
+          action={<AttendanceDate value={selDate} today={today} />}
+        />
 
         <div className="grid grid-cols-3 gap-3">
           <StatCard label="Present today" value={present} icon={CalendarCheck} tone="success" />
@@ -153,7 +166,7 @@ export default async function AttendancePage() {
                       <AttendanceRow
                         memberId={m.id}
                         name={m.name || "this member"}
-                        date={today}
+                        date={selDate}
                         current={status}
                         note={row?.note ?? null}
                       />
