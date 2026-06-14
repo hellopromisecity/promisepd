@@ -71,8 +71,15 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
       .maybeSingle();
 
     const meta = (user.user_metadata ?? {}) as Record<string, string | null>;
-    const email = profile?.email ?? meta.email ?? null;
-    const mobile = profile?.mobile || meta.mobile || "";
+    // Resolve the owner's real-world email / mobile from every place it
+    // might live — the profile row, the signup metadata, AND the auth
+    // user's own email/phone.  This matters because one person can have
+    // two accounts (a mobile/username login whose auth email is synthetic,
+    // and a real-email login); the super-admin override must recognise the
+    // owner no matter which one they signed in with, so they're never
+    // locked out of the dashboard.
+    const email = profile?.email ?? meta.email ?? user.email ?? null;
+    const mobile = profile?.mobile || meta.mobile || user.phone || "";
 
     // Env-designated owner is always admin; otherwise use the DB role.
     const role: Role = isSuperAdmin(email, mobile)
