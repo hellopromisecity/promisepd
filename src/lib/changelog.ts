@@ -24,6 +24,27 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.3",
+    date: "2026-06-14",
+    title: "Multi-tagging, full-height sidebar & Secure Vault",
+    changes: [
+      { kind: "new", text: "Secure Vault — keep every company login (site, URL, email, password) in one private place, with one-tap copy and show/hide." },
+      { kind: "new", text: "A post can now be filed under multiple categories AND multiple projects at once (tap the chips to toggle)." },
+      { kind: "improved", text: "The dashboard sidebar now runs the full height of every page — no more empty cut-off below the menu." },
+    ],
+  },
+  {
+    version: "1.2.2",
+    date: "2026-06-14",
+    title: "Sign in your way, richer articles",
+    changes: [
+      { kind: "new", text: "Sign in with your mobile (any format), username, OR email — plus your password. Whichever you use, it just works." },
+      { kind: "fixed", text: "Facebook video & Reel links now embed and play inline (Reels keep their vertical shape)." },
+      { kind: "new", text: "In the article editor, drag an image’s corner to resize it and add a caption beneath it." },
+      { kind: "fixed", text: "The owner can no longer be locked out of the dashboard, whichever of their accounts they sign in with." },
+    ],
+  },
+  {
     version: "1.2.1",
     date: "2026-06-14",
     title: "Dashboard footer & finishing touches",
