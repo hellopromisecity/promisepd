@@ -209,6 +209,10 @@ export default async function AttendancePage({
     }
 
     // ===== DAY mode: one-click bulk-marking roster =====
+    // A day is "taken" once it has at least one attendance record — that's
+    // what tells the roster to show real data vs. the "not taken" prompt.
+    const isToday = selDate === today;
+    const taken = attRows.length > 0;
     const byRef = new Map(attRows.map((r) => [r.staff_ref ?? "", r.status]));
 
     const rosterRows: RosterRow[] = directory.map((d) => {
@@ -229,7 +233,7 @@ export default async function AttendancePage({
       <div className="space-y-5">
         <PageHeader
           title="Attendance"
-          subtitle={`Mark hajira · ${fmtDate(selDate)}${selDate === today ? " (today)" : ""}`}
+          subtitle={`Daily attendance · ${fmtDate(selDate)}${isToday ? " (today)" : ""}`}
           action={importLink}
         />
         <AttendanceControls mode="day" date={selDate} />
@@ -241,8 +245,8 @@ export default async function AttendancePage({
           />
         ) : (
           // key by date so switching days remounts the roster with the
-          // new day's saved statuses (its state is seeded once on mount).
-          <AttendanceRoster key={selDate} date={selDate} rows={rosterRows} />
+          // new day's state (seeded once on mount).
+          <AttendanceRoster key={selDate} date={selDate} rows={rosterRows} isToday={isToday} taken={taken} />
         )}
       </div>
     );
