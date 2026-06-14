@@ -44,7 +44,7 @@ export default async function ChangelogPage() {
 
       <div className="overflow-hidden rounded-2xl border border-border bg-bg">
         {/* Scrollable box so the release history never stretches the page. */}
-        <div className="max-h-[62vh] overflow-y-auto p-5 sm:p-6 [scrollbar-gutter:stable]">
+        <div className="max-h-[78vh] overflow-y-auto p-5 sm:p-6 [scrollbar-gutter:stable]">
           <ol className="relative space-y-8 border-l border-border pl-6">
             {CHANGELOG.map((entry, i) => (
               <li key={entry.version} className="relative">
@@ -93,7 +93,7 @@ export default async function ChangelogPage() {
 
         {/* Universal footer */}
         <div className="border-t border-border px-5 py-4 text-center text-xs text-fg-muted sm:px-6">
-          {CHANGELOG_FOOTER.company} · v{CURRENT_VERSION} · Powered by{" "}
+          {CHANGELOG_FOOTER.company} · v{CURRENT_VERSION} · Design &amp; Developed by{" "}
           <a
             href={CHANGELOG_FOOTER.poweredByUrl}
             target="_blank"

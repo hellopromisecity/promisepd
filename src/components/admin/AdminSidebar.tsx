@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { isGroup, type NavEntry } from "@/lib/admin-nav";
+import { CURRENT_VERSION } from "@/lib/changelog";
 import type { Member } from "@/lib/auth";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -100,6 +101,18 @@ export default function AdminSidebar({
           )}
         </ul>
       </nav>
+
+      {/* Footer — fills the sidebar's empty tail + a quick link to what's new. */}
+      <div className="border-t border-border px-3 py-3">
+        <Link
+          href="/dashboard/changelog"
+          onClick={onClose}
+          className="flex items-center justify-between rounded-xl px-3 py-2 text-[11px] font-medium text-fg-muted transition-colors hover:bg-bg-soft hover:text-fg"
+        >
+          <span>What&apos;s new</span>
+          <span className="rounded-md bg-bg-soft px-2 py-0.5 font-bold text-fg">v{CURRENT_VERSION}</span>
+        </Link>
+      </div>
     </aside>
   );
 }

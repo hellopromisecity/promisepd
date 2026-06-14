@@ -44,6 +44,18 @@ export default function AdminShell({
           <main className="mx-auto w-full max-w-[1440px] flex-1 p-4 sm:p-6 lg:p-8">
             {children}
           </main>
+          {/* Universal footer — on every dashboard section. */}
+          <footer className="border-t border-border px-4 py-4 text-center text-[11px] text-fg-muted sm:px-6">
+            © 2026 Promise Proper Development · Design &amp; Developed by{" "}
+            <a
+              href="https://growthency.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-brand-blue hover:underline"
+            >
+              Mustaqeem
+            </a>
+          </footer>
         </div>
       </div>
     </div>

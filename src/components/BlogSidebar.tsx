@@ -72,14 +72,16 @@ export default function BlogSidebar({
           </span>
         </div>
 
-        <div className="px-5 pb-6 -mt-12 text-center">
-          <div className="mx-auto h-32 w-32 rounded-full bg-gradient-to-br from-brand-blue to-brand-red p-1 shadow-xl">
+        {/* relative+z so the avatar paints ABOVE the positioned banner
+            (otherwise the gradient covers the top of the photo). */}
+        <div className="relative z-10 px-5 pb-6 -mt-14 text-center">
+          <div className="mx-auto h-36 w-36 rounded-full bg-gradient-to-br from-brand-blue to-brand-red p-1 shadow-xl">
             <Image
               src={BLOG_AUTHOR.avatarUrl}
               alt={authorName}
-              width={160}
-              height={160}
-              className="h-full w-full rounded-full object-cover object-top ring-4 ring-white"
+              width={184}
+              height={184}
+              className="h-full w-full rounded-full object-cover ring-4 ring-white"
             />
           </div>
           <div className="mt-3 text-[10px] font-bold uppercase tracking-[0.2em] text-fg-faint">

@@ -16,12 +16,24 @@ export type ChangelogEntry = {
 
 export const CHANGELOG_FOOTER = {
   company: "Promise Proper Development",
-  poweredByLabel: "Growthency",
+  // Credit link — text reads "Mustaqeem", links to the studio site.
+  poweredByLabel: "Mustaqeem",
   poweredByUrl: "https://growthency.com/",
 };
 
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.2.1",
+    date: "2026-06-14",
+    title: "Dashboard footer & finishing touches",
+    changes: [
+      { kind: "fixed", text: "Blog author photo now sits ON TOP of the card banner (was clipped behind it) and is larger." },
+      { kind: "new", text: "A universal footer on every dashboard section — “Design & Developed by Mustaqeem”." },
+      { kind: "improved", text: "Sidebar no longer ends with empty space — it carries a “What’s new · version” link at the bottom." },
+      { kind: "improved", text: "The changelog box is taller, so more releases show without scrolling." },
+    ],
+  },
   {
     version: "1.2.0",
     date: "2026-06-14",
