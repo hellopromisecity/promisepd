@@ -22,17 +22,17 @@ import {
 } from "@tiptap/react";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 
+// Our own command name — deliberately NOT `setImage`.  @tiptap/extension-image
+// (still a dependency) declares `image.setImage` with a fixed signature, so
+// re-declaring `setImage` with extra attrs is a hard TS error.  A uniquely
+// named command merges cleanly into the `image` command group and types the
+// same way whether or not the package's declaration is in the compilation.
+type ResizableImageAttrs = { src: string; alt?: string; title?: string; width?: string; caption?: string };
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     image: {
-      /** Insert an image. */
-      setImage: (attrs: {
-        src: string;
-        alt?: string;
-        title?: string;
-        width?: string;
-        caption?: string;
-      }) => ReturnType;
+      setResizableImage: (attrs: ResizableImageAttrs) => ReturnType;
     };
   }
 }
@@ -94,8 +94,8 @@ export const ResizableImage = Node.create({
 
   addCommands() {
     return {
-      setImage:
-        (attrs) =>
+      setResizableImage:
+        (attrs: ResizableImageAttrs) =>
         ({ commands }) =>
           commands.insertContent({ type: this.name, attrs }),
     };

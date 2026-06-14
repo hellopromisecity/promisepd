@@ -8,7 +8,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
+import { ResizableImage } from "./ResizableImage";
 import TextAlign from "@tiptap/extension-text-align";
 import { Table } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -29,7 +29,8 @@ const EDITOR_CLASS =
   "[&_.ProseMirror_h3]:text-xl [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mt-4 [&_.ProseMirror_h3]:mb-2 " +
   "[&_.ProseMirror_h4]:text-lg [&_.ProseMirror_h4]:font-semibold [&_.ProseMirror_h4]:mt-3 [&_.ProseMirror_h4]:mb-1 " +
   "[&_.ProseMirror_p]:my-2 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 " +
-  "[&_.ProseMirror_a]:text-brand-blue [&_.ProseMirror_a]:underline [&_.ProseMirror_img]:rounded-xl [&_.ProseMirror_img]:my-3 [&_.ProseMirror_img]:max-w-full " +
+  "[&_.ProseMirror_a]:text-brand-blue [&_.ProseMirror_a]:underline [&_.ProseMirror_img]:rounded-xl [&_.ProseMirror_img]:max-w-full " +
+  "[&_.ProseMirror_figure]:mx-auto [&_.ProseMirror_figure]:my-3 [&_.ProseMirror_figcaption]:text-center [&_.ProseMirror_figcaption]:text-sm [&_.ProseMirror_figcaption]:italic [&_.ProseMirror_figcaption]:text-fg-muted " +
   "[&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-brand-blue/40 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-fg-muted " +
   "[&_.ProseMirror_pre]:bg-bg-soft [&_.ProseMirror_pre]:rounded-lg [&_.ProseMirror_pre]:p-3 [&_.ProseMirror_pre]:text-sm [&_.ProseMirror_pre]:overflow-x-auto " +
   "[&_.ProseMirror_hr]:my-4 [&_.ProseMirror_hr]:border-border " +
@@ -52,7 +53,7 @@ export default function RichEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit,
-      Image,
+      ResizableImage,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Table.configure({ resizable: false }),
       TableRow,
@@ -71,7 +72,7 @@ export default function RichEditor({
   const insertImageUrl = useCallback(async () => {
     if (!editor) return;
     const url = await promptDialog({ title: "Insert image", message: "Image URL", placeholder: "https://…" });
-    if (url) editor.chain().focus().setImage({ src: url }).run();
+    if (url) editor.chain().focus().setResizableImage({ src: url }).run();
   }, [editor]);
 
   const setLink = useCallback(async () => {
@@ -92,7 +93,7 @@ export default function RichEditor({
         fd.append("image", file);
         fd.append("folder", "blog");
         const res = await uploadImage(fd);
-        if (res.ok) editor.chain().focus().setImage({ src: res.url }).run();
+        if (res.ok) editor.chain().focus().setResizableImage({ src: res.url }).run();
         else toast(res.error, "error");
       } finally {
         setUploading(false);
