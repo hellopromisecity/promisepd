@@ -5,7 +5,6 @@ import { getCurrentUser, isStaff } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/ui";
 import {
   CHANGELOG,
-  CHANGELOG_FOOTER,
   CURRENT_VERSION,
   type ChangeKind,
 } from "@/lib/changelog";
@@ -89,19 +88,6 @@ export default async function ChangelogPage() {
               </li>
             ))}
           </ol>
-        </div>
-
-        {/* Universal footer */}
-        <div className="border-t border-border px-5 py-4 text-center text-xs text-fg-muted sm:px-6">
-          {CHANGELOG_FOOTER.company} · v{CURRENT_VERSION} · Design &amp; Developed by{" "}
-          <a
-            href={CHANGELOG_FOOTER.poweredByUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-brand-blue hover:underline"
-          >
-            {CHANGELOG_FOOTER.poweredByLabel}
-          </a>
         </div>
       </div>
     </div>
