@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Users, Shield, ShieldCheck, UserCog } from "lucide-react";
+import { Users, Shield, ShieldCheck, KeyRound } from "lucide-react";
 import { getCurrentUser, isManager, isAdmin, type Role } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import {
@@ -13,7 +13,8 @@ import {
   type Tone,
 } from "@/components/admin/ui";
 import RoleSelect from "./RoleSelect";
-import { AddStaffButton, StaffRowActions, type StaffMember } from "./StaffManager";
+import { AddStaffButton, StaffRowActions, CreateLoginButton, type StaffMember } from "./StaffManager";
+import { STAFF_ROSTER, canonicalMobile, roleFromTitle } from "@/lib/staff-roster";
 
 export const dynamic = "force-dynamic";
 
@@ -102,33 +103,88 @@ export default async function StaffPage() {
     created_at: String(r.created_at ?? ""),
   }));
 
-  const counts = {
-    total: rows.length,
-    staff: rows.filter((r) => r.role === "staff").length,
-    managers: rows.filter((r) => r.role === "manager").length,
-    admins: rows.filter((r) => r.role === "admin").length,
+  // ── Merge the office roster (code) with the accounts (DB) by mobile ──
+  // Every employee in STAFF_ROSTER is shown; if one also has a login
+  // account it's enriched with role / salary / management.  Accounts with
+  // no roster entry (e.g. a member who self-registered) are appended.
+  const byMobile = new Map<string, ProfileRow>();
+  for (const r of rows) byMobile.set(canonicalMobile(r.mobile), r);
+
+  type MergedRow = {
+    key: string;
+    name: string;
+    designation: string | null; // roster job title
+    district: string | null;
+    code: string; // employee_code (account) || roster idNo
+    mobile: string; // display (local 01… preferred)
+    account: ProfileRow | null;
   };
+
+  // De-dupe the hand-maintained roster by canonical mobile (the office
+  // sheet has no uniqueness guard — the DB does, the code list doesn't),
+  // so a person accidentally listed twice can't double-render or collide
+  // on React keys.  Keep the first occurrence.
+  const seenRoster = new Set<string>();
+  const uniqueRoster = STAFF_ROSTER.filter((e) => {
+    const c = canonicalMobile(e.mobile) || e.idNo;
+    if (seenRoster.has(c)) return false;
+    seenRoster.add(c);
+    return true;
+  });
+
+  const matched = new Set<string>();
+  const merged: MergedRow[] = uniqueRoster.map((e) => {
+    const canon = canonicalMobile(e.mobile);
+    const account = byMobile.get(canon) ?? null;
+    if (account) matched.add(account.id);
+    return {
+      key: account?.id ?? (canon || e.idNo),
+      name: account?.name || e.name,
+      designation: e.title,
+      district: e.district,
+      code: account?.employee_code || e.idNo,
+      mobile: e.mobile || account?.mobile || "",
+      account,
+    };
+  });
+  // DB accounts with no roster entry → append (directory + management).
+  for (const r of rows) {
+    if (matched.has(r.id)) continue;
+    merged.push({
+      key: r.id,
+      name: r.name,
+      designation: null,
+      district: null,
+      code: r.employee_code || "",
+      mobile: r.mobile,
+      account: r,
+    });
+  }
+
+  const withLogin = merged.filter((m) => m.account).length;
+  const managers = merged.filter((m) => m.account?.role === "manager").length;
+  const admins = merged.filter((m) => m.account?.role === "admin").length;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Staff"
-        subtitle="Team members, pay & access levels."
+        subtitle="Company roster, pay & access."
         action={canEditRoles ? <AddStaffButton /> : undefined}
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Members" value={counts.total} sub="total accounts" icon={Users} tone="info" />
-        <StatCard label="Staff" value={counts.staff} sub="role: staff" icon={UserCog} tone="info" />
-        <StatCard label="Managers" value={counts.managers} sub="role: manager" icon={Shield} tone="warning" />
-        <StatCard label="Admins" value={counts.admins} sub="role: admin" icon={ShieldCheck} tone="danger" />
+        <StatCard label="Employees" value={uniqueRoster.length} sub="on the roster" icon={Users} tone="info" />
+        <StatCard label="With login" value={withLogin} sub="have an account" icon={KeyRound} tone="success" />
+        <StatCard label="Managers" value={managers} sub="role: manager" icon={Shield} tone="warning" />
+        <StatCard label="Admins" value={admins} sub="role: admin" icon={ShieldCheck} tone="danger" />
       </div>
 
-      {rows.length === 0 ? (
+      {merged.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No members yet"
-          message="Registered accounts will appear here."
+          title="No staff yet"
+          message="Employees from the roster and registered accounts will appear here."
         />
       ) : (
         <TableShell>
@@ -144,62 +200,73 @@ export default async function StaffPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const role = asRole(r.role);
+            {merged.map((m) => {
+              const acc = m.account;
+              const role = acc ? asRole(acc.role) : null;
+              const meta = [m.designation, m.district].filter(Boolean).join(" · ") || acc?.email || null;
               return (
-                <tr key={r.id}>
+                <tr key={m.key}>
                   <td className={tdCls}>
                     <div className="flex items-center gap-3">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-blue-tint text-xs font-bold text-brand-blue">
-                        {(r.name?.[0] ?? "?").toUpperCase()}
+                        {(m.name?.[0] ?? "?").toUpperCase()}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-fg">{r.name || "Unnamed"}</p>
-                        {r.email && (
-                          <p className="truncate text-xs text-fg-muted">{r.email}</p>
-                        )}
+                        <p className="truncate font-semibold text-fg">{m.name || "Unnamed"}</p>
+                        {meta && <p className="truncate text-xs text-fg-muted">{meta}</p>}
                       </div>
                     </div>
                   </td>
-                  <td className={`${tdCls} whitespace-nowrap font-mono text-xs text-fg-muted`}>{r.employee_code || "—"}</td>
-                  <td className={`${tdCls} whitespace-nowrap`}>{r.mobile || "—"}</td>
+                  <td className={`${tdCls} whitespace-nowrap font-mono text-xs text-fg-muted`}>{m.code || "—"}</td>
+                  <td className={`${tdCls} whitespace-nowrap`}>{m.mobile || "—"}</td>
                   <td className={`${tdCls} whitespace-nowrap`}>
-                    {Number(r.salary) || Number(r.allowance) || Number(r.deduction)
-                      ? <span className="font-semibold text-fg">{taka(Number(r.salary) + Number(r.allowance) - Number(r.deduction))}</span>
-                      : <span className="text-fg-faint">—</span>}
-                  </td>
-                  <td className={tdCls}>
-                    {canEditRoles ? (
-                      <RoleSelect
-                        memberId={r.id}
-                        name={r.name || "this member"}
-                        current={role}
-                        isSelf={r.id === me.id}
-                      />
+                    {acc && (acc.salary || acc.allowance || acc.deduction) ? (
+                      <span className="font-semibold text-fg">{taka(acc.salary + acc.allowance - acc.deduction)}</span>
                     ) : (
-                      <Badge tone={ROLE_TONE[role]}>{role}</Badge>
+                      <span className="text-fg-faint">—</span>
                     )}
                   </td>
                   <td className={tdCls}>
-                    <Badge tone={STATUS_TONE[r.status] ?? "neutral"}>{r.status || "active"}</Badge>
+                    {acc && role ? (
+                      canEditRoles ? (
+                        <RoleSelect memberId={acc.id} name={m.name || "this member"} current={role} isSelf={acc.id === me.id} />
+                      ) : (
+                        <Badge tone={ROLE_TONE[role]}>{role}</Badge>
+                      )
+                    ) : (
+                      <Badge tone="neutral">no login</Badge>
+                    )}
+                  </td>
+                  <td className={tdCls}>
+                    {acc ? (
+                      <Badge tone={STATUS_TONE[acc.status] ?? "neutral"}>{acc.status || "active"}</Badge>
+                    ) : (
+                      <span className="text-fg-faint">—</span>
+                    )}
                   </td>
                   {canEditRoles && (
                     <td className={tdCls}>
-                      {r.id === me.id ? (
-                        <span className="text-[11px] text-fg-faint">—</span>
+                      {acc ? (
+                        acc.id === me.id ? (
+                          <span className="text-[11px] text-fg-faint">you</span>
+                        ) : (
+                          <StaffRowActions
+                            member={{
+                              id: acc.id,
+                              name: acc.name,
+                              mobile: acc.mobile,
+                              email: acc.email,
+                              employee_code: acc.employee_code,
+                              salary: acc.salary,
+                              allowance: acc.allowance,
+                              deduction: acc.deduction,
+                              status: acc.status || "active",
+                            } satisfies StaffMember}
+                          />
+                        )
                       ) : (
-                        <StaffRowActions
-                          member={{
-                            id: r.id,
-                            name: r.name,
-                            mobile: r.mobile,
-                            email: r.email,
-                            employee_code: r.employee_code,
-                            salary: Number(r.salary) || 0,
-                            allowance: Number(r.allowance) || 0,
-                            deduction: Number(r.deduction) || 0,
-                            status: r.status || "active",
-                          } satisfies StaffMember}
+                        <CreateLoginButton
+                          prefill={{ name: m.name, mobile: m.mobile, employee_code: m.code, role: roleFromTitle(m.designation ?? "") }}
                         />
                       )}
                     </td>

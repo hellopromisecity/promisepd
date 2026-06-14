@@ -9,7 +9,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UserPlus, Pencil, Trash2, Loader2, X, Check } from "lucide-react";
+import { UserPlus, Pencil, Trash2, Loader2, X, Check, KeyRound } from "lucide-react";
 import { createStaff, updateStaff, deleteStaff, type StaffInput } from "@/app/actions/admin-staff";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
@@ -27,6 +27,9 @@ export type StaffMember = {
   status: string;
 };
 
+/** Seed values for the create form (used by the roster "Create login"). */
+export type StaffPrefill = { name?: string; mobile?: string; employee_code?: string; role?: Role };
+
 const ROLES: Role[] = ["staff", "manager", "admin", "member"];
 const STATUSES = ["active", "inactive", "suspended"] as const;
 
@@ -41,6 +44,22 @@ export function AddStaffButton() {
         <UserPlus className="h-4 w-4" /> Add staff
       </button>
       {open && <StaffFormModal mode="create" onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** Roster row → create a login, prefilled from the office record. */
+export function CreateLoginButton({ prefill }: { prefill: StaffPrefill }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-brand-blue hover:bg-brand-blue-tint"
+      >
+        <KeyRound className="h-3.5 w-3.5" /> Create login
+      </button>
+      {open && <StaffFormModal mode="create" prefill={prefill} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -84,22 +103,24 @@ export function StaffRowActions({ member }: { member: StaffMember }) {
 function StaffFormModal({
   mode,
   member,
+  prefill,
   onClose,
 }: {
   mode: "create" | "edit";
   member?: StaffMember;
+  prefill?: StaffPrefill;
   onClose: () => void;
 }) {
   const router = useRouter();
   const editing = mode === "edit";
   const [form, setForm] = useState<StaffInput & { role: Role }>({
-    name: member?.name ?? "",
-    mobile: member?.mobile ?? "",
+    name: member?.name ?? prefill?.name ?? "",
+    mobile: member?.mobile ?? prefill?.mobile ?? "",
     username: "",
     email: member?.email ?? "",
     password: "",
-    role: "staff",
-    employee_code: member?.employee_code ?? "",
+    role: prefill?.role ?? "staff",
+    employee_code: member?.employee_code ?? prefill?.employee_code ?? "",
     salary: member?.salary ?? 0,
     allowance: member?.allowance ?? 0,
     deduction: member?.deduction ?? 0,
