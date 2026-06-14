@@ -65,11 +65,10 @@ export const BLOG_AUTHOR = {
   name: "কামরুল হাসান",
   nameEn: "Kamrul Hasan",
   role: "MD & CEO, Promise Group",
-  // Real headshot used on the team page; falls back to a DiceBear
+  // Sharp, tightly-cropped headshot (from public/author.jpg) so the
+  // avatar stays crisp at large card sizes.  Falls back to a DiceBear
   // initials avatar in older callers that haven't been updated yet.
-  // Versioned to bust the immutable /public cache when the photo is
-  // refreshed (kept in sync with team.ts).
-  avatarUrl: "/ceo-v2.webp",
+  avatarUrl: "/author.webp",
   avatarFallback:
     "https://api.dicebear.com/9.x/initials/svg?seed=Kamrul%20Hasan&backgroundColor=1847a1,e11924&textColor=ffffff&fontWeight=700",
 };

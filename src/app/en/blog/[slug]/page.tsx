@@ -10,7 +10,14 @@ import {
   type BlogPost,
 } from "@/lib/blog";
 import { BLOG_EN } from "@/lib/blog.en";
-import { getAllPublicPosts, getPublicPostBySlug, relatedFrom } from "@/lib/blog-db";
+import {
+  getAllPublicPosts,
+  getPublicPostBySlug,
+  getViewCounts,
+  relatedFrom,
+  withViewCounts,
+} from "@/lib/blog-db";
+import ViewCounter from "@/components/ViewCounter";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 
@@ -82,18 +89,27 @@ export default async function EnBlogPostPage(
   props: PageProps<"/en/blog/[slug]">,
 ) {
   const { slug } = await props.params;
-  const post = await getPublicPostBySlug(slug);
-  if (!post) notFound();
+  const found = await getPublicPostBySlug(slug);
+  if (!found) notFound();
 
-  const en = BLOG_EN[post.slug];
-  const cat = CATEGORY_META[post.category];
+  const en = BLOG_EN[found.slug];
+  const cat = CATEGORY_META[found.category];
 
-  // Prev/next + related within the merged pool (code + DB), newest-first.
-  const sorted = await getAllPublicPosts();
+  // Prev/next + related + sidebar within the merged pool, newest-first,
+  // with dynamic view counts folded in.
+  const counts = await getViewCounts();
+  const sorted = withViewCounts(await getAllPublicPosts(), counts);
+  const post = { ...found, views: found.views + (counts[found.slug] ?? 0) };
   const related = relatedFrom(sorted, post.slug, 3);
   const idx = sorted.findIndex((p) => p.slug === post.slug);
   const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
   const next = sorted[(idx + 1) % sorted.length];
+
+  const popular = [...sorted]
+    .filter((p) => p.slug !== post.slug)
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 5);
+  const recent = sorted.filter((p) => p.slug !== post.slug).slice(0, 5);
 
   const title = en?.title ?? post.titleEn ?? post.title;
   const description = en?.excerpt ?? post.excerptEn ?? post.excerpt;
@@ -141,6 +157,7 @@ export default async function EnBlogPostPage(
     <>
       <JsonLd data={breadcrumb} />
       <JsonLd data={articleSchema} />
+      <ViewCounter slug={post.slug} />
 
       <BlogArticle
         post={post}
@@ -148,6 +165,8 @@ export default async function EnBlogPostPage(
         prev={prev}
         next={next}
         locale="en"
+        popular={popular}
+        recent={recent}
       />
     </>
   );

@@ -45,7 +45,13 @@ const PAGINATION_WINDOW = 5;
 type CategoryFilter = "all" | BlogCategoryKey;
 type ProjectFilter = "all" | BlogProjectKey;
 
-export default function BlogList({ extraPosts = [] }: { extraPosts?: BlogPost[] }) {
+export default function BlogList({
+  extraPosts = [],
+  viewCounts = {},
+}: {
+  extraPosts?: BlogPost[];
+  viewCounts?: Record<string, number>;
+}) {
   const locale = useLocale();
   const isEn = locale === "en";
   const t = DICT[locale].blog;
@@ -62,9 +68,16 @@ export default function BlogList({ extraPosts = [] }: { extraPosts?: BlogPost[] 
   const [catOpen, setCatOpen] = useState(false);
   const [projOpen, setProjOpen] = useState(false);
 
-  // Code-defined articles + admin-published DB posts, newest-first.
-  // Featured is pulled out separately.
-  const allPosts = useMemo(() => [...BLOG_POSTS, ...extraPosts], [extraPosts]);
+  // Code-defined articles + admin-published DB posts, newest-first, with
+  // the dynamic view delta folded onto each post's base count.
+  const allPosts = useMemo(
+    () =>
+      [...BLOG_POSTS, ...extraPosts].map((p) => ({
+        ...p,
+        views: p.views + (viewCounts[p.slug] ?? 0),
+      })),
+    [extraPosts, viewCounts],
+  );
   const allSorted = useMemo(
     () => [...allPosts].sort((a, b) => (a.iso < b.iso ? 1 : -1)),
     [allPosts],

@@ -4,8 +4,10 @@
  *  both /blog/[slug] (Bengali, root) and /en/blog/[slug] (English). The
  *  Bengali BlogPost data is passed in unchanged; English text is overlaid
  *  from BLOG_EN when locale === "en", preserving cover, category, order
- *  and chronology. */
+ *  and chronology.  A sticky sidebar (author card + popular + recent)
+ *  flanks the article on desktop. */
 
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -18,6 +20,7 @@ import {
   Mail,
 } from "lucide-react";
 import BlogCard from "./BlogCard";
+import BlogSidebar from "./BlogSidebar";
 import { SITE } from "@/lib/site";
 import {
   BLOG_AUTHOR,
@@ -49,11 +52,12 @@ const RICH_BODY =
   "[&_pre]:bg-bg-soft [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:my-5 [&_pre]:overflow-x-auto [&_pre]:text-sm " +
   "[&_hr]:my-8 [&_hr]:border-border " +
   "[&_table]:w-full [&_table]:my-6 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2.5 [&_th]:border [&_th]:border-border [&_th]:bg-bg-soft [&_th]:p-2.5 [&_th]:text-left [&_th]:font-bold " +
-  // Embedded YouTube / Facebook players (see src/lib/embed.ts).
-  "[&_.video-embed]:relative [&_.video-embed]:my-6 [&_.video-embed]:w-full [&_.video-embed]:overflow-hidden [&_.video-embed]:rounded-2xl [&_.video-embed]:bg-black [&_.video-embed]:shadow-md " +
-  "[&_.video-embed--landscape]:aspect-video " +
-  "[&_.video-embed--portrait]:aspect-[9/16] [&_.video-embed--portrait]:mx-auto [&_.video-embed--portrait]:max-w-[360px] " +
-  "[&_.video-embed_iframe]:absolute [&_.video-embed_iframe]:inset-0 [&_.video-embed_iframe]:h-full [&_.video-embed_iframe]:w-full [&_.video-embed_iframe]:border-0";
+  // Embedded YouTube player — responsive 16:9 (see src/lib/embed.ts).
+  "[&_.video-embed]:relative [&_.video-embed]:my-6 [&_.video-embed]:aspect-video [&_.video-embed]:w-full [&_.video-embed]:overflow-hidden [&_.video-embed]:rounded-2xl [&_.video-embed]:bg-black [&_.video-embed]:shadow-md " +
+  "[&_.video-embed_iframe]:absolute [&_.video-embed_iframe]:inset-0 [&_.video-embed_iframe]:h-full [&_.video-embed_iframe]:w-full [&_.video-embed_iframe]:border-0 " +
+  // Facebook video — the SDK auto-sizes to the real aspect inside a
+  // centred, capped-width wrapper (landscape or portrait reel both work).
+  "[&_.fb-embed]:my-6 [&_.fb-embed]:mx-auto [&_.fb-embed]:flex [&_.fb-embed]:justify-center [&_.fb-embed]:max-w-[500px] [&_.fb-embed]:overflow-hidden [&_.fb-embed]:rounded-2xl";
 
 export default function BlogArticle({
   post,
@@ -61,12 +65,16 @@ export default function BlogArticle({
   prev,
   next,
   locale,
+  popular = [],
+  recent = [],
 }: {
   post: BlogPost;
   related: BlogPost[];
   prev: BlogPost;
   next: BlogPost;
   locale: Locale;
+  popular?: BlogPost[];
+  recent?: BlogPost[];
 }) {
   const isEn = locale === "en";
   const t = DICT[locale].blog;
@@ -92,146 +100,151 @@ export default function BlogArticle({
   const prevTitle = isEn ? BLOG_EN[prev.slug]?.title ?? prev.title : prev.title;
   const nextTitle = isEn ? BLOG_EN[next.slug]?.title ?? next.title : next.title;
 
+  // Load the Facebook SDK only when the article actually embeds a FB video,
+  // then (re-)parse the XFBML so the player sizes to the real aspect ratio.
+  useEffect(() => {
+    if (!bodyHtml || !bodyHtml.includes("fb-video")) return;
+    const fb = (window as unknown as { FB?: { XFBML: { parse: () => void } } }).FB;
+    if (fb) {
+      fb.XFBML.parse();
+      return;
+    }
+    if (!document.getElementById("fb-root")) {
+      const root = document.createElement("div");
+      root.id = "fb-root";
+      document.body.prepend(root);
+    }
+    if (!document.getElementById("facebook-jssdk")) {
+      const s = document.createElement("script");
+      s.id = "facebook-jssdk";
+      s.async = true;
+      s.defer = true;
+      s.crossOrigin = "anonymous";
+      s.src = "https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v19.0";
+      document.body.appendChild(s);
+    }
+  }, [bodyHtml]);
+
   return (
     <>
-      {/* Article header / hero */}
-      <section className="relative pt-28 pb-12 sm:pt-32 sm:pb-16">
-        <div className="absolute inset-0 -z-10 mesh-bg-soft" />
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <Link
-            href={lp("/blog")}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-fg-muted hover:text-brand-red transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t.backToList}
-          </Link>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider ${
-                ACCENT_TAG[cat.accent]
-              } shadow-sm`}
+      {/* Article + sticky sidebar */}
+      <section className="relative pt-28 pb-14 sm:pt-32 sm:pb-20">
+        <div className="absolute inset-x-0 top-0 -z-10 h-[360px] mesh-bg-soft" />
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12 lg:px-8">
+          {/* LEFT — article */}
+          <div className="min-w-0">
+            <Link
+              href={lp("/blog")}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-fg-muted hover:text-brand-red transition-colors"
             >
-              {catLabel}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-bg-soft px-3 py-1.5 text-[11px] font-semibold text-fg-muted">
-              <Clock className="h-3 w-3" />
-              {num(post.readingMinutes)} {t.readMinsLong}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-bg-soft px-3 py-1.5 text-[11px] font-semibold text-fg-muted">
-              <Eye className="h-3 w-3" />
-              {num(post.views)} {t.views}
-            </span>
-            <time
-              dateTime={post.iso}
-              className="inline-flex items-center gap-1 rounded-full bg-bg-soft px-3 py-1.5 text-[11px] font-semibold text-fg-muted"
-            >
-              <Calendar className="h-3 w-3" />
-              {dateText}
-            </time>
-          </div>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              {t.backToList}
+            </Link>
 
-          <h1 className="mt-5 text-3xl sm:text-4xl lg:text-5xl font-bold leading-[1.12] text-fg">
-            {title}
-          </h1>
-
-          <div className="mt-6 flex items-center gap-3">
-            <Image
-              src={BLOG_AUTHOR.avatarUrl}
-              alt={authorName}
-              width={44}
-              height={44}
-              className="h-11 w-11 rounded-full shrink-0 object-cover"
-            />
-            <div className="min-w-0">
-              <div className="text-sm font-bold text-fg">{authorName}</div>
-              <div className="text-[11px] text-fg-muted">{BLOG_AUTHOR.role}</div>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider ${ACCENT_TAG[cat.accent]} shadow-sm`}
+              >
+                {catLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-bg-soft px-3 py-1.5 text-[11px] font-semibold text-fg-muted">
+                <Clock className="h-3 w-3" />
+                {num(post.readingMinutes)} {t.readMinsLong}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-bg-soft px-3 py-1.5 text-[11px] font-semibold text-fg-muted">
+                <Eye className="h-3 w-3" />
+                {num(post.views)} {t.views}
+              </span>
+              <time
+                dateTime={post.iso}
+                className="inline-flex items-center gap-1 rounded-full bg-bg-soft px-3 py-1.5 text-[11px] font-semibold text-fg-muted"
+              >
+                <Calendar className="h-3 w-3" />
+                {dateText}
+              </time>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Article visual — real cover photo */}
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-        <div className="relative rounded-3xl overflow-hidden shadow-xl h-56 sm:h-72 lg:h-80 bg-bg-soft">
-          {cover && (
-            <Image
-              src={cover}
-              alt={title}
-              fill
-              priority
-              sizes="(min-width:1024px) 896px, 100vw"
-              className="object-cover"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-fg/25 to-transparent" />
-        </div>
-      </div>
+            <h1 className="mt-5 text-3xl font-bold leading-[1.14] text-fg sm:text-4xl lg:text-[2.7rem]">
+              {title}
+            </h1>
 
-      {/* Article body */}
-      <article className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        {bodyHtml ? (
-          // DB-authored post — render the editor's HTML.  Content is
-          // authored by trusted managers via the admin TipTap editor.
-          <div className={RICH_BODY} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-        ) : (
-          <>
-            <p className="text-lg sm:text-xl text-fg-soft leading-relaxed font-medium first-letter:text-5xl first-letter:font-bold first-letter:text-brand-red first-letter:float-left first-letter:mr-2 first-letter:leading-none">
-              {intro}
-            </p>
+            <div className="mt-6 flex items-center gap-3">
+              <Image
+                src={BLOG_AUTHOR.avatarUrl}
+                alt={authorName}
+                width={44}
+                height={44}
+                className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-border"
+              />
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-fg">{authorName}</div>
+                <div className="text-[11px] text-fg-muted">{BLOG_AUTHOR.role}</div>
+              </div>
+            </div>
 
-            <div className="mt-10 space-y-10">
-              {sections.map((section, i) => (
-                <section key={i}>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">
-                    {section.heading}
-                  </h2>
-                  <div className="mt-4 space-y-4">
-                    {section.body.map((p, j) => (
-                      <p
-                        key={j}
-                        className="text-base sm:text-lg text-fg-soft leading-relaxed"
-                      >
-                        {p}
-                      </p>
+            {/* Cover */}
+            <div className="relative mt-8 h-56 overflow-hidden rounded-3xl bg-bg-soft shadow-xl sm:h-72 lg:h-80">
+              {cover && (
+                <Image
+                  src={cover}
+                  alt={title}
+                  fill
+                  priority
+                  sizes="(min-width:1024px) 760px, 100vw"
+                  className="object-cover"
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-fg/25 to-transparent" />
+            </div>
+
+            {/* Body */}
+            <article className="mt-10">
+              {bodyHtml ? (
+                // DB-authored post — render the editor's HTML.  Content is
+                // authored by trusted managers via the admin TipTap editor.
+                <div className={RICH_BODY} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+              ) : (
+                <>
+                  <p className="text-lg sm:text-xl text-fg-soft leading-relaxed font-medium first-letter:text-5xl first-letter:font-bold first-letter:text-brand-red first-letter:float-left first-letter:mr-2 first-letter:leading-none">
+                    {intro}
+                  </p>
+
+                  <div className="mt-10 space-y-10">
+                    {sections.map((section, i) => (
+                      <section key={i}>
+                        <h2 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">
+                          {section.heading}
+                        </h2>
+                        <div className="mt-4 space-y-4">
+                          {section.body.map((p, j) => (
+                            <p
+                              key={j}
+                              className="text-base sm:text-lg text-fg-soft leading-relaxed"
+                            >
+                              {p}
+                            </p>
+                          ))}
+                        </div>
+                      </section>
                     ))}
                   </div>
-                </section>
-              ))}
-            </div>
 
-            {closing && (
-              <div className="mt-12 rounded-2xl border-l-4 border-brand-red bg-bg-soft px-6 py-5">
-                <p className="text-base sm:text-lg text-fg-soft leading-relaxed italic">
-                  {closing}
-                </p>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Author card */}
-        <div className="mt-12 card p-6 flex items-start gap-4">
-          <Image
-            src={BLOG_AUTHOR.avatarUrl}
-            alt={authorName}
-            width={64}
-            height={64}
-            className="h-16 w-16 rounded-2xl shrink-0 object-cover"
-          />
-          <div className="min-w-0">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-fg-faint">
-              {t.authorLabel}
-            </div>
-            <div className="mt-1 text-lg font-bold text-fg">{authorName}</div>
-            <p className="mt-1 text-sm text-fg-muted leading-relaxed">
-              {isEn
-                ? `${BLOG_AUTHOR.role}. ${t.authorBio}`
-                : `${BLOG_AUTHOR.role}। ${t.authorBio}`}
-            </p>
+                  {closing && (
+                    <div className="mt-12 rounded-2xl border-l-4 border-brand-red bg-bg-soft px-6 py-5">
+                      <p className="text-base sm:text-lg text-fg-soft leading-relaxed italic">
+                        {closing}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </article>
           </div>
+
+          {/* RIGHT — sticky sidebar */}
+          <BlogSidebar popular={popular} recent={recent} locale={locale} />
         </div>
-      </article>
+      </section>
 
       {/* CTA */}
       <section className="relative pb-12">

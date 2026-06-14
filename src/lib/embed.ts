@@ -27,7 +27,7 @@ function isFacebookVideo(url: string): boolean {
 function youtubeEmbed(id: string): string {
   // youtube-nocookie: no tracking cookie until the visitor hits play.
   return (
-    `<div class="video-embed video-embed--landscape">` +
+    `<div class="video-embed">` +
     `<iframe src="https://www.youtube-nocookie.com/embed/${id}" title="YouTube video player" loading="lazy" frameborder="0" ` +
     `allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>` +
     `</div>`
@@ -35,13 +35,13 @@ function youtubeEmbed(id: string): string {
 }
 
 function facebookEmbed(url: string): string {
-  const portrait = /\/reel\//i.test(url);
-  const orientation = portrait ? "video-embed--portrait" : "video-embed--landscape";
-  const href = encodeURIComponent(url);
+  // XFBML .fb-video: the Facebook SDK measures the real video and sizes
+  // the embed to its TRUE aspect — so a landscape video stays landscape
+  // and a portrait reel stays portrait (data-width="auto" fills the
+  // capped-width wrapper).  BlogArticle loads the SDK + parses on mount.
   return (
-    `<div class="video-embed ${orientation}">` +
-    `<iframe src="https://www.facebook.com/plugins/video.php?href=${href}&show_text=false" title="Facebook video player" loading="lazy" frameborder="0" scrolling="no" ` +
-    `allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowfullscreen></iframe>` +
+    `<div class="fb-embed">` +
+    `<div class="fb-video" data-href="${url}" data-show-text="false" data-width="auto" data-allowfullscreen="true" data-lazy="true"></div>` +
     `</div>`
   );
 }

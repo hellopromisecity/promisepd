@@ -6,7 +6,7 @@ import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 import { BLOG_AUTHOR, BLOG_POSTS } from "@/lib/blog";
 import { BLOG_EN } from "@/lib/blog.en";
-import { getPublishedDbPosts } from "@/lib/blog-db";
+import { getPublishedDbPosts, getViewCounts } from "@/lib/blog-db";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
 };
 
 export default async function EnBlogPage() {
-  const dbPosts = await getPublishedDbPosts();
+  const [dbPosts, viewCounts] = await Promise.all([getPublishedDbPosts(), getViewCounts()]);
 
   const breadcrumb = breadcrumbSchema([
     { name: "Home", url: `${SITE_URL}/en` },
@@ -88,7 +88,7 @@ export default async function EnBlogPage() {
       <JsonLd data={blogSchema} />
 
       <BlogHeader />
-      <BlogList extraPosts={dbPosts} />
+      <BlogList extraPosts={dbPosts} viewCounts={viewCounts} />
     </>
   );
 }

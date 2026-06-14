@@ -190,6 +190,24 @@ export async function getPublicPostBySlug(rawSlug: string): Promise<BlogPost | n
   return mapRow(res.data as unknown as DbRow);
 }
 
+/** slug → tracked extra views (post_views).  {} when unavailable. */
+export async function getViewCounts(): Promise<Record<string, number>> {
+  const admin = createAdminClient();
+  if (!admin) return {};
+  const { data, error } = await admin.from("post_views").select("slug, views");
+  if (error || !data) return {};
+  const map: Record<string, number> = {};
+  for (const r of data as { slug: string; views: number }[]) {
+    map[r.slug] = Number(r.views) || 0;
+  }
+  return map;
+}
+
+/** Add the tracked view delta onto each post's base view count. */
+export function withViewCounts(posts: BlogPost[], counts: Record<string, number>): BlogPost[] {
+  return posts.map((p) => ({ ...p, views: p.views + (counts[p.slug] ?? 0) }));
+}
+
 /** Related posts (same category first) drawn from the merged pool. */
 export function relatedFrom(all: BlogPost[], slug: string, n = 3): BlogPost[] {
   const cur = all.find((p) => p.slug === slug);

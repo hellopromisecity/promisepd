@@ -307,6 +307,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["blog_projects"]["Insert"]>;
         Relationships: [];
       };
+      post_views: {
+        Row: { slug: string; views: number; updated_at: string };
+        Insert: { slug: string; views?: number; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["post_views"]["Insert"]>;
+        Relationships: [];
+      };
       project_overrides: {
         Row: {
           slug: string;
