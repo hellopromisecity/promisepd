@@ -24,6 +24,52 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.8",
+    date: "2026-06-14",
+    title: "Attendance, beautified · edit your own profile",
+    changes: [
+      { kind: "improved", text: "Attendance gets an animated “% present” gauge and Present/Late/Absent/Leave count cards." },
+      { kind: "improved", text: "The chosen status is now a clear, filled button — and a Reset button undoes a day’s marks." },
+      { kind: "new", text: "Admins can edit their own profile (name, salary…) right from the Staff list." },
+    ],
+  },
+  {
+    version: "1.2.7",
+    date: "2026-06-14",
+    title: "One-tap attendance + date ranges",
+    changes: [
+      { kind: "new", text: "Mark the whole team Present / Absent / Late / Leave in ONE tap, tweak anyone individually, then Save the day in one go — no more per-row dropdowns." },
+      { kind: "new", text: "Date control with Today / Yesterday / pick-a-day, plus Last 7 days, Last 30 days, This / Last month, This / Last year and a custom range." },
+      { kind: "new", text: "Range view shows a per-employee summary (present / late / absent / leave / days marked)." },
+    ],
+  },
+  {
+    version: "1.2.6",
+    date: "2026-06-14",
+    title: "Every employee on attendance + fingerprint import",
+    changes: [
+      { kind: "new", text: "The attendance roster now lists EVERY employee — with or without a login — so anyone’s hajira can be marked." },
+      { kind: "new", text: "ZKTeco fingerprint import (K40 / K50 / K60 / K90): upload the device’s CSV/TXT export and attendance is added by employee code." },
+    ],
+  },
+  {
+    version: "1.2.5",
+    date: "2026-06-14",
+    title: "Company roster",
+    changes: [
+      { kind: "new", text: "The whole office team (name, designation, district, ID, mobile) now appears in Staff — give anyone a login in one click." },
+    ],
+  },
+  {
+    version: "1.2.4",
+    date: "2026-06-14",
+    title: "Staff management & pay",
+    changes: [
+      { kind: "new", text: "Add, edit and remove staff from the dashboard — set role, employee code, status and salary (basic + allowance − deduction)." },
+      { kind: "new", text: "Attendance: pick any past date to review or mark, not just today." },
+    ],
+  },
+  {
     version: "1.2.3",
     date: "2026-06-14",
     title: "Multi-tagging, full-height sidebar & Secure Vault",
