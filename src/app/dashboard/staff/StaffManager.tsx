@@ -64,7 +64,7 @@ export function CreateLoginButton({ prefill }: { prefill: StaffPrefill }) {
   );
 }
 
-export function StaffRowActions({ member }: { member: StaffMember }) {
+export function StaffRowActions({ member, canDelete = true }: { member: StaffMember; canDelete?: boolean }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -92,9 +92,11 @@ export function StaffRowActions({ member }: { member: StaffMember }) {
       <button onClick={() => setEditing(true)} className="grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:bg-bg-soft hover:text-fg" aria-label="Edit">
         <Pencil className="h-4 w-4" />
       </button>
-      <button onClick={onDelete} disabled={pending} className="grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50" aria-label="Delete">
-        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-      </button>
+      {canDelete && (
+        <button onClick={onDelete} disabled={pending} className="grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50" aria-label="Delete">
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </button>
+      )}
       {editing && <StaffFormModal mode="edit" member={member} onClose={() => setEditing(false)} />}
     </div>
   );

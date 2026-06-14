@@ -238,7 +238,9 @@ export default async function AttendancePage({
             message="Employees from the roster and registered accounts will appear here."
           />
         ) : (
-          <AttendanceRoster date={selDate} rows={rosterRows} />
+          // key by date so switching days remounts the roster with the
+          // new day's saved statuses (its state is seeded once on mount).
+          <AttendanceRoster key={selDate} date={selDate} rows={rosterRows} />
         )}
       </div>
     );

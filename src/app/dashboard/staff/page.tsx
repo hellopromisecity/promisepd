@@ -247,23 +247,22 @@ export default async function StaffPage() {
                   {canEditRoles && (
                     <td className={tdCls}>
                       {acc ? (
-                        acc.id === me.id ? (
-                          <span className="text-[11px] text-fg-faint">you</span>
-                        ) : (
-                          <StaffRowActions
-                            member={{
-                              id: acc.id,
-                              name: acc.name,
-                              mobile: acc.mobile,
-                              email: acc.email,
-                              employee_code: acc.employee_code,
-                              salary: acc.salary,
-                              allowance: acc.allowance,
-                              deduction: acc.deduction,
-                              status: acc.status || "active",
-                            } satisfies StaffMember}
-                          />
-                        )
+                        // Admin can edit ANY profile — including their own
+                        // (name, salary, etc.) — but can't delete themselves.
+                        <StaffRowActions
+                          canDelete={acc.id !== me.id}
+                          member={{
+                            id: acc.id,
+                            name: acc.name,
+                            mobile: acc.mobile,
+                            email: acc.email,
+                            employee_code: acc.employee_code,
+                            salary: acc.salary,
+                            allowance: acc.allowance,
+                            deduction: acc.deduction,
+                            status: acc.status || "active",
+                          } satisfies StaffMember}
+                        />
                       ) : (
                         <CreateLoginButton
                           prefill={{ name: m.name, mobile: m.mobile, employee_code: m.code, role: roleFromTitle(m.designation ?? "") }}
