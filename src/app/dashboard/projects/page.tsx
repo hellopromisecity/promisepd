@@ -173,7 +173,7 @@ export default async function AdminProjectsPage() {
                   </td>
                   <td className={`${tdCls} text-right`}>
                     <Link
-                      href={`/admin/projects/${p.slug}`}
+                      href={`/dashboard/projects/${p.slug}`}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-1.5 text-xs font-semibold text-fg transition-colors hover:border-brand-blue/40 hover:text-brand-blue"
                     >
                       <Pencil className="h-3.5 w-3.5" /> Edit

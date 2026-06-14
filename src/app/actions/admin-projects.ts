@@ -97,8 +97,8 @@ export async function upsertOverride(slug: string, input: OverrideInput): Promis
       detail: `Override saved for "${project.name}"`,
     });
 
-    revalidatePath("/admin/projects");
-    revalidatePath(`/admin/projects/${slug}`);
+    revalidatePath("/dashboard/projects");
+    revalidatePath(`/dashboard/projects/${slug}`);
     revalidatePath("/");
 
     return { message: "Override saved." };
@@ -126,8 +126,8 @@ export async function resetOverride(slug: string): Promise<ActionResult> {
       detail: `Override reset to code defaults for "${project.name}"`,
     });
 
-    revalidatePath("/admin/projects");
-    revalidatePath(`/admin/projects/${slug}`);
+    revalidatePath("/dashboard/projects");
+    revalidatePath(`/dashboard/projects/${slug}`);
     revalidatePath("/");
 
     return { message: "Reverted to code defaults." };

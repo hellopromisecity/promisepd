@@ -134,7 +134,7 @@ export default function BlogForm({
         ? await updatePost(post!.id, payload(status))
         : await createPost(payload(status));
       if (res.ok) {
-        router.push("/admin/blog");
+        router.push("/dashboard/blog");
         router.refresh();
       } else {
         setError(res.error);
@@ -218,7 +218,7 @@ export default function BlogForm({
     <div className="space-y-5">
       {/* Top bar */}
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={() => router.push("/admin/blog")} className="grid h-9 w-9 place-items-center rounded-xl border border-border text-fg-muted hover:text-fg" aria-label="Back">
+        <button onClick={() => router.push("/dashboard/blog")} className="grid h-9 w-9 place-items-center rounded-xl border border-border text-fg-muted hover:text-fg" aria-label="Back">
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="mr-auto">

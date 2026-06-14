@@ -75,10 +75,10 @@ export default async function AdminDashboard() {
   );
 
   const kpis = [
-    { label: "Projects", value: PROJECTS.length, sub: "live on the site", icon: Building, href: "/admin/projects" },
-    { label: "Members", value: members, sub: "registered accounts", icon: Users, href: "/admin/staff" },
-    { label: "Leads", value: leads, sub: "contact enquiries", icon: MessageSquare, href: "/admin/marketing/followup" },
-    { label: "Blog posts", value: BLOG_POSTS.length, sub: "published articles", icon: Newspaper, href: "/admin/blog" },
+    { label: "Projects", value: PROJECTS.length, sub: "live on the site", icon: Building, href: "/dashboard/projects" },
+    { label: "Members", value: members, sub: "registered accounts", icon: Users, href: "/dashboard/staff" },
+    { label: "Leads", value: leads, sub: "contact enquiries", icon: MessageSquare, href: "/dashboard/marketing/followup" },
+    { label: "Blog posts", value: BLOG_POSTS.length, sub: "published articles", icon: Newspaper, href: "/dashboard/blog" },
   ];
 
   return (
@@ -89,7 +89,7 @@ export default async function AdminDashboard() {
           <p className="mt-0.5 text-sm text-fg-muted">Everything at a glance.</p>
         </div>
         <Link
-          href="/admin/projects"
+          href="/dashboard/projects"
           className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-colors hover:bg-brand-blue-dark"
         >
           <Plus className="h-4 w-4" /> New project
@@ -160,7 +160,7 @@ export default async function AdminDashboard() {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-bold text-fg">Recent enquiries</h2>
             <Link
-              href="/admin/marketing/followup"
+              href="/dashboard/marketing/followup"
               className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline"
             >
               All <ArrowRight className="h-3.5 w-3.5" />

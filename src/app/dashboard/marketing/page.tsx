@@ -19,7 +19,7 @@ export default async function MarketingOverviewPage() {
 
   const followupsLink = (
     <Link
-      href="/admin/marketing/followup"
+      href="/dashboard/marketing/followup"
       className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40"
     >
       <ListChecks className="h-4 w-4" /> Client follow-up

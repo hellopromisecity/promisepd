@@ -27,7 +27,7 @@ export default async function AdminPlaceholder({
   params: Promise<{ slug: string[] }>;
 }) {
   const { slug } = await params;
-  const title = labelFor(`/admin/${slug.join("/")}`);
+  const title = labelFor(`/dashboard/${slug.join("/")}`);
 
   return (
     <div className="space-y-6">
@@ -45,7 +45,7 @@ export default async function AdminPlaceholder({
           “{title}” is being built. We’re shipping the dashboard section by section — this one is on the way.
         </p>
         <Link
-          href="/admin"
+          href="/dashboard"
           className="mt-5 inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-fg hover:border-brand-blue/40 hover:text-brand-blue"
         >
           <ArrowLeft className="h-4 w-4" /> Back to dashboard

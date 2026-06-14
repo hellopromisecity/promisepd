@@ -26,7 +26,7 @@ export default async function BlogAdminPage() {
   const admin = getAdmin();
   const newBtn = (
     <Link
-      href="/admin/blog/new"
+      href="/dashboard/blog/new"
       className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark"
     >
       + New article

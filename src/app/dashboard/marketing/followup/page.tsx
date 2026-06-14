@@ -108,7 +108,7 @@ export default async function FollowupPage() {
       />
 
       <Link
-        href="/admin/marketing"
+        href="/dashboard/marketing"
         className="inline-flex items-center gap-1 text-sm font-semibold text-fg-muted transition-colors hover:text-brand-blue"
       >
         <ArrowLeft className="h-4 w-4" /> Marketing overview

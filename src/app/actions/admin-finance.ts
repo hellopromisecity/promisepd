@@ -38,10 +38,10 @@ function money(detail: number): string {
 }
 
 function revalidateFinance() {
-  revalidatePath("/admin/finance");
-  revalidatePath("/admin/finance/bank");
-  revalidatePath("/admin/income");
-  revalidatePath("/admin/expenses");
+  revalidatePath("/dashboard/finance");
+  revalidatePath("/dashboard/finance/bank");
+  revalidatePath("/dashboard/income");
+  revalidatePath("/dashboard/expenses");
 }
 
 /* ----------------------------- Accounts ----------------------------- */

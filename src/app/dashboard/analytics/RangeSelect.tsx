@@ -13,7 +13,7 @@ export default function RangeSelect({ value }: { value: DateRange }) {
       </span>
       <select
         value={value}
-        onChange={(e) => router.push(`/admin/analytics?range=${e.target.value}`)}
+        onChange={(e) => router.push(`/dashboard/analytics?range=${e.target.value}`)}
         className="appearance-none rounded-xl border border-border bg-bg py-2 pl-9 pr-9 text-sm font-semibold text-fg outline-none focus:border-brand-blue/50"
       >
         {(Object.keys(RANGE_LABELS) as DateRange[]).map((k) => (

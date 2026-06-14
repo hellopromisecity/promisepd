@@ -17,7 +17,7 @@ import {
   ValidationError,
   type ActionResult,
 } from "@/lib/admin-guard";
-import { slugify } from "@/app/admin/blog/slug";
+import { slugify } from "@/app/dashboard/blog/slug";
 
 export type BlogStatus = "draft" | "published" | "scheduled";
 
@@ -140,7 +140,7 @@ function stripOptional<T extends Record<string, unknown>>(row: T): T {
 }
 
 function revalidateBlog() {
-  revalidatePath("/admin/blog");
+  revalidatePath("/dashboard/blog");
   revalidatePath("/blog");
 }
 
@@ -295,8 +295,8 @@ export async function createCategory(name: string): Promise<ActionResult<{ id: s
     }
 
     await logAudit({ action: "create", entity: "blog_category", entityId: data.id, detail: `Added category “${clean}”` });
-    revalidatePath("/admin/blog");
-    revalidatePath("/admin/blog/new");
+    revalidatePath("/dashboard/blog");
+    revalidatePath("/dashboard/blog/new");
     return { data: { id: data.id }, message: "Category added." };
   });
 }
@@ -318,8 +318,8 @@ export async function deleteCategory(id: string): Promise<ActionResult> {
       entityId: id,
       detail: existing ? `Deleted category “${existing.name}”` : `Deleted category ${id}`,
     });
-    revalidatePath("/admin/blog");
-    revalidatePath("/admin/blog/new");
+    revalidatePath("/dashboard/blog");
+    revalidatePath("/dashboard/blog/new");
     return { message: "Category deleted." };
   });
 }
@@ -349,8 +349,8 @@ export async function createProject(name: string): Promise<ActionResult<{ id: st
     }
 
     await logAudit({ action: "create", entity: "blog_project", entityId: data.id, detail: `Added project “${clean}”` });
-    revalidatePath("/admin/blog");
-    revalidatePath("/admin/blog/new");
+    revalidatePath("/dashboard/blog");
+    revalidatePath("/dashboard/blog/new");
     return { data: { id: data.id }, message: "Project added." };
   });
 }
@@ -372,8 +372,8 @@ export async function deleteProject(id: string): Promise<ActionResult> {
       entityId: id,
       detail: existing ? `Deleted project “${existing.name}”` : `Deleted project ${id}`,
     });
-    revalidatePath("/admin/blog");
-    revalidatePath("/admin/blog/new");
+    revalidatePath("/dashboard/blog");
+    revalidatePath("/dashboard/blog/new");
     return { message: "Project deleted." };
   });
 }

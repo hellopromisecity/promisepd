@@ -48,7 +48,7 @@ export async function submitReport(input: {
       actor: { id: me.id, name: me.name },
     });
 
-    revalidatePath("/admin/insights/messages");
+    revalidatePath("/dashboard/insights/messages");
     return { message: "Report submitted." };
   });
 }

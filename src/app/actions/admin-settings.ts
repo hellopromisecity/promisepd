@@ -26,7 +26,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-const PATH = "/admin/settings";
+const PATH = "/dashboard/settings";
 
 /* ------------------------------------------------------------------ */
 /* Profile                                                             */

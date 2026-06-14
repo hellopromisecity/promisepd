@@ -30,7 +30,7 @@ export default function AuditFilter({
     if (a) params.set("action", a);
     if (e) params.set("entity", e);
     const qs = params.toString();
-    router.push(qs ? `/admin/insights/audit?${qs}` : "/admin/insights/audit");
+    router.push(qs ? `/dashboard/insights/audit?${qs}` : "/dashboard/insights/audit");
   }
 
   const hasFilter = Boolean(action || entity);
@@ -78,7 +78,7 @@ export default function AuditFilter({
       {hasFilter && (
         <button
           type="button"
-          onClick={() => router.push("/admin/insights/audit")}
+          onClick={() => router.push("/dashboard/insights/audit")}
           className="inline-flex items-center gap-1 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg-muted transition-colors hover:border-brand-blue/40 hover:text-brand-blue"
         >
           <X className="h-3.5 w-3.5" /> Clear

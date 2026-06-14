@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
   const bare = isEn ? path.replace(/^\/en/, "") || "/" : path;
 
   const isAccount = bare === "/account" || bare.startsWith("/account/");
-  const isAdmin = path === "/admin" || path.startsWith("/admin/");
+  const isAdmin = path === "/dashboard" || path.startsWith("/dashboard/");
   const isAuthPage = bare === "/login" || bare === "/signup";
 
   // Guests can't see the member area or the admin dashboard.  (Admin
@@ -75,11 +75,11 @@ export const config = {
   // Public marketing pages skip the middleware entirely, so they never
   // pay for a Supabase auth round-trip — they stay instant.
   matcher: [
-    "/admin/:path*",
+    "/dashboard/:path*",
     "/account/:path*",
     "/login",
     "/signup",
-    "/en/admin/:path*",
+    "/en/dashboard/:path*",
     "/en/account/:path*",
     "/en/login",
     "/en/signup",

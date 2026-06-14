@@ -46,6 +46,12 @@ const nextConfig: NextConfig = {
         destination: "/:slug",
         permanent: true,
       },
+      // The admin dashboard moved from /admin to /dashboard — keep old
+      // bookmarks / links working.
+      { source: "/admin", destination: "/dashboard", permanent: true },
+      { source: "/admin/:path*", destination: "/dashboard/:path*", permanent: true },
+      { source: "/en/admin", destination: "/dashboard", permanent: true },
+      { source: "/en/admin/:path*", destination: "/dashboard/:path*", permanent: true },
     ];
   },
 

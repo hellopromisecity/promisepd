@@ -17,7 +17,7 @@ import {
   type ActionResult,
 } from "@/lib/admin-guard";
 import { isManager } from "@/lib/auth";
-import { FOLLOWUP_STATUSES, type FollowupStatus } from "@/app/admin/marketing/status";
+import { FOLLOWUP_STATUSES, type FollowupStatus } from "@/app/dashboard/marketing/status";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
 
 function isStatus(v: unknown): v is FollowupStatus {
@@ -40,8 +40,8 @@ function cleanDate(v: string | null | undefined): string | null {
 }
 
 function bothPaths() {
-  revalidatePath("/admin/marketing");
-  revalidatePath("/admin/marketing/followup");
+  revalidatePath("/dashboard/marketing");
+  revalidatePath("/dashboard/marketing/followup");
 }
 
 /** Create a follow-up.  Any staff may add; created_by = caller. */
@@ -254,7 +254,7 @@ const VALID_TYPES = new Set(OFFICER_TYPES.map((t) => t.code));
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 function revalidateLeaderboard() {
-  revalidatePath("/admin/marketing");
+  revalidatePath("/dashboard/marketing");
   revalidatePath("/leaderboard");
   revalidatePath("/en/leaderboard");
 }
@@ -445,7 +445,7 @@ export async function addPointItem(label: string, points: number, afr = 0, incom
     if (error) throw new Error(error.message);
 
     await logAudit({ action: "create", entity: "point_item", entityId: data.id, detail: `Added point item “${l}” (${p} pts)` });
-    revalidatePath("/admin/marketing");
+    revalidatePath("/dashboard/marketing");
     return { data: { id: data.id }, message: "Point item added." };
   });
 }
@@ -471,7 +471,7 @@ export async function updatePointItem(
     if (error) throw new Error(error.message);
 
     await logAudit({ action: "update", entity: "point_item", entityId: id, detail: `Updated point item (${JSON.stringify(patch)})` });
-    revalidatePath("/admin/marketing");
+    revalidatePath("/dashboard/marketing");
     return { message: "Point item updated." };
   });
 }
@@ -499,7 +499,7 @@ export async function savePointItems(
     }
 
     await logAudit({ action: "update", entity: "point_item", detail: `Saved ${items.length} point items` });
-    revalidatePath("/admin/marketing");
+    revalidatePath("/dashboard/marketing");
     return { message: "All point values saved." };
   });
 }
@@ -515,7 +515,7 @@ export async function deletePointItem(id: string): Promise<ActionResult> {
     if (error) throw new Error(error.message);
 
     await logAudit({ action: "delete", entity: "point_item", entityId: id, detail: `Deleted point item ${id}` });
-    revalidatePath("/admin/marketing");
+    revalidatePath("/dashboard/marketing");
     return { message: "Point item deleted." };
   });
 }

@@ -41,39 +41,39 @@ export const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
 
 /** Full nav, in display order (mirrors the agreed dashboard sections). */
 export const ADMIN_NAV: NavEntry[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, min: "staff" },
-  { label: "Analytics", href: "/admin/analytics", icon: BarChart3, min: "admin" },
-  { label: "Staff", href: "/admin/staff", icon: Users, min: "manager" },
-  { label: "Attendance", href: "/admin/attendance", icon: CalendarCheck, min: "staff" },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, min: "staff" },
+  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "admin" },
+  { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
+  { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "staff" },
   {
     label: "Finance",
     icon: Wallet,
     children: [
-      { label: "Overview", href: "/admin/finance", icon: ChartPie, min: "admin" },
-      { label: "Bank & cash", href: "/admin/finance/bank", icon: Building2, min: "admin" },
+      { label: "Overview", href: "/dashboard/finance", icon: ChartPie, min: "admin" },
+      { label: "Bank & cash", href: "/dashboard/finance/bank", icon: Building2, min: "admin" },
     ],
   },
-  { label: "Blog", href: "/admin/blog", icon: Newspaper, min: "manager" },
-  { label: "Projects", href: "/admin/projects", icon: Building, min: "manager" },
-  { label: "Income", href: "/admin/income", icon: TrendingUp, min: "admin" },
-  { label: "Expenses", href: "/admin/expenses", icon: TrendingDown, min: "manager" },
+  { label: "Blog", href: "/dashboard/blog", icon: Newspaper, min: "manager" },
+  { label: "Projects", href: "/dashboard/projects", icon: Building, min: "manager" },
+  { label: "Income", href: "/dashboard/income", icon: TrendingUp, min: "admin" },
+  { label: "Expenses", href: "/dashboard/expenses", icon: TrendingDown, min: "manager" },
   {
     label: "Marketing",
     icon: Megaphone,
     children: [
-      { label: "Overview", href: "/admin/marketing", icon: ChartPie, min: "manager" },
-      { label: "Client follow-up", href: "/admin/marketing/followup", icon: UserCheck, min: "staff" },
+      { label: "Overview", href: "/dashboard/marketing", icon: ChartPie, min: "manager" },
+      { label: "Client follow-up", href: "/dashboard/marketing/followup", icon: UserCheck, min: "staff" },
     ],
   },
   {
     label: "Insights",
     icon: Lightbulb,
     children: [
-      { label: "Message box", href: "/admin/insights/messages", icon: MessageSquare, min: "staff" },
-      { label: "Audit log", href: "/admin/insights/audit", icon: History, min: "admin" },
+      { label: "Message box", href: "/dashboard/insights/messages", icon: MessageSquare, min: "staff" },
+      { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "admin" },
     ],
   },
-  { label: "Settings", href: "/admin/settings", icon: Settings, min: "staff" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "staff" },
 ];
 
 /** Return only the entries (and child leaves) visible to `role`. */

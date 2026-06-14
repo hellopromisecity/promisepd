@@ -67,7 +67,7 @@ export async function setRole(memberId: string, role: Role): Promise<ActionResul
       entityId: memberId,
       detail: `Set role of ${target.name || "member"} to ${role}`,
     });
-    revalidatePath("/admin/staff");
+    revalidatePath("/dashboard/staff");
     return { message: "Role updated." };
   });
 }
@@ -108,7 +108,7 @@ export async function setAttendance(
       entityId: memberId,
       detail: `Marked ${status} on ${date}`,
     });
-    revalidatePath("/admin/attendance");
+    revalidatePath("/dashboard/attendance");
     return { message: "Attendance saved." };
   });
 }
@@ -172,7 +172,7 @@ export async function setOwnCheck(kind: "in" | "out"): Promise<ActionResult> {
       });
     }
 
-    revalidatePath("/admin/attendance");
+    revalidatePath("/dashboard/attendance");
     return { message: kind === "in" ? "Checked in." : "Checked out." };
   });
 }

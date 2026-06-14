@@ -143,7 +143,7 @@ export default function BlogList({ rows, newButton }: { rows: BlogRow[]; newButt
               filtered.map((r) => (
                 <tr key={r.id} className="border-b border-border/60 last:border-0 hover:bg-bg-soft/50">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/blog/${r.id}`} className="font-semibold text-fg hover:text-brand-blue">
+                    <Link href={`/dashboard/blog/${r.id}`} className="font-semibold text-fg hover:text-brand-blue">
                       {r.title}
                     </Link>
                     <div className="text-xs text-fg-faint">/{r.slug}</div>
@@ -173,7 +173,7 @@ export default function BlogList({ rows, newButton }: { rows: BlogRow[]; newButt
                       <a href={`/blog/${r.slug}`} target="_blank" rel="noopener noreferrer" title="View on site" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue">
                         <ExternalLink className="h-4 w-4" />
                       </a>
-                      <Link href={`/admin/blog/${r.id}`} title="Edit" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue">
+                      <Link href={`/dashboard/blog/${r.id}`} title="Edit" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue">
                         <SquarePen className="h-4 w-4" />
                       </Link>
                       <button onClick={() => onDelete(r)} disabled={busyId === r.id} title="Delete" className="rounded-md p-1.5 hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50">

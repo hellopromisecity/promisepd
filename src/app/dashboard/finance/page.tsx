@@ -100,7 +100,7 @@ export default async function FinanceOverviewPage() {
         subtitle="Income, expenses and account balances at a glance."
         action={
           <Link
-            href="/admin/finance/bank"
+            href="/dashboard/finance/bank"
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40"
           >
             <Building2 className="h-4 w-4" /> Bank &amp; cash
@@ -137,7 +137,7 @@ export default async function FinanceOverviewPage() {
             message="Add a bank, cash or mobile account to start tracking balances."
             action={
               <Link
-                href="/admin/finance/bank"
+                href="/dashboard/finance/bank"
                 className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-colors hover:bg-brand-blue-dark"
               >
                 Add account <ArrowRight className="h-4 w-4" />
@@ -186,7 +186,7 @@ export default async function FinanceOverviewPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-fg">Recent transactions</h2>
           <Link
-            href="/admin/income"
+            href="/dashboard/income"
             className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline"
           >
             All income <ArrowRight className="h-3.5 w-3.5" />

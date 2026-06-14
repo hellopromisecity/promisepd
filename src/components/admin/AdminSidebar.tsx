@@ -35,7 +35,7 @@ export default function AdminSidebar({
   // Only the single most-specific matching link is "active".  Collect
   // every leaf href, keep the longest one the current path matches
   // (exact, or a sub-path), so /admin/marketing/followup highlights only
-  // "Client follow-up" — not the "/admin/marketing" overview as well.
+  // "Client follow-up" — not the "/dashboard/marketing" overview as well.
   const activeHref = useMemo(() => {
     const hrefs: string[] = [];
     for (const e of nav) {

@@ -94,7 +94,7 @@ export default async function EditProjectPage({
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/projects"
+        href="/dashboard/projects"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted transition-colors hover:text-brand-blue"
       >
         <ArrowLeft className="h-4 w-4" /> Back to projects

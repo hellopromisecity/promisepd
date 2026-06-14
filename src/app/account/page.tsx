@@ -20,7 +20,7 @@ export default async function AccountPage() {
   const member = await getCurrentUser();
   if (!member) redirect("/login?next=/account");
   // Staff / managers / admins get the full dashboard, not the member page.
-  if (isStaff(member.role)) redirect("/admin");
+  if (isStaff(member.role)) redirect("/dashboard");
 
   return (
     <section className="relative pt-24 pb-10 min-h-[80svh]">
