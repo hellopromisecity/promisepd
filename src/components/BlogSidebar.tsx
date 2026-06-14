@@ -65,21 +65,21 @@ export default function BlogSidebar({
       {/* ── Author card ───────────────────────────────────────── */}
       <div className="overflow-hidden rounded-3xl border border-border bg-bg shadow-[var(--shadow-brand)]">
         {/* Gradient banner */}
-        <div className="relative h-20 bg-gradient-to-br from-brand-blue via-brand-blue-dark to-brand-red">
+        <div className="relative h-24 bg-gradient-to-br from-brand-blue via-brand-blue-dark to-brand-red">
           <div className="absolute inset-0 opacity-30 mix-blend-overlay [background:radial-gradient(circle_at_20%_20%,#fff_0,transparent_45%)]" />
           <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold text-brand-blue-dark shadow-sm">
             <BadgeCheck className="h-3 w-3" /> {t.verified}
           </span>
         </div>
 
-        <div className="px-5 pb-5 -mt-12 text-center">
-          <div className="mx-auto h-24 w-24 rounded-full bg-gradient-to-br from-brand-blue to-brand-red p-[3px] shadow-lg">
+        <div className="px-5 pb-6 -mt-[4.5rem] text-center">
+          <div className="mx-auto h-36 w-36 rounded-full bg-gradient-to-br from-brand-blue to-brand-red p-1 shadow-xl">
             <Image
               src={BLOG_AUTHOR.avatarUrl}
               alt={authorName}
-              width={96}
-              height={96}
-              className="h-full w-full rounded-full object-cover ring-2 ring-white"
+              width={180}
+              height={180}
+              className="h-full w-full rounded-full object-cover ring-4 ring-white"
             />
           </div>
           <div className="mt-3 text-[10px] font-bold uppercase tracking-[0.2em] text-fg-faint">

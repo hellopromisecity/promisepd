@@ -162,7 +162,10 @@ export default function LeaderboardView({
       <section className="relative pb-12">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           <div className="card overflow-hidden">
-            <div className="bg-bg-soft px-5 sm:px-6 py-3 grid grid-cols-[3rem_1fr_5rem_6rem] sm:grid-cols-[3rem_1fr_8rem_8rem] gap-3 text-[10px] uppercase tracking-[0.18em] font-bold text-fg-muted">
+            {/* Internal scroll so the long roster scrolls inside the box,
+                with the column header pinned at the top. */}
+            <div className="max-h-[65vh] overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="sticky top-0 z-10 bg-bg-soft px-5 sm:px-6 py-3 grid grid-cols-[3rem_1fr_5rem_6rem] sm:grid-cols-[3rem_1fr_8rem_8rem] gap-3 text-[10px] uppercase tracking-[0.18em] font-bold text-fg-muted">
               <div>{isEn ? L.thRank : "র‍্যাঙ্ক"}</div>
               <div>{isEn ? L.thPartner : "পার্টনার"}</div>
               <div className="text-right">{isEn ? L.thPoints : "পয়েন্ট"}</div>
@@ -205,6 +208,7 @@ export default function LeaderboardView({
                 );
               })
             )}
+            </div>
           </div>
         </div>
       </section>
