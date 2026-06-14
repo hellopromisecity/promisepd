@@ -60,12 +60,15 @@ export default function ReportToDeveloper({
   errorDigest,
 }: ReportToDeveloperProps) {
   const T = COPY[stripLocale(usePathname() || "/").locale];
-  // Build the email body lazily on click so we always capture the
-  // CURRENT URL (the page might have navigated since render).  No
-  // window access on the server — we use `typeof` checks throughout.
+
+  // Render a STABLE href (the plain default) on both server and client so
+  // hydration matches — the URL / UA / timestamp would otherwise differ
+  // between the two renders.  The rich, context-filled body is swapped in
+  // on click, just before the mail client opens, via onMailClick below.
+  const staticMail = DEVELOPER.reportMailUrl();
   const buildMailLink = () => {
     if (typeof window === "undefined") {
-      return DEVELOPER.reportMailUrl();
+      return staticMail;
     }
     const ts = new Date().toISOString();
     const lines = [
@@ -84,6 +87,12 @@ export default function ReportToDeveloper({
       `PromisePD — Site Issue (${ts.slice(0, 10)})`,
       lines.join("\n"),
     );
+  };
+
+  // Swap the static href for the context-rich one the instant the link is
+  // activated — keeps render deterministic but the email pre-filled.
+  const onMailClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.currentTarget.href = buildMailLink();
   };
 
   if (variant === "inline") {
@@ -108,7 +117,8 @@ export default function ReportToDeveloper({
         </a>
         <span className="text-fg-faint">·</span>
         <a
-          href={typeof window === "undefined" ? DEVELOPER.reportMailUrl() : buildMailLink()}
+          href={staticMail}
+          onClick={onMailClick}
           className="font-semibold text-fg hover:text-brand-blue transition-colors"
         >
           {T.email}
@@ -165,7 +175,8 @@ export default function ReportToDeveloper({
           WhatsApp
         </a>
         <a
-          href={typeof window === "undefined" ? DEVELOPER.reportMailUrl() : buildMailLink()}
+          href={staticMail}
+          onClick={onMailClick}
           className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-border px-4 py-3 text-sm font-bold text-fg hover:border-brand-blue/40 transition-colors"
         >
           <Mail className="h-4 w-4 text-brand-blue" />
