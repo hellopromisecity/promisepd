@@ -339,6 +339,47 @@ export async function setStaffAttendance(
   });
 }
 
+export type AttendanceEntry = {
+  ref: string;
+  memberId?: string | null;
+  status: AttendanceStatus;
+};
+
+/** Save the whole roster for a date in ONE batch (the bulk-marking UI).
+ *  Manager+ only.  Upserts every entry keyed by staff_ref. */
+export async function saveAttendanceBatch(
+  date: string,
+  entries: AttendanceEntry[],
+): Promise<ActionResult<{ saved: number }>> {
+  return runAction(async () => {
+    await requireManager();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ValidationError("Invalid date.");
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+
+    const rows = (entries ?? [])
+      .filter((e) => e.ref && ATTENDANCE_STATUSES.includes(e.status))
+      .map((e) => ({
+        staff_ref: e.ref,
+        member_id: e.memberId ?? null,
+        date,
+        status: e.status,
+      }));
+    if (rows.length === 0) throw new ValidationError("Nothing to save.");
+
+    const { error } = await admin.from("attendance").upsert(rows, { onConflict: "staff_ref,date" });
+    if (error) throw new Error(error.message);
+
+    await logAudit({
+      action: "bulk_update",
+      entity: "attendance",
+      detail: `Saved attendance for ${rows.length} staff on ${date}`,
+    });
+    revalidatePath("/dashboard/attendance");
+    return { data: { saved: rows.length }, message: `Saved attendance for ${rows.length} staff.` };
+  });
+}
+
 /** Self check-in / check-out for today.  Staff-only, and may only ever
  *  touch the caller's own attendance row. */
 export async function setOwnCheck(kind: "in" | "out"): Promise<ActionResult> {

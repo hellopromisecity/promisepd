@@ -15,13 +15,14 @@ import {
   type Tone,
 } from "@/components/admin/ui";
 import { buildStaffDirectory, refForMember, type StaffAccount } from "@/lib/staff-directory";
-import AttendanceRow from "./AttendanceRow";
 import SelfCheck from "./SelfCheck";
-import AttendanceDate from "./AttendanceDate";
+import AttendanceControls from "./AttendanceControls";
+import AttendanceRoster, { type RosterRow } from "./AttendanceRoster";
 
 export const dynamic = "force-dynamic";
 
 type AttendanceStatus = "present" | "late" | "absent" | "leave" | "holiday";
+type MarkStatus = "present" | "late" | "absent" | "leave";
 
 const STATUS_TONE: Record<AttendanceStatus, Tone> = {
   present: "success",
@@ -36,9 +37,45 @@ function todayStr(): string {
   return new Date().toLocaleDateString("en-CA");
 }
 
+const isoDate = (d: Date) => d.toLocaleDateString("en-CA");
+
+/** Resolve a range preset id (or custom from/to) to a {from, to} window. */
+function resolveRange(
+  id: string,
+  from: string,
+  to: string,
+  today: string,
+): { from: string; to: string; label: string } {
+  const t = new Date(`${today}T00:00:00`);
+  const y = t.getFullYear();
+  const back = (n: number) => {
+    const c = new Date(t);
+    c.setDate(c.getDate() - n);
+    return isoDate(c);
+  };
+  switch (id) {
+    case "last7": return { from: back(6), to: today, label: "Last 7 days" };
+    case "last30": return { from: back(29), to: today, label: "Last 30 days" };
+    case "this_month": return { from: isoDate(new Date(y, t.getMonth(), 1)), to: today, label: "This month" };
+    case "last_month": return { from: isoDate(new Date(y, t.getMonth() - 1, 1)), to: isoDate(new Date(y, t.getMonth(), 0)), label: "Last month" };
+    case "this_year": return { from: `${y}-01-01`, to: today, label: "This year" };
+    case "last_year": return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, label: "Last year" };
+    case "custom": {
+      const f = /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : today;
+      const tt = /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : today;
+      return f <= tt ? { from: f, to: tt, label: "Custom range" } : { from: tt, to: f, label: "Custom range" };
+    }
+    default: return { from: isoDate(new Date(y, t.getMonth(), 1)), to: today, label: "This month" };
+  }
+}
+
 function fmtDate(d: string | null): string {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-GB", {
+  // Parse a bare YYYY-MM-DD as LOCAL midnight (matches todayStr /
+  // resolveRange) so the rendered day never shifts under a non-UTC
+  // server or locale.
+  const s = d.includes("T") ? d : `${d}T00:00:00`;
+  return new Date(s).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -53,16 +90,13 @@ function fmtTime(iso: string | null): string {
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; range?: string; from?: string; to?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!me || !isStaff(me.role)) redirect("/account");
 
   const today = todayStr();
   const sp = await searchParams;
-  // Managers can review/mark any past date via ?date=; default today.
-  const selDate =
-    sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
   const admin = getAdmin();
 
   if (!admin) {
@@ -78,11 +112,10 @@ export default async function AttendancePage({
     );
   }
 
-  // ----- Manager / admin: whole-team view for the selected date -----
+  // ----- Manager / admin -----
   if (isManager(me.role)) {
-    // Every employee on the roster (login or not) + any extra accounts.
-    // `employee_code` only exists once migration 0016 is applied — fall
-    // back to the base columns so this never errors out.
+    // Full company directory (roster + accounts).  `employee_code` only
+    // exists after migration 0016 — fall back so this never errors out.
     const selProfiles = (cols: string) =>
       admin.from("profiles").select(cols).order("name", { ascending: true });
     let pres = await selProfiles("id, name, mobile, role, employee_code");
@@ -90,49 +123,114 @@ export default async function AttendancePage({
     const accounts = (pres.error ? [] : pres.data ?? []) as unknown as StaffAccount[];
     const directory = buildStaffDirectory(accounts);
 
-    // Attendance for the day, keyed by staff_ref.
-    const { data: dayRows } = await admin
-      .from("attendance")
-      .select("staff_ref, status, check_in, check_out, note")
-      .eq("date", selDate);
-    const byRef = new Map(
-      (dayRows ?? []).map((r) => [(r as { staff_ref: string | null }).staff_ref ?? "", r]),
+    const importLink = (
+      <Link
+        href="/dashboard/attendance/import"
+        className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-brand-blue hover:bg-brand-blue-tint"
+      >
+        <Upload className="h-4 w-4" /> Import (ZKTeco)
+      </Link>
     );
 
-    let present = 0;
-    let late = 0;
-    let absent = 0;
-    for (const d of directory) {
-      const st = byRef.get(d.ref)?.status;
-      if (st === "present") present++;
-      else if (st === "late") late++;
-      else if (st === "absent") absent++;
+    // ===== RANGE mode: read-only per-employee summary =====
+    if (sp.range) {
+      const { from, to, label } = resolveRange(sp.range, sp.from ?? "", sp.to ?? "", today);
+      const { data: rangeRows } = await admin
+        .from("attendance")
+        .select("staff_ref, status")
+        .gte("date", from)
+        .lte("date", to);
+      const agg = new Map<string, { present: number; late: number; absent: number; leave: number }>();
+      for (const r of (rangeRows ?? []) as { staff_ref: string | null; status: string }[]) {
+        const k = r.staff_ref ?? "";
+        if (!k) continue;
+        const a = agg.get(k) ?? { present: 0, late: 0, absent: 0, leave: 0 };
+        if (r.status === "present") a.present++;
+        else if (r.status === "late") a.late++;
+        else if (r.status === "absent") a.absent++;
+        else if (r.status === "leave") a.leave++;
+        agg.set(k, a);
+      }
+
+      return (
+        <div className="space-y-5">
+          <PageHeader title="Attendance" subtitle={`Summary · ${label} (${fmtDate(from)} – ${fmtDate(to)})`} action={importLink} />
+          <AttendanceControls mode="range" rangeId={sp.range} from={from} to={to} />
+          {directory.length === 0 ? (
+            <EmptyState icon={CalendarCheck} title="No staff yet" message="Employees will appear here." />
+          ) : (
+            <TableShell>
+              <thead>
+                <tr>
+                  <th className={thCls}>Employee</th>
+                  <th className={thCls}>Present</th>
+                  <th className={thCls}>Late</th>
+                  <th className={thCls}>Absent</th>
+                  <th className={thCls}>Leave</th>
+                  <th className={thCls}>Marked</th>
+                </tr>
+              </thead>
+              <tbody>
+                {directory.map((d) => {
+                  const a = agg.get(d.ref) ?? { present: 0, late: 0, absent: 0, leave: 0 };
+                  const marked = a.present + a.late + a.absent + a.leave;
+                  const meta = [d.designation, d.district].filter(Boolean).join(" · ") || d.mobile;
+                  return (
+                    <tr key={d.ref}>
+                      <td className={tdCls}>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-fg">{d.name || "Unnamed"}</p>
+                          <p className="truncate text-xs text-fg-muted">{meta}{d.code ? ` · ${d.code}` : ""}</p>
+                        </div>
+                      </td>
+                      <td className={`${tdCls} font-semibold text-emerald-600`}>{a.present}</td>
+                      <td className={`${tdCls} text-amber-600`}>{a.late}</td>
+                      <td className={`${tdCls} text-brand-red`}>{a.absent}</td>
+                      <td className={`${tdCls} text-brand-blue`}>{a.leave}</td>
+                      <td className={`${tdCls} text-fg-muted`}>{marked}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </TableShell>
+          )}
+        </div>
+      );
     }
 
+    // ===== DAY mode: one-click bulk-marking roster =====
+    const selDate =
+      sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
+    const { data: dayRows } = await admin
+      .from("attendance")
+      .select("staff_ref, status")
+      .eq("date", selDate);
+    const byRef = new Map(
+      (dayRows ?? []).map((r) => [(r as { staff_ref: string | null }).staff_ref ?? "", (r as { status: string }).status]),
+    );
+
+    const rosterRows: RosterRow[] = directory.map((d) => {
+      const raw = byRef.get(d.ref);
+      const status: MarkStatus | null =
+        raw === "present" || raw === "absent" || raw === "late" || raw === "leave" ? raw : null;
+      return {
+        ref: d.ref,
+        memberId: d.account?.id ?? null,
+        name: d.name,
+        meta: [d.designation, d.district].filter(Boolean).join(" · ") || d.mobile,
+        code: d.code,
+        status,
+      };
+    });
+
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         <PageHeader
           title="Attendance"
-          subtitle={`Team status · ${fmtDate(selDate)}${selDate !== today ? "" : " (today)"}`}
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              <AttendanceDate value={selDate} today={today} />
-              <Link
-                href="/dashboard/attendance/import"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-1.5 text-sm font-semibold text-brand-blue hover:bg-brand-blue-tint"
-              >
-                <Upload className="h-4 w-4" /> Import (ZKTeco)
-              </Link>
-            </div>
-          }
+          subtitle={`Mark hajira · ${fmtDate(selDate)}${selDate === today ? " (today)" : ""}`}
+          action={importLink}
         />
-
-        <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Present" value={present} icon={CalendarCheck} tone="success" />
-          <StatCard label="Late" value={late} icon={Clock} tone="warning" />
-          <StatCard label="Absent" value={absent} icon={UserX} tone="danger" />
-        </div>
-
+        <AttendanceControls mode="day" date={selDate} />
         {directory.length === 0 ? (
           <EmptyState
             icon={CalendarCheck}
@@ -140,60 +238,7 @@ export default async function AttendancePage({
             message="Employees from the roster and registered accounts will appear here."
           />
         ) : (
-          <TableShell>
-            <thead>
-              <tr>
-                <th className={thCls}>Employee</th>
-                <th className={thCls}>Code</th>
-                <th className={thCls}>Check in</th>
-                <th className={thCls}>Check out</th>
-                <th className={thCls}>Status</th>
-                <th className={thCls}>Set</th>
-              </tr>
-            </thead>
-            <tbody>
-              {directory.map((d) => {
-                const row = byRef.get(d.ref);
-                const status = (row?.status as AttendanceStatus | undefined) ?? null;
-                const meta = [d.designation, d.district].filter(Boolean).join(" · ");
-                return (
-                  <tr key={d.ref}>
-                    <td className={tdCls}>
-                      <div className="flex items-center gap-3">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-blue-tint text-xs font-bold text-brand-blue">
-                          {(d.name?.[0] ?? "?").toUpperCase()}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-fg">{d.name || "Unnamed"}</p>
-                          <p className="truncate text-xs text-fg-muted">{meta || d.mobile}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className={`${tdCls} whitespace-nowrap font-mono text-xs text-fg-muted`}>{d.code || "—"}</td>
-                    <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>{fmtTime(row?.check_in ?? null)}</td>
-                    <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>{fmtTime(row?.check_out ?? null)}</td>
-                    <td className={tdCls}>
-                      {status ? (
-                        <Badge tone={STATUS_TONE[status]}>{status}</Badge>
-                      ) : (
-                        <span className="text-xs text-fg-faint">not marked</span>
-                      )}
-                    </td>
-                    <td className={tdCls}>
-                      <AttendanceRow
-                        staffRef={d.ref}
-                        memberId={d.account?.id ?? null}
-                        name={d.name || "this member"}
-                        date={selDate}
-                        current={status}
-                        note={row?.note ?? null}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </TableShell>
+          <AttendanceRoster date={selDate} rows={rosterRows} />
         )}
       </div>
     );
