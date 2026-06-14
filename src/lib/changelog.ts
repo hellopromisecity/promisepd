@@ -1,0 +1,237 @@
+/** Product changelog — shown in the dashboard (Settings → Changelog) so
+ *  the team can see, at a glance, what shipped in every release.
+ *
+ *  Versioning: 1.0.1 → 1.0.10, then the next bump rolls the minor —
+ *  1.0.10 → 1.1.0 → 1.1.1 … (patch runs 1–10, then minor +1).  Newest
+ *  release goes at the TOP of the list; CURRENT_VERSION reads from it. */
+
+export type ChangeKind = "new" | "improved" | "fixed" | "changed";
+
+export type ChangelogEntry = {
+  version: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  changes: { kind: ChangeKind; text: string }[];
+};
+
+export const CHANGELOG_FOOTER = {
+  company: "Promise Proper Development",
+  poweredByLabel: "Growthency",
+  poweredByUrl: "https://growthency.com/",
+};
+
+/** Newest first. */
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.2.0",
+    date: "2026-06-14",
+    title: "Land plots, in-app changelog & polish",
+    changes: [
+      { kind: "new", text: "This changelog — every release and what it shipped, in one place." },
+      { kind: "changed", text: "Promise City land plot: third category is now 10 katha = 15 decimals (৳90 Lakh)." },
+      { kind: "improved", text: "Profile photo now appears in the dashboard topbar and the public Dashboard nav pill." },
+      { kind: "improved", text: "Dashboard blog list shows real total views (base + tracked), not 0." },
+      { kind: "improved", text: "Blog sidebar: bigger, cleaner author card; Popular & Recent now show 10 posts each." },
+    ],
+  },
+  {
+    version: "1.1.10",
+    date: "2026-06-14",
+    title: "One-click dashboard, no redirect bounce",
+    changes: [
+      { kind: "improved", text: "The “Dashboard” button now opens the dashboard directly — no more /account → /dashboard hop." },
+      { kind: "new", text: "Header shows your avatar + “Dashboard” once signed in (guests still see “Login”)." },
+    ],
+  },
+  {
+    version: "1.1.9",
+    date: "2026-06-14",
+    title: "Dashboard moved to /dashboard",
+    changes: [
+      { kind: "changed", text: "The admin panel now lives at /dashboard (was /admin); old links 301-redirect automatically." },
+      { kind: "changed", text: "Every “MD & CEO” label now reads “Founder & CEO”." },
+      { kind: "improved", text: "Story page: the founder is named once, with a more evocative closing line." },
+    ],
+  },
+  {
+    version: "1.1.8",
+    date: "2026-06-14",
+    title: "Marketing roster & leaderboard",
+    changes: [
+      { kind: "new", text: "Imported the full marketing-officer + director roster (name, mobile, ID, district)." },
+      { kind: "new", text: "Award-points officer picker is now searchable by name, mobile or ID number." },
+      { kind: "improved", text: "Leaderboard scrolls inside its own box with a pinned header." },
+    ],
+  },
+  {
+    version: "1.1.7",
+    date: "2026-06-14",
+    title: "Blog reading experience",
+    changes: [
+      { kind: "new", text: "Article sidebar: a premium author card, Popular posts and Recent posts." },
+      { kind: "new", text: "Per-post view counting (counts real visits, once per session)." },
+      { kind: "improved", text: "Sharp, high-res founder photo across the blog." },
+    ],
+  },
+  {
+    version: "1.1.6",
+    date: "2026-06-14",
+    title: "Rich media in articles",
+    changes: [
+      { kind: "new", text: "Pasted YouTube / Facebook video links render as inline players (Facebook keeps its true aspect)." },
+      { kind: "improved", text: "Sharing a post on WhatsApp / Facebook now shows the post’s own cover image." },
+    ],
+  },
+  {
+    version: "1.1.5",
+    date: "2026-06-14",
+    title: "Admin posts go public",
+    changes: [
+      { kind: "new", text: "Posts published from the dashboard now appear on the public blog (Bangla + English)." },
+      { kind: "fixed", text: "Bangla post URLs no longer 500 in production (slugs are romanised to ASCII)." },
+      { kind: "fixed", text: "Removed a hydration warning from the footer’s “report an issue” link." },
+    ],
+  },
+  {
+    version: "1.1.4",
+    date: "2026-06-14",
+    title: "Blog publishing fixes",
+    changes: [
+      { kind: "fixed", text: "Publishing a post with a Bangla title no longer fails with “Something went wrong”." },
+      { kind: "new", text: "Project + category taxonomy for posts (admin can add / delete both)." },
+      { kind: "improved", text: "The article editor’s toolbar stays pinned while you write long posts." },
+    ],
+  },
+  {
+    version: "1.1.3",
+    date: "2026-06-13",
+    title: "No more browser pop-ups",
+    changes: [
+      { kind: "improved", text: "Every confirm / alert / prompt is replaced with on-brand dialogs and toasts." },
+    ],
+  },
+  {
+    version: "1.1.2",
+    date: "2026-06-13",
+    title: "Analytics & follow-ups",
+    changes: [
+      { kind: "new", text: "Google Analytics tracking + a dashboard Analytics section." },
+      { kind: "new", text: "Client follow-up data grid: search, status, custom date range, unique-lead counts." },
+      { kind: "new", text: "Award points now capture the sale date and client name / ID." },
+    ],
+  },
+  {
+    version: "1.1.1",
+    date: "2026-06-13",
+    title: "Income & leaderboard depth",
+    changes: [
+      { kind: "new", text: "Income tracking that feeds the public leaderboard." },
+      { kind: "improved", text: "Leaderboard: decimal points, AFR, filters, sort, CSV/PDF export, officer editing." },
+      { kind: "fixed", text: "De-duplicated the point-item catalogue (idempotent migration)." },
+    ],
+  },
+  {
+    version: "1.1.0",
+    date: "2026-06-13",
+    title: "Marketing officers & live leaderboard",
+    changes: [
+      { kind: "new", text: "Marketing officers + points feed a live public leaderboard." },
+      { kind: "changed", text: "Marketing split into Overview (leaderboard) and Client follow-up (leads)." },
+    ],
+  },
+  {
+    version: "1.0.10",
+    date: "2026-06-13",
+    title: "Faster, snappier dashboard",
+    changes: [
+      { kind: "improved", text: "Top progress bar + skeletons give instant navigation feedback." },
+      { kind: "improved", text: "Auth-gated pages cache the session lookup and scope the middleware tightly." },
+    ],
+  },
+  {
+    version: "1.0.9",
+    date: "2026-06-13",
+    title: "Blog CMS",
+    changes: [
+      { kind: "new", text: "Full article editor with SEO, scheduling, cover upload and manageable categories." },
+    ],
+  },
+  {
+    version: "1.0.8",
+    date: "2026-06-13",
+    title: "Admin dashboard — all sections",
+    changes: [
+      { kind: "new", text: "Projects, Blog, Staff, Attendance, Finance, Marketing, Insights and Settings." },
+      { kind: "new", text: "Role system (member / staff / manager / admin) with a super-admin override." },
+    ],
+  },
+  {
+    version: "1.0.7",
+    date: "2026-06-13",
+    title: "Member accounts",
+    changes: [
+      { kind: "new", text: "Real sign-up / sign-in with mobile or username + password (no OTP / SMS cost)." },
+    ],
+  },
+  {
+    version: "1.0.6",
+    date: "2026-06-13",
+    title: "Fifth division refresh",
+    changes: [
+      { kind: "changed", text: "Renamed the fifth division to “Ahbab Interior and Architects” + added its logo." },
+    ],
+  },
+  {
+    version: "1.0.5",
+    date: "2026-06-12",
+    title: "Installable app (PWA)",
+    changes: [
+      { kind: "new", text: "Install Promise City as an app; it opens to the login page." },
+      { kind: "improved", text: "Centred the install-prompt screenshot for a cleaner look." },
+    ],
+  },
+  {
+    version: "1.0.4",
+    date: "2026-06-03",
+    title: "Official forms",
+    changes: [
+      { kind: "new", text: "Six fillable forms (Promise City, Fuzala Tower / Complex, investment, marketing director) — fill in, generate a PDF, email it." },
+    ],
+  },
+  {
+    version: "1.0.3",
+    date: "2026-05-28",
+    title: "Bilingual website",
+    changes: [
+      { kind: "new", text: "Full English mirror at /en with a language switcher and SEO hreflang tags." },
+    ],
+  },
+  {
+    version: "1.0.2",
+    date: "2026-05-24",
+    title: "Engagement & outreach",
+    changes: [
+      { kind: "new", text: "Newsletter sign-up with a branded welcome email." },
+      { kind: "new", text: "Branded email notification on every contact-form submission." },
+    ],
+  },
+  {
+    version: "1.0.1",
+    date: "2026-05-21",
+    title: "Premium polish",
+    changes: [
+      { kind: "improved", text: "Subtle architectural hero backdrops across the homepage and division pages." },
+      { kind: "improved", text: "Refined Partner rewards and Team cards with richer hover motion." },
+    ],
+  },
+  {
+    version: "1.0.0",
+    date: "2026-05-20",
+    title: "Launch 🎉",
+    changes: [
+      { kind: "new", text: "Promise City goes live — homepage, five divisions, projects, gallery, team, the story, partner programme, leaderboard and contact." },
+    ],
+  },
+];
+
+export const CURRENT_VERSION = CHANGELOG[0]?.version ?? "1.0.0";

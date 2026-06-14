@@ -22,6 +22,7 @@ import {
   MessageSquare,
   History,
   Settings,
+  Rocket,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/auth";
@@ -74,6 +75,7 @@ export const ADMIN_NAV: NavEntry[] = [
     ],
   },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "staff" },
+  { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "staff" },
 ];
 
 /** Return only the entries (and child leaves) visible to `role`. */

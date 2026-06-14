@@ -102,9 +102,9 @@ export const PROJECT_EN: Record<
     location: "Dhaka",
     price: "Tk 6 Lakh / decimal",
     description:
-      "A planned residential township in Dhaka — investable land plots (4/6/9 katha) alongside Fuzala Tower and Fuzala Complex.",
+      "A planned residential township in Dhaka — investable land plots (4/6/10 katha) alongside Fuzala Tower and Fuzala Complex.",
     highlights: [
-      "4 / 6 / 9 katha plots",
+      "4 / 6 / 10 katha plots",
       "Tk 9 Lakh per katha",
       "Verified deed & mutation",
       "Premium location",
@@ -193,18 +193,18 @@ export const PROJECT_DETAIL_EN: Record<
       "Promise City is our flagship residential township — Fuzala Tower and Fuzala Complex alongside investable land plots. Your future address in the heart of Dhaka, with verified deeds, handover with mutation and full legal security.",
     details: [
       "Promise City — a planned residential township in Dhaka, with investable land plots alongside Fuzala Tower and Fuzala Complex.",
-      "Land price: 6 Lakh taka per decimal, 9 Lakh taka per katha (= 1.5 decimals). Three plot categories — 4 katha, 6 katha and 9 katha.",
+      "Land price: 6 Lakh taka per decimal, 9 Lakh taka per katha (= 1.5 decimals). Three plot categories — 4 katha, 6 katha and 10 katha.",
       "Verified deed, handover with mutation — full legal security. Pick your plot from the layout plan.",
     ],
     plots: {
       pricePerShotangsho: "6 Lakh taka",
       pricePerKatha: "9 Lakh taka",
       conversion: "1 katha = 1.5 decimals",
-      note: "Coming soon: live plot availability from the dashboard — filter by 4 / 6 / 9 katha and everyone can see which plots are open and which are sold — in shaa Allah.",
+      note: "Coming soon: live plot availability from the dashboard — filter by 4 / 6 / 10 katha and everyone can see which plots are open and which are sold — in shaa Allah.",
       categories: [
         { katha: "4 katha", shotangsho: "6 decimals", price: "Tk 36 Lakh" },
         { katha: "6 katha", shotangsho: "9 decimals", price: "Tk 54 Lakh" },
-        { katha: "9 katha", shotangsho: "13.5 decimals", price: "Tk 81 Lakh" },
+        { katha: "10 katha", shotangsho: "15 decimals", price: "Tk 90 Lakh" },
       ],
     },
   },
