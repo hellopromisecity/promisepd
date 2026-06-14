@@ -64,7 +64,7 @@ export type BlogPost = {
 export const BLOG_AUTHOR = {
   name: "কামরুল হাসান",
   nameEn: "Kamrul Hasan",
-  role: "MD & CEO, Promise Group",
+  role: "Founder & CEO, Promise Group",
   // Sharp, tightly-cropped headshot (from public/author.jpg) so the
   // avatar stays crisp at large card sizes.  Falls back to a DiceBear
   // initials avatar in older callers that haven't been updated yet.

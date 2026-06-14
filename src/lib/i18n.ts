@@ -51,6 +51,7 @@ type Dict = {
   login: string;
   signup: string;
   accountNav: string;
+  dashboardNav: string;
   call: string;
   menu: string;
   openMenu: string;
@@ -283,6 +284,7 @@ export const DICT: Record<Locale, Dict> = {
       contact: "যোগাযোগ",
     },
     login: "লগইন",
+    dashboardNav: "ড্যাশবোর্ড",
     signup: "সাইন আপ",
     accountNav: "অ্যাকাউন্ট",
     call: "কল করুন",
@@ -560,6 +562,7 @@ export const DICT: Record<Locale, Dict> = {
       contact: "Contact",
     },
     login: "Login",
+    dashboardNav: "Dashboard",
     signup: "Sign Up",
     accountNav: "Account",
     call: "Call Now",

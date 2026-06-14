@@ -36,7 +36,7 @@ export default function BlogFeatured({ post }: { post: BlogPost }) {
   const excerpt = en?.excerpt ?? (isEn ? post.excerptEn : undefined) ?? post.excerpt;
   const catLabel = isEn ? CATEGORY_EN[post.category] ?? cat.bn : cat.bn;
   const authorName = isEn ? BLOG_AUTHOR.nameEn : BLOG_AUTHOR.name;
-  const authorRole = isEn ? "MD & CEO, Promise Group" : BLOG_AUTHOR.role;
+  const authorRole = isEn ? "Founder & CEO, Promise Group" : BLOG_AUTHOR.role;
   const num = (n: number) => (isEn ? String(n) : bnNumber(n));
   const dateText = isEn ? formatDateEn(post.iso) : post.date;
   const cover = post.cover ?? BLOG_COVER[post.slug];

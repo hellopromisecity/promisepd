@@ -472,7 +472,7 @@ export default function Navbar() {
                 loginHref={lp("/login")}
                 accountHref={lp("/account")}
                 loginLabel={t.login}
-                accountLabel={t.accountNav}
+                accountLabel={t.dashboardNav}
               />
               <button
                 onClick={() => setOpen(true)}
@@ -687,7 +687,7 @@ export default function Navbar() {
                   loginHref={lp("/login")}
                   accountHref={lp("/account")}
                   loginLabel={t.login}
-                  accountLabel={t.accountNav}
+                  accountLabel={t.dashboardNav}
                   onSelect={() => setOpen(false)}
                 />
                 <Link

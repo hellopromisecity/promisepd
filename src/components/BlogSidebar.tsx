@@ -88,7 +88,7 @@ export default function BlogSidebar({
           <div className="mt-0.5 text-lg font-bold text-fg">{authorName}</div>
           <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-blue-tint px-3 py-1 text-[11px] font-semibold text-brand-blue-dark">
             <Sparkles className="h-3 w-3" />
-            {isEn ? "MD & CEO, Promise Group" : "MD & CEO, Promise Group"}
+            {isEn ? "Founder & CEO, Promise Group" : "Founder & CEO, Promise Group"}
           </div>
           <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{t.bio}</p>
 
