@@ -1,8 +1,10 @@
 "use client";
 
-/** Header auth control — shows "Login" to guests and "Account" (→
- *  /account) to logged-in members.  Detects the session client-side via
- *  the browser Supabase client and live-updates on sign in / out.
+/** Header auth control — shows "Login" to guests and an avatar +
+ *  "Dashboard" pill to signed-in users.  It asks /api/me who's logged in
+ *  so the link points STRAIGHT at the right place (staff → /dashboard,
+ *  members → /account) — no /account → /dashboard redirect hop — and
+ *  live-updates on sign in / out.
  *
  *  Two visual variants keep the existing Navbar styling intact:
  *    desktop → the brand-blue chip in the top bar (hidden < sm)
@@ -31,38 +33,55 @@ export default function AuthNavButton({
   onSelect,
 }: Props) {
   const [authed, setAuthed] = useState(false);
+  // Where the pill links once we know the role.  Defaults to the account
+  // entry (which still redirects correctly) until /api/me resolves.
+  const [dest, setDest] = useState(accountHref);
 
   useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
     let active = true;
+
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/me", { cache: "no-store" });
+        const data = await res.json();
+        if (!active) return;
+        setAuthed(!!data.authed);
+        // Staff jump straight to /dashboard (single-locale); members go
+        // to their localized account page.  Either way: no extra hop.
+        setDest(data.authed && data.staff ? "/dashboard" : accountHref);
+      } catch {
+        /* network/misconfig — stay in the guest state */
+      }
+    };
+
+    refresh();
+
+    // Reflect sign in / out without a reload.
     let unsub: (() => void) | undefined;
-    try {
-      const supabase = createClient();
-      supabase.auth.getUser().then(({ data }) => {
-        if (active) setAuthed(!!data.user);
-      });
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (active) setAuthed(!!session?.user);
-      });
-      unsub = () => sub.subscription.unsubscribe();
-    } catch {
-      /* Supabase misconfigured — stay in the guest (login) state. */
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      try {
+        const supabase = createClient();
+        const { data: sub } = supabase.auth.onAuthStateChange(() => refresh());
+        unsub = () => sub.subscription.unsubscribe();
+      } catch {
+        /* Supabase misconfigured — guest state */
+      }
     }
+
     return () => {
       active = false;
       unsub?.();
     };
-  }, []);
+  }, [accountHref]);
 
-  // Logged in → an avatar + "Dashboard" pill (the account href is
-  // role-aware: staff land on the dashboard, members on their account).
+  // Logged in → an avatar + "Dashboard" pill linking straight to `dest`.
   if (authed) {
     const authedCls =
       variant === "desktop"
         ? "hidden sm:inline-flex items-center gap-2 rounded-xl border border-border bg-white py-1 pl-1 pr-3.5 text-sm font-semibold text-fg shadow-sm transition-all hover:border-brand-blue/50 hover:shadow-md"
         : "inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-1.5 pl-1.5 pr-4 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/50";
     return (
-      <Link href={accountHref} onClick={onSelect} className={authedCls}>
+      <Link href={dest} onClick={onSelect} className={authedCls}>
         <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-red text-white shadow-sm">
           <UserRound className="h-4 w-4" />
         </span>
