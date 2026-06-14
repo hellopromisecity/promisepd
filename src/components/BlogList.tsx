@@ -31,6 +31,7 @@ import {
   CATEGORY_META,
   CATEGORY_ORDER,
   bnNumber,
+  type BlogPost,
   type BlogCategoryKey,
   type BlogProjectKey,
 } from "@/lib/blog";
@@ -44,7 +45,7 @@ const PAGINATION_WINDOW = 5;
 type CategoryFilter = "all" | BlogCategoryKey;
 type ProjectFilter = "all" | BlogProjectKey;
 
-export default function BlogList() {
+export default function BlogList({ extraPosts = [] }: { extraPosts?: BlogPost[] }) {
   const locale = useLocale();
   const isEn = locale === "en";
   const t = DICT[locale].blog;
@@ -61,11 +62,12 @@ export default function BlogList() {
   const [catOpen, setCatOpen] = useState(false);
   const [projOpen, setProjOpen] = useState(false);
 
-  // Posts sorted newest-first.  Featured is pulled out separately.
+  // Code-defined articles + admin-published DB posts, newest-first.
+  // Featured is pulled out separately.
+  const allPosts = useMemo(() => [...BLOG_POSTS, ...extraPosts], [extraPosts]);
   const allSorted = useMemo(
-    () =>
-      [...BLOG_POSTS].sort((a, b) => (a.iso < b.iso ? 1 : -1)),
-    [],
+    () => [...allPosts].sort((a, b) => (a.iso < b.iso ? 1 : -1)),
+    [allPosts],
   );
 
   const featuredPost = useMemo(
@@ -156,8 +158,8 @@ export default function BlogList() {
   }, [project, t, isEn]);
 
   const projectPostCount = useMemo(
-    () => BLOG_POSTS.filter((p) => p.category === "projects").length,
-    [],
+    () => allPosts.filter((p) => p.category === "projects").length,
+    [allPosts],
   );
 
   return (
@@ -240,7 +242,7 @@ export default function BlogList() {
                       onClick={() => onProjectChange("all")}
                     />
                     {BLOG_PROJECTS.map((p) => {
-                      const count = BLOG_POSTS.filter(
+                      const count = allPosts.filter(
                         (post) => post.project === p.key,
                       ).length;
                       return (
@@ -305,14 +307,14 @@ export default function BlogList() {
                   >
                     <FilterOption
                       label={t.allCategories}
-                      count={BLOG_POSTS.length}
+                      count={allPosts.length}
                       isEn={isEn}
                       active={category === "all"}
                       onClick={() => onCategoryChange("all")}
                     />
                     {CATEGORY_ORDER.map((key) => {
                       const meta = CATEGORY_META[key];
-                      const count = BLOG_POSTS.filter(
+                      const count = allPosts.filter(
                         (p) => p.category === key,
                       ).length;
                       return (

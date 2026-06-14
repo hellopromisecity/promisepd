@@ -6,18 +6,18 @@ import {
   BLOG_AUTHOR,
   BLOG_POSTS,
   CATEGORY_META,
-  getPostBySlug,
-  getRelatedPosts,
 } from "@/lib/blog";
 import { BLOG_EN } from "@/lib/blog.en";
+import { getAllPublicPosts, getPublicPostBySlug, relatedFrom } from "@/lib/blog-db";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
 
-/** Only the 12 known slugs prerender — every other URL 404s. */
-export const dynamicParams = false;
+/** Code slugs prerender; admin-published DB posts render on demand. */
+export const dynamicParams = true;
+export const revalidate = 60;
 
 export async function generateStaticParams() {
   return BLOG_POSTS.map((p) => ({ slug: p.slug }));
@@ -27,12 +27,12 @@ export async function generateMetadata(
   props: PageProps<"/en/blog/[slug]">,
 ): Promise<Metadata> {
   const { slug } = await props.params;
-  const post = getPostBySlug(slug);
+  const post = await getPublicPostBySlug(slug);
   if (!post) return { title: "Post not found" };
 
   const en = BLOG_EN[slug];
-  const title = en?.title ?? post.title;
-  const description = en?.excerpt ?? post.excerpt;
+  const title = en?.title ?? post.titleEn ?? post.title;
+  const description = en?.excerpt ?? post.excerptEn ?? post.excerpt;
   const url = `${SITE_URL}/en/blog/${post.slug}`;
   return {
     title,
@@ -74,21 +74,21 @@ export default async function EnBlogPostPage(
   props: PageProps<"/en/blog/[slug]">,
 ) {
   const { slug } = await props.params;
-  const post = getPostBySlug(slug);
+  const post = await getPublicPostBySlug(slug);
   if (!post) notFound();
 
   const en = BLOG_EN[post.slug];
   const cat = CATEGORY_META[post.category];
-  const related = getRelatedPosts(post.slug, 3);
 
-  // Prev/next within the full chronological list (newest-first).
-  const sorted = [...BLOG_POSTS].sort((a, b) => (a.iso < b.iso ? 1 : -1));
+  // Prev/next + related within the merged pool (code + DB), newest-first.
+  const sorted = await getAllPublicPosts();
+  const related = relatedFrom(sorted, post.slug, 3);
   const idx = sorted.findIndex((p) => p.slug === post.slug);
   const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
   const next = sorted[(idx + 1) % sorted.length];
 
-  const title = en?.title ?? post.title;
-  const description = en?.excerpt ?? post.excerpt;
+  const title = en?.title ?? post.titleEn ?? post.title;
+  const description = en?.excerpt ?? post.excerptEn ?? post.excerpt;
 
   const breadcrumb = breadcrumbSchema([
     { name: "Home", url: `${SITE_URL}/en` },
@@ -105,15 +105,17 @@ export default async function EnBlogPostPage(
     "@id": `${SITE_URL}/en/blog/${post.slug}#article`,
     headline: title,
     description,
-    image: OG_IMAGE,
+    image: post.cover ?? OG_IMAGE,
     url: `${SITE_URL}/en/blog/${post.slug}`,
     datePublished: post.iso,
     dateModified: post.iso,
     inLanguage: "en",
-    wordCount: sections.reduce(
-      (n, s) => n + s.body.join(" ").split(/\s+/).length,
-      intro.split(/\s+/).length,
-    ),
+    wordCount: sections.length
+      ? sections.reduce(
+          (n, s) => n + s.body.join(" ").split(/\s+/).length,
+          intro.split(/\s+/).length,
+        )
+      : post.readingMinutes * 200,
     author: {
       "@type": "Person",
       name: BLOG_AUTHOR.nameEn,

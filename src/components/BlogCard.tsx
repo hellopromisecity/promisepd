@@ -36,13 +36,13 @@ export default function BlogCard({
   const t = DICT[locale].blog;
   const cat = CATEGORY_META[post.category];
   const en = isEn ? BLOG_EN[post.slug] : null;
-  const title = en?.title ?? post.title;
-  const excerpt = en?.excerpt ?? post.excerpt;
+  const title = en?.title ?? (isEn ? post.titleEn : undefined) ?? post.title;
+  const excerpt = en?.excerpt ?? (isEn ? post.excerptEn : undefined) ?? post.excerpt;
   const catLabel = isEn ? CATEGORY_EN[post.category] ?? cat.bn : cat.bn;
   const authorName = isEn ? BLOG_AUTHOR.nameEn : BLOG_AUTHOR.name;
   const num = (n: number) => (isEn ? String(n) : bnNumber(n));
   const dateText = isEn ? formatDateEn(post.iso) : post.date;
-  const cover = BLOG_COVER[post.slug];
+  const cover = post.cover ?? BLOG_COVER[post.slug];
 
   return (
     <motion.article

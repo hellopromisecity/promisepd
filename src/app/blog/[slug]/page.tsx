@@ -6,17 +6,18 @@ import {
   BLOG_AUTHOR,
   BLOG_POSTS,
   CATEGORY_META,
-  getPostBySlug,
-  getRelatedPosts,
 } from "@/lib/blog";
+import { getAllPublicPosts, getPublicPostBySlug, relatedFrom } from "@/lib/blog-db";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
 
-/** Only the 12 known slugs prerender — every other URL 404s. */
-export const dynamicParams = false;
+/** The code-defined slugs prerender; admin-published DB posts render on
+ *  demand (then ISR-cache) instead of 404ing. */
+export const dynamicParams = true;
+export const revalidate = 60;
 
 export async function generateStaticParams() {
   return BLOG_POSTS.map((p) => ({ slug: p.slug }));
@@ -26,7 +27,7 @@ export async function generateMetadata(
   props: PageProps<"/blog/[slug]">,
 ): Promise<Metadata> {
   const { slug } = await props.params;
-  const post = getPostBySlug(slug);
+  const post = await getPublicPostBySlug(slug);
   if (!post) return { title: "পোস্ট পাওয়া যায়নি" };
 
   const url = `${SITE_URL}/blog/${post.slug}`;
@@ -67,14 +68,14 @@ export default async function BlogPostPage(
   props: PageProps<"/blog/[slug]">,
 ) {
   const { slug } = await props.params;
-  const post = getPostBySlug(slug);
+  const post = await getPublicPostBySlug(slug);
   if (!post) notFound();
 
   const cat = CATEGORY_META[post.category];
-  const related = getRelatedPosts(post.slug, 3);
 
-  // Prev/next within the full chronological list (newest-first).
-  const sorted = [...BLOG_POSTS].sort((a, b) => (a.iso < b.iso ? 1 : -1));
+  // Prev/next + related within the merged pool (code + DB), newest-first.
+  const sorted = await getAllPublicPosts();
+  const related = relatedFrom(sorted, post.slug, 3);
   const idx = sorted.findIndex((p) => p.slug === post.slug);
   const prev = sorted[(idx - 1 + sorted.length) % sorted.length];
   const next = sorted[(idx + 1) % sorted.length];
@@ -91,15 +92,17 @@ export default async function BlogPostPage(
     "@id": `${SITE_URL}/blog/${post.slug}#article`,
     headline: post.title,
     description: post.excerpt,
-    image: OG_IMAGE,
+    image: post.cover ?? OG_IMAGE,
     url: `${SITE_URL}/blog/${post.slug}`,
     datePublished: post.iso,
     dateModified: post.iso,
     inLanguage: "bn-BD",
-    wordCount: post.sections.reduce(
-      (n, s) => n + s.body.join(" ").split(/\s+/).length,
-      post.intro.split(/\s+/).length,
-    ),
+    wordCount: post.sections.length
+      ? post.sections.reduce(
+          (n, s) => n + s.body.join(" ").split(/\s+/).length,
+          post.intro.split(/\s+/).length,
+        )
+      : post.readingMinutes * 200,
     author: {
       "@type": "Person",
       name: BLOG_AUTHOR.name,

@@ -5,9 +5,13 @@ import JsonLd from "@/components/JsonLd";
 import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 import { BLOG_AUTHOR, BLOG_POSTS } from "@/lib/blog";
+import { getPublishedDbPosts } from "@/lib/blog-db";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
+
+// Refresh published DB posts into the public list a minute after they go live.
+export const revalidate = 60;
 
 const PAGE_TITLE = "প্রমিস জার্নাল — রিয়েল এস্টেট গাইড, নোটিশ ও রিসোর্স";
 const PAGE_DESC =
@@ -43,7 +47,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function BlogPage() {
+export default async function BlogPage() {
+  const dbPosts = await getPublishedDbPosts();
+
   const breadcrumb = breadcrumbSchema([
     { name: "হোম", url: SITE_URL },
     { name: "ব্লগ", url: `${SITE_URL}/blog` },
@@ -65,7 +71,7 @@ export default function BlogPage() {
       name: BLOG_AUTHOR.name,
       alternateName: BLOG_AUTHOR.nameEn,
     },
-    blogPost: BLOG_POSTS.map((p) => ({
+    blogPost: [...BLOG_POSTS, ...dbPosts].map((p) => ({
       "@type": "BlogPosting",
       headline: p.title,
       url: `${SITE_URL}/blog/${p.slug}`,
@@ -81,7 +87,7 @@ export default function BlogPage() {
       <JsonLd data={blogSchema} />
 
       <BlogHeader />
-      <BlogList />
+      <BlogList extraPosts={dbPosts} />
     </>
   );
 }

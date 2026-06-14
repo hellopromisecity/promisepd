@@ -43,6 +43,22 @@ export type BlogPost = {
   intro: string;
   sections: { heading: string; body: string[] }[];
   closing?: string;
+
+  // ── DB-backed posts (admin CMS) ─────────────────────────────────
+  // These optional fields only exist on posts loaded from the database
+  // (src/lib/blog-db.ts).  Code-defined posts above leave them unset and
+  // keep using BLOG_COVER + BLOG_EN + `sections` as before.
+  /** Resolved cover URL (overrides the static BLOG_COVER lookup). */
+  cover?: string;
+  /** Rich HTML body — rendered instead of `sections` when present. */
+  bodyHtml?: string;
+  /** Rich HTML body, English. */
+  bodyHtmlEn?: string;
+  /** Per-post English overlays (when there's no BLOG_EN[slug] entry). */
+  titleEn?: string;
+  excerptEn?: string;
+  /** Where the post came from — handy for prev/next + debugging. */
+  source?: "code" | "db";
 };
 
 export const BLOG_AUTHOR = {
@@ -721,3 +737,16 @@ export function getRelatedPosts(slug: string, n = 3): BlogPost[] {
 /** Bn formatter shared across the blog UI (digits + lakh/crore grouping). */
 export const bnNumber = (n: number) =>
   new Intl.NumberFormat("bn-BD", { maximumFractionDigits: 0 }).format(n);
+
+const BN_MONTHS = [
+  "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+  "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর",
+];
+
+/** Format an ISO date (YYYY-MM-DD) as "১৫ মে, ২০২৬" — matches the hand
+ *  written `date` strings on the code-defined posts. */
+export const bnDate = (iso: string): string => {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${bnNumber(d)} ${BN_MONTHS[m - 1]}, ${bnNumber(y)}`;
+};

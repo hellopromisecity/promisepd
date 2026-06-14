@@ -35,6 +35,21 @@ const ACCENT_TAG: Record<string, string> = {
   ash: "bg-brand-ash text-fg",
 };
 
+/** Prose styling for DB-authored HTML bodies — mirrors the admin editor's
+ *  preview so what an admin writes is what readers see. */
+const RICH_BODY =
+  "text-base sm:text-lg text-fg-soft leading-relaxed " +
+  "[&_h2]:text-2xl [&_h2]:sm:text-3xl [&_h2]:font-bold [&_h2]:text-fg [&_h2]:leading-tight [&_h2]:mt-10 [&_h2]:mb-3 " +
+  "[&_h3]:text-xl [&_h3]:sm:text-2xl [&_h3]:font-bold [&_h3]:text-fg [&_h3]:mt-8 [&_h3]:mb-2 " +
+  "[&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-fg [&_h4]:mt-6 [&_h4]:mb-2 " +
+  "[&_p]:my-4 [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1 " +
+  "[&_a]:text-brand-blue [&_a]:underline [&_a:hover]:text-brand-blue-dark " +
+  "[&_img]:rounded-2xl [&_img]:my-6 [&_img]:w-full [&_img]:shadow-md " +
+  "[&_blockquote]:border-l-4 [&_blockquote]:border-brand-red [&_blockquote]:bg-bg-soft [&_blockquote]:px-6 [&_blockquote]:py-4 [&_blockquote]:my-6 [&_blockquote]:rounded-r-2xl [&_blockquote]:italic " +
+  "[&_pre]:bg-bg-soft [&_pre]:rounded-xl [&_pre]:p-4 [&_pre]:my-5 [&_pre]:overflow-x-auto [&_pre]:text-sm " +
+  "[&_hr]:my-8 [&_hr]:border-border " +
+  "[&_table]:w-full [&_table]:my-6 [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2.5 [&_th]:border [&_th]:border-border [&_th]:bg-bg-soft [&_th]:p-2.5 [&_th]:text-left [&_th]:font-bold";
+
 export default function BlogArticle({
   post,
   related,
@@ -53,15 +68,18 @@ export default function BlogArticle({
   const lp = (href: string) => localizedPath(href, locale);
   const num = (n: number) => (isEn ? String(n) : bnNumber(n));
 
-  const cover = BLOG_COVER[post.slug];
+  const cover = post.cover ?? BLOG_COVER[post.slug];
   const cat = CATEGORY_META[post.category];
   const catLabel = isEn ? CATEGORY_EN[post.category] ?? cat.bn : cat.bn;
 
   const en = isEn ? BLOG_EN[post.slug] : null;
-  const title = en?.title ?? post.title;
+  const title = en?.title ?? (isEn ? post.titleEn : undefined) ?? post.title;
   const intro = en?.intro ?? post.intro;
   const sections = en?.sections ?? post.sections;
   const closing = en?.closing ?? post.closing;
+
+  // DB-backed posts carry rich HTML instead of structured `sections`.
+  const bodyHtml = (isEn ? post.bodyHtmlEn ?? post.bodyHtml : post.bodyHtml) ?? null;
 
   const authorName = isEn ? BLOG_AUTHOR.nameEn : BLOG_AUTHOR.name;
   const dateText = isEn ? formatDateEn(post.iso) : post.date;
@@ -147,36 +165,44 @@ export default function BlogArticle({
 
       {/* Article body */}
       <article className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <p className="text-lg sm:text-xl text-fg-soft leading-relaxed font-medium first-letter:text-5xl first-letter:font-bold first-letter:text-brand-red first-letter:float-left first-letter:mr-2 first-letter:leading-none">
-          {intro}
-        </p>
-
-        <div className="mt-10 space-y-10">
-          {sections.map((section, i) => (
-            <section key={i}>
-              <h2 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">
-                {section.heading}
-              </h2>
-              <div className="mt-4 space-y-4">
-                {section.body.map((p, j) => (
-                  <p
-                    key={j}
-                    className="text-base sm:text-lg text-fg-soft leading-relaxed"
-                  >
-                    {p}
-                  </p>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-
-        {closing && (
-          <div className="mt-12 rounded-2xl border-l-4 border-brand-red bg-bg-soft px-6 py-5">
-            <p className="text-base sm:text-lg text-fg-soft leading-relaxed italic">
-              {closing}
+        {bodyHtml ? (
+          // DB-authored post — render the editor's HTML.  Content is
+          // authored by trusted managers via the admin TipTap editor.
+          <div className={RICH_BODY} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+        ) : (
+          <>
+            <p className="text-lg sm:text-xl text-fg-soft leading-relaxed font-medium first-letter:text-5xl first-letter:font-bold first-letter:text-brand-red first-letter:float-left first-letter:mr-2 first-letter:leading-none">
+              {intro}
             </p>
-          </div>
+
+            <div className="mt-10 space-y-10">
+              {sections.map((section, i) => (
+                <section key={i}>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-fg leading-tight">
+                    {section.heading}
+                  </h2>
+                  <div className="mt-4 space-y-4">
+                    {section.body.map((p, j) => (
+                      <p
+                        key={j}
+                        className="text-base sm:text-lg text-fg-soft leading-relaxed"
+                      >
+                        {p}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            {closing && (
+              <div className="mt-12 rounded-2xl border-l-4 border-brand-red bg-bg-soft px-6 py-5">
+                <p className="text-base sm:text-lg text-fg-soft leading-relaxed italic">
+                  {closing}
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Author card */}

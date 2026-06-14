@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "api.dicebear.com" },
       // YouTube video thumbnails for the /gallery "ভিডিও" tab.
       { protocol: "https", hostname: "i.ytimg.com" },
+      // Supabase Storage — admin-uploaded blog covers / inline images.
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
     ],
   },
 

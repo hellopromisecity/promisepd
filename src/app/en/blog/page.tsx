@@ -6,9 +6,12 @@ import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 import { BLOG_AUTHOR, BLOG_POSTS } from "@/lib/blog";
 import { BLOG_EN } from "@/lib/blog.en";
+import { getPublishedDbPosts } from "@/lib/blog-db";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
+
+export const revalidate = 60;
 
 const PAGE_TITLE = "Promise Journal — real-estate guides, notices & resources";
 const PAGE_DESC =
@@ -47,7 +50,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function EnBlogPage() {
+export default async function EnBlogPage() {
+  const dbPosts = await getPublishedDbPosts();
+
   const breadcrumb = breadcrumbSchema([
     { name: "Home", url: `${SITE_URL}/en` },
     { name: "Blog", url: `${SITE_URL}/en/blog` },
@@ -67,9 +72,9 @@ export default function EnBlogPage() {
       name: BLOG_AUTHOR.nameEn,
       alternateName: BLOG_AUTHOR.name,
     },
-    blogPost: BLOG_POSTS.map((p) => ({
+    blogPost: [...BLOG_POSTS, ...dbPosts].map((p) => ({
       "@type": "BlogPosting",
-      headline: BLOG_EN[p.slug]?.title ?? p.title,
+      headline: BLOG_EN[p.slug]?.title ?? p.titleEn ?? p.title,
       url: `${SITE_URL}/en/blog/${p.slug}`,
       datePublished: p.iso,
       dateModified: p.iso,
@@ -83,7 +88,7 @@ export default function EnBlogPage() {
       <JsonLd data={blogSchema} />
 
       <BlogHeader />
-      <BlogList />
+      <BlogList extraPosts={dbPosts} />
     </>
   );
 }
