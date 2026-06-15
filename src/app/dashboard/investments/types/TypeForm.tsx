@@ -71,8 +71,8 @@ export default function TypeForm({ type }: { type?: EditableType }) {
                 <div>
                   <label className={labelCls} htmlFor="ty-op">Effect on balance</label>
                   <select id="ty-op" name="operator" defaultValue={type?.operator ?? "+"} className={inputCls}>
-                    <option value="+">+ adds</option>
-                    <option value="-">− subtracts</option>
+                    <option value="+">+ (Credit)</option>
+                    <option value="-">− (Debit)</option>
                   </select>
                 </div>
                 <div>

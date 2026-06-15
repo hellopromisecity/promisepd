@@ -1,18 +1,11 @@
 import { redirect } from "next/navigation";
-import { Tags, Plus, Minus } from "lucide-react";
+import { Tags, Plus, Minus, ToggleRight } from "lucide-react";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
-import {
-  PageHeader,
-  StatCard,
-  Badge,
-  EmptyState,
-  TableShell,
-  thCls,
-  tdCls,
-} from "@/components/admin/ui";
-import { listTypes, type InvestmentType } from "@/lib/investments";
+import { PageHeader, StatCard, EmptyState } from "@/components/admin/ui";
+import { listTypes } from "@/lib/investments";
 import TypeForm from "./TypeForm";
+import TypesTable, { type TypeRow } from "./TypesTable";
 
 export const dynamic = "force-dynamic";
 
@@ -37,68 +30,40 @@ export default async function TransactionTypesPage() {
     admin.from("investor_transactions").select("type"),
   ]);
   const usage = new Map<string, number>();
-  for (const r of (usageRes.data ?? []) as { type: string }[]) {
-    usage.set(r.type, (usage.get(r.type) ?? 0) + 1);
-  }
+  for (const r of (usageRes.data ?? []) as { type: string }[]) usage.set(r.type, (usage.get(r.type) ?? 0) + 1);
 
-  const inflow = types.filter((t) => t.operator === "+").length;
-  const outflow = types.filter((t) => t.operator === "-").length;
+  const rows: TypeRow[] = types.map((t) => ({
+    name: t.name,
+    operator: (t.operator === "-" ? "-" : "+") as "+" | "-",
+    classification: t.classification,
+    is_editable: t.is_editable,
+    is_active: t.is_active,
+    used: usage.get(t.name) ?? 0,
+  }));
+
+  const active = rows.filter((t) => t.is_active).length;
+  const credit = rows.filter((t) => t.operator === "+").length;
+  const debit = rows.filter((t) => t.operator === "-").length;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Transaction Types"
-        subtitle={`${types.length} types ported from the app.`}
+        subtitle={`${rows.length} types — how each kind of money movement affects a balance.`}
         action={<TypeForm />}
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Types" value={types.length} sub="total" icon={Tags} tone="info" />
-        <StatCard label="Inflow (+)" value={inflow} sub="add to balance" icon={Plus} tone="success" />
-        <StatCard label="Outflow (−)" value={outflow} sub="reduce balance" icon={Minus} tone="danger" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Types" value={rows.length} sub="total kinds" icon={Tags} tone="info" />
+        <StatCard label="Active" value={active} sub="in use" icon={ToggleRight} tone="success" />
+        <StatCard label="Credit (+)" value={credit} sub="add to balance" icon={Plus} tone="success" />
+        <StatCard label="Debit (−)" value={debit} sub="reduce balance" icon={Minus} tone="danger" />
       </div>
 
-      {types.length === 0 ? (
-        <EmptyState icon={Tags} title="No types yet" message="Imported transaction types will appear here." />
+      {rows.length === 0 ? (
+        <EmptyState icon={Tags} title="No types yet" message="Add your first transaction type." />
       ) : (
-        <TableShell>
-          <thead>
-            <tr>
-              <th className={thCls}>Name</th>
-              <th className={thCls}>Effect</th>
-              <th className={thCls}>Classification</th>
-              <th className={`${thCls} text-right`}>Used</th>
-              <th className={thCls}>Editable</th>
-              <th className={thCls}>Status</th>
-              <th className={`${thCls} text-right`}>Edit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {types.map((t: InvestmentType) => (
-              <tr key={t.name}>
-                <td className={`${tdCls} font-semibold text-fg`}>{t.name}</td>
-                <td className={tdCls}>
-                  <Badge tone={t.operator === "-" ? "danger" : "success"}>
-                    {t.operator === "-" ? "− subtract" : "+ add"}
-                  </Badge>
-                </td>
-                <td className={`${tdCls} capitalize text-fg-muted`}>{t.classification}</td>
-                <td className={`${tdCls} text-right tabular-nums text-fg-muted`}>{(usage.get(t.name) ?? 0).toLocaleString("en-US")}</td>
-                <td className={tdCls}>
-                  <Badge tone={t.is_editable ? "neutral" : "info"}>{t.is_editable ? "editable" : "system"}</Badge>
-                </td>
-                <td className={tdCls}>
-                  <Badge tone={t.is_active ? "success" : "neutral"}>{t.is_active ? "active" : "inactive"}</Badge>
-                </td>
-                <td className={tdCls}>
-                  <div className="flex justify-end">
-                    <TypeForm type={{ name: t.name, operator: t.operator, classification: t.classification, is_active: t.is_active }} />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+        <TypesTable types={rows} />
       )}
     </div>
   );

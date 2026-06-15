@@ -299,6 +299,47 @@ export async function saveInvestmentType(input: TypeInput): Promise<ActionResult
   });
 }
 
+export async function setInvestmentTypeActive(name: string, active: boolean): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!name) throw new ValidationError("Missing type.");
+    const { error } = await admin.from("investment_types").update({ is_active: !!active }).eq("name", name);
+    if (error) throw new Error(error.message);
+    await logAudit({ action: "update", entity: "investment_type", entityId: name, detail: `${active ? "Activated" : "Deactivated"} type ${name}` });
+    revalidatePath("/dashboard/investments/types");
+    return { message: active ? "Type activated." : "Type deactivated." };
+  });
+}
+
+export async function deleteInvestmentType(name: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!name) throw new ValidationError("Missing type.");
+
+    const { data: t } = await admin.from("investment_types").select("is_editable").eq("name", name).maybeSingle();
+    if (!t) throw new ValidationError("Type not found.");
+    if (!t.is_editable) throw new ValidationError("This is a system type and can’t be deleted.");
+
+    const { count } = await admin
+      .from("investor_transactions")
+      .select("*", { count: "exact", head: true })
+      .eq("type", name);
+    if ((count ?? 0) > 0) {
+      throw new ValidationError(`In use by ${count} transaction(s) — set it inactive instead of deleting.`);
+    }
+
+    const { error } = await admin.from("investment_types").delete().eq("name", name);
+    if (error) throw new Error(error.message);
+    await logAudit({ action: "delete", entity: "investment_type", entityId: name, detail: `Deleted type ${name}` });
+    revalidatePath("/dashboard/investments/types");
+    return { message: "Type deleted." };
+  });
+}
+
 // ── Unsubscribe requests ──────────────────────────────────────────
 export async function reviewUnsubscribe(id: string, status: "approved" | "rejected", notes?: string): Promise<ActionResult> {
   return runAction(async () => {
