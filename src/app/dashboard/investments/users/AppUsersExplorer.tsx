@@ -212,7 +212,7 @@ export default function AppUsersExplorer({
         <Stat i={0} label="Total users" value={s.total.toLocaleString("en-US")} sub="app accounts" icon={Users} tone="blue" />
         <Stat i={1} label="Verified" value={s.verified.toLocaleString("en-US")} sub={`${s.unverified} unverified`} icon={BadgeCheck} tone="emerald" />
         <Stat i={2} label="Total invested" value={compact(s.invested)} sub="principal in" icon={TrendingUp} tone="amber" />
-        <Stat i={3} label="Assets under mgmt" value={compact(s.aum)} sub="sum of balances" icon={Wallet} tone="violet" />
+        <Stat i={3} label="Total balance" value={compact(s.aum)} sub="across all users" icon={Wallet} tone="violet" />
       </div>
 
       {/* charts */}

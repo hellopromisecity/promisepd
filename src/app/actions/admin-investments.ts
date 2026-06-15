@@ -319,11 +319,14 @@ export type ProjectInput = {
   project_name: string;
   status: string;
   project_address?: string | null;
+  project_details?: string | null;
   total_amount_required?: number | string | null;
   per_user_share_amount?: number | string | null;
   project_progress?: number | string | null;
   start_date?: string | null;
   end_date?: string | null;
+  hide_total_amount?: boolean;
+  hide_share_price?: boolean;
 };
 
 export async function saveInvestmentProject(input: ProjectInput): Promise<ActionResult<{ id: string }>> {
@@ -339,11 +342,14 @@ export async function saveInvestmentProject(input: ProjectInput): Promise<Action
       project_name: name,
       status,
       project_address: input.project_address?.trim() || null,
+      project_details: input.project_details?.trim() || null,
       total_amount_required: input.total_amount_required != null && input.total_amount_required !== "" ? money(input.total_amount_required) : null,
       per_user_share_amount: input.per_user_share_amount != null && input.per_user_share_amount !== "" ? money(input.per_user_share_amount) : null,
       project_progress: input.project_progress != null && input.project_progress !== "" ? money(input.project_progress) : 0,
       start_date: input.start_date && isoDate(input.start_date) ? input.start_date : null,
       end_date: input.end_date && isoDate(input.end_date) ? input.end_date : null,
+      hide_total_amount: !!input.hide_total_amount,
+      hide_share_price: !!input.hide_share_price,
     };
 
     let id = input.project_id?.trim() || null;
@@ -358,7 +364,122 @@ export async function saveInvestmentProject(input: ProjectInput): Promise<Action
 
     await logAudit({ action: input.project_id ? "update" : "create", entity: "investment_project", entityId: id, detail: `${input.project_id ? "Edited" : "Added"} project ${name}` });
     revalidatePath("/dashboard/investments/projects");
+    if (input.project_id) revalidatePath(`/dashboard/investments/projects/${input.project_id}`);
     return { data: { id: id! }, message: "Project saved." };
+  });
+}
+
+export async function deleteInvestmentProject(projectId: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!projectId) throw new ValidationError("Missing project.");
+
+    // Block while financial records still point at it — those must be moved or
+    // deleted first (we never silently orphan transactions).
+    const { count } = await admin
+      .from("investor_transactions")
+      .select("*", { count: "exact", head: true })
+      .eq("project_id", projectId);
+    if ((count ?? 0) > 0) {
+      throw new ValidationError(`This project has ${count} transaction(s). Reassign or delete them first.`);
+    }
+
+    // Memberships are just links — clear them, then drop the project.
+    await admin.from("investments").delete().eq("project_id", projectId);
+    const { error } = await admin.from("investment_projects").delete().eq("project_id", projectId);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "delete", entity: "investment_project", entityId: projectId, detail: `Deleted project ${projectId}` });
+    revalidatePath("/dashboard/investments/projects");
+    return { message: "Project deleted." };
+  });
+}
+
+// ── Project ⇄ investor memberships ────────────────────────────────
+export type ProjectInvestorInput = {
+  project_id: string;
+  uid: string;
+  custom_share_price?: number | string | null;
+  discount?: number | string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
+function membershipRow(input: ProjectInvestorInput) {
+  return {
+    custom_share_price: input.custom_share_price != null && input.custom_share_price !== "" ? money(input.custom_share_price) : null,
+    discount: input.discount != null && input.discount !== "" ? money(input.discount) : 0,
+    user_specific_start_date: input.start_date && isoDate(input.start_date) ? input.start_date : null,
+    user_specific_end_date: input.end_date && isoDate(input.end_date) ? input.end_date : null,
+  };
+}
+
+export async function addInvestorToProject(input: ProjectInvestorInput): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    const project_id = input.project_id?.trim();
+    const uid = input.uid?.trim();
+    if (!project_id || !uid) throw new ValidationError("Pick a project and an investor.");
+
+    const [{ data: proj }, { data: inv }] = await Promise.all([
+      admin.from("investment_projects").select("project_id").eq("project_id", project_id).maybeSingle(),
+      admin.from("investor_accounts").select("uid").eq("uid", uid).maybeSingle(),
+    ]);
+    if (!proj) throw new ValidationError("That project no longer exists.");
+    if (!inv) throw new ValidationError("That investor no longer exists.");
+
+    const { data: existing } = await admin
+      .from("investments")
+      .select("id")
+      .eq("project_id", project_id)
+      .eq("uid", uid)
+      .maybeSingle();
+    if (existing) throw new ValidationError("This investor is already in the project.");
+
+    const { error } = await admin.from("investments").insert({ uid, project_id, total_paid: 0, ...membershipRow(input) });
+    if (error) throw new Error(/duplicate|unique/i.test(error.message) ? "This investor is already in the project." : error.message);
+
+    await logAudit({ action: "create", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Added ${uid} to ${project_id}` });
+    revalidatePath(`/dashboard/investments/projects/${project_id}`);
+    return { message: "Investor added to project." };
+  });
+}
+
+export async function updateProjectInvestor(input: ProjectInvestorInput): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    const project_id = input.project_id?.trim();
+    const uid = input.uid?.trim();
+    if (!project_id || !uid) throw new ValidationError("Missing membership.");
+
+    const { error } = await admin.from("investments").update(membershipRow(input)).eq("project_id", project_id).eq("uid", uid);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "update", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Updated ${uid} in ${project_id}` });
+    revalidatePath(`/dashboard/investments/projects/${project_id}`);
+    return { message: "Investor updated." };
+  });
+}
+
+export async function removeInvestorFromProject(project_id: string, uid: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!project_id?.trim() || !uid?.trim()) throw new ValidationError("Missing membership.");
+
+    const { error } = await admin.from("investments").delete().eq("project_id", project_id).eq("uid", uid);
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "delete", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Removed ${uid} from ${project_id}` });
+    revalidatePath(`/dashboard/investments/projects/${project_id}`);
+    return { message: "Investor removed from project. Their transactions are unchanged." };
   });
 }
 

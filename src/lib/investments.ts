@@ -165,6 +165,96 @@ export async function listUnsubscribe(admin: Admin): Promise<UnsubscribeRequest[
   return (data ?? []) as UnsubscribeRequest[];
 }
 
+const PROFIT_TYPE_NAMES = new Set(["profit", "profit_share"]);
+
+/** Per-project { investors, raised } for the projects list cards.
+ *  investors = membership rows; raised = the real money paid in (sum of every
+ *  member's "+" non-profit transactions tagged to the project — same rule the
+ *  investor portal uses, so it never relies on the stale total_paid cache). */
+export async function projectStats(admin: Admin): Promise<Map<string, { investors: number; raised: number }>> {
+  const [memRes, txs, types] = await Promise.all([
+    admin.from("investments").select("project_id, uid"),
+    listTransactions(admin),
+    listTypes(admin),
+  ]);
+  const op = new Map(types.map((t) => [t.name, t.operator]));
+  const out = new Map<string, { investors: number; raised: number }>();
+  const ensure = (id: string) => {
+    let v = out.get(id);
+    if (!v) { v = { investors: 0, raised: 0 }; out.set(id, v); }
+    return v;
+  };
+  for (const m of (memRes.data ?? []) as { project_id: string; uid: string }[]) ensure(m.project_id).investors++;
+  for (const t of txs) {
+    if (!t.project_id) continue;
+    const ty = String(t.type);
+    if (PROFIT_TYPE_NAMES.has(ty) || (op.get(ty) ?? "+") !== "+") continue;
+    ensure(t.project_id).raised += Number(t.amount) || 0;
+  }
+  return out;
+}
+
+export type ProjectMember = {
+  uid: string;
+  name: string;
+  phone: string;
+  custom_share_price: number | null;
+  discount: number;
+  start_date: string | null;
+  end_date: string | null;
+  paid: number; // this member's "+" non-profit transactions for THIS project
+};
+
+/** One project + its investor memberships (with names/phones and real paid). */
+export async function projectWithInvestors(
+  admin: Admin,
+  projectId: string,
+): Promise<{ project: InvestmentProject; members: ProjectMember[] } | null> {
+  const { data: project } = await admin.from("investment_projects").select("*").eq("project_id", projectId).maybeSingle();
+  if (!project) return null;
+
+  const [memRes, txRes, types] = await Promise.all([
+    admin.from("investments").select("uid, custom_share_price, discount, user_specific_start_date, user_specific_end_date").eq("project_id", projectId),
+    admin.from("investor_transactions").select("uid, type, amount").eq("project_id", projectId),
+    listTypes(admin),
+  ]);
+  const op = new Map(types.map((t) => [t.name, t.operator]));
+
+  const memberships = (memRes.data ?? []) as {
+    uid: string; custom_share_price: number | null; discount: number;
+    user_specific_start_date: string | null; user_specific_end_date: string | null;
+  }[];
+  const uids = [...new Set(memberships.map((m) => m.uid))];
+  const nameMap = new Map<string, { name: string; phone: string }>();
+  if (uids.length) {
+    const { data: accs } = await admin.from("investor_accounts").select("uid, full_name, phone_number").in("uid", uids);
+    for (const a of (accs ?? []) as { uid: string; full_name: string; phone_number: string }[]) {
+      nameMap.set(a.uid, { name: a.full_name, phone: a.phone_number });
+    }
+  }
+  const paidByUid = new Map<string, number>();
+  for (const t of (txRes.data ?? []) as { uid: string; type: string; amount: number }[]) {
+    const ty = String(t.type);
+    if (PROFIT_TYPE_NAMES.has(ty) || (op.get(ty) ?? "+") !== "+") continue;
+    paidByUid.set(t.uid, (paidByUid.get(t.uid) ?? 0) + (Number(t.amount) || 0));
+  }
+
+  const members: ProjectMember[] = memberships
+    .map((m) => ({
+      uid: m.uid,
+      name: nameMap.get(m.uid)?.name ?? m.uid,
+      phone: nameMap.get(m.uid)?.phone ?? "",
+      custom_share_price: m.custom_share_price,
+      discount: Number(m.discount) || 0,
+      start_date: m.user_specific_start_date,
+      end_date: m.user_specific_end_date,
+      paid: paidByUid.get(m.uid) ?? 0,
+    }))
+    .sort((a, b) => b.paid - a.paid);
+
+  return { project: project as InvestmentProject, members };
+}
+
 // ── Investor self-service portal (/account) ───────────────────────
 export type PortalMyProject = {
   project_id: string;

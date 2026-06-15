@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.5",
+    date: "2026-06-15",
+    title: "Projects — full redesign with investor management",
+    changes: [
+      { kind: "improved", text: "The Projects page is rebuilt: summary cards (projects, total goal, total raised, memberships), search, a status filter and sorting, and a grid of project cards each showing live progress, goal, money raised and investor count." },
+      { kind: "new", text: "Open any project to its own page — edit or delete it, and fully manage investors: add an investor (with share price / discount / dates), edit a membership, or remove one (their transactions stay intact). Each member’s real paid-in amount for the project is shown." },
+      { kind: "new", text: "The Add/Edit Project form now includes Details and the “hide total / hide share price from app” toggles." },
+      { kind: "changed", text: "The App Users “Assets under management” card is now labelled “Total balance”." },
+    ],
+  },
+  {
     version: "1.3.4",
     date: "2026-06-15",
     title: "App Users — a complete, powerful redesign",
