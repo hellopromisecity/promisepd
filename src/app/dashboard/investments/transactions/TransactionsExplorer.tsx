@@ -19,6 +19,8 @@ import {
   ArrowDown,
   ReceiptText,
   Activity,
+  Download,
+  FileText,
 } from "lucide-react";
 import { thCls, tdCls, Badge, EmptyState } from "@/components/admin/ui";
 import TxnForm, { type InvestorOption, type TypeOption, type ProjectOption } from "./TxnForm";
@@ -56,6 +58,7 @@ type SortKey = "date" | "amount" | "type" | "user";
 
 const DATE_PRESETS = [
   { id: "all", label: "All time" },
+  { id: "7d", label: "Last 7 days" },
   { id: "30d", label: "Last 30 days" },
   { id: "90d", label: "Last 90 days" },
   { id: "this_year", label: "This year" },
@@ -67,6 +70,7 @@ function presetRange(id: string): { from: string; to: string } {
   const now = new Date();
   const iso = (d: Date) => d.toLocaleDateString("en-CA");
   const y = now.getFullYear();
+  if (id === "7d") { const f = new Date(now); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(now) }; }
   if (id === "30d") { const f = new Date(now); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(now) }; }
   if (id === "90d") { const f = new Date(now); f.setDate(f.getDate() - 89); return { from: iso(f), to: iso(now) }; }
   if (id === "this_year") return { from: `${y}-01-01`, to: iso(now) };
@@ -218,6 +222,58 @@ export default function TransactionsExplorer({
   const SortIcon = ({ k }: { k: SortKey }) =>
     sortKey !== k ? <ArrowUpDown className="h-3 w-3 opacity-40" /> : sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
 
+  // ── exports (operate on the current filtered + sorted set) ──
+  const rangeLabel = applied.from || applied.to ? `${applied.from || "start"}_${applied.to || "now"}` : "all-time";
+  function exportCSV() {
+    const head = ["Date", "ID", "Receipt", "User", "UID", "Type", "Direction", "Amount", "Project"];
+    const body = sorted.map((r) => [
+      String(r.date).slice(0, 10), r.transaction_id, r.rashid ?? "", r.userName, r.uid, r.type,
+      r.operator === "-" ? "out" : "in", r.amount, r.projectName ?? "",
+    ]);
+    const csv = [head, ...body].map((row) => row.map((c) => { const v = String(c ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `transactions-${rangeLabel}.csv`; a.click(); URL.revokeObjectURL(url);
+  }
+  async function exportPDF() {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const money = (n: number) => "Tk " + Math.round(n).toLocaleString("en-US");
+    const cols = [
+      { k: "date", t: "Date", x: 40, w: 70 }, { k: "id", t: "ID", x: 112, w: 72 },
+      { k: "user", t: "User", x: 184, w: 170 }, { k: "type", t: "Type", x: 354, w: 110 },
+      { k: "amount", t: "Amount", x: 474, w: 92, r: true }, { k: "project", t: "Project", x: 572, w: 230 },
+    ];
+    const drawHeader = () => {
+      doc.setFillColor(24, 71, 161); doc.rect(0, 0, W, 50, "F");
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+      doc.text("PromisePD — Transactions", 40, 32);
+      doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      doc.text(`${stats.count} txns  •  In ${money(stats.inflow)}  •  Out ${money(stats.outflow)}  •  Net ${money(stats.net)}`, W - 40, 32, { align: "right" });
+      doc.setFillColor(238, 241, 246); doc.rect(0, 56, W, 20, "F");
+      doc.setTextColor(60, 60, 60); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
+      for (const c of cols) doc.text(c.t, c.r ? c.x + c.w - 4 : c.x, 70, { align: c.r ? "right" : "left" });
+    };
+    drawHeader();
+    let y = 92; doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+    sorted.forEach((r, i) => {
+      if (y > H - 28) { doc.addPage(); drawHeader(); y = 92; }
+      if (i % 2 === 0) { doc.setFillColor(249, 250, 252); doc.rect(0, y - 10, W, 16, "F"); }
+      doc.setTextColor(30, 30, 30);
+      const out = r.operator === "-";
+      const cell: Record<string, string> = {
+        date: String(r.date).slice(0, 10), id: r.transaction_id, user: (r.userName || "").slice(0, 38),
+        type: r.type, amount: (out ? "-" : "+") + money(r.amount), project: (r.projectName || "").slice(0, 46),
+      };
+      for (const c of cols) doc.text(cell[c.k], c.r ? c.x + c.w - 4 : c.x, y, { align: c.r ? "right" : "left" });
+      y += 16;
+    });
+    const pages = doc.getNumberOfPages();
+    for (let p = 1; p <= pages; p++) { doc.setPage(p); doc.setTextColor(150, 150, 150); doc.setFontSize(8); doc.text(`Generated ${new Date().toLocaleString("en-GB")}  •  Page ${p}/${pages}`, W / 2, H - 14, { align: "center" }); }
+    doc.save(`transactions-${rangeLabel}.pdf`);
+  }
+
   const maxBar = Math.max(1, ...chart.bars.map((b) => Math.max(b.in, b.out)));
   const labelStep = Math.max(1, Math.ceil(chart.bars.length / 14)); // thin out labels when many buckets
 
@@ -271,17 +327,17 @@ export default function TransactionsExplorer({
               <span className="flex items-center gap-1.5 text-brand-red"><span className="h-2.5 w-2.5 rounded-full bg-brand-red" /> Out</span>
             </div>
           </div>
-          <div className="relative flex items-end gap-1.5 border-b border-border" style={{ height: 196 }}>
+          <div className="relative flex items-end gap-2 border-b border-border" style={{ height: 124 }}>
             {chart.bars.map((b, i) => (
               <div key={i} className="group/bar relative flex h-full min-w-0 flex-1 flex-col items-center justify-end">
-                <div className="pointer-events-none absolute left-1/2 top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-bg px-2 py-1 text-[10px] shadow-lg opacity-0 transition-opacity duration-200 group-hover/bar:opacity-100">
+                <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-bg px-2 py-1 text-[10px] shadow-lg opacity-0 transition-opacity duration-200 group-hover/bar:opacity-100">
                   <p className="font-bold text-fg">{b.label}</p>
                   <p className="text-emerald-600">In {compact(b.in)}</p>
                   <p className="text-brand-red">Out {compact(b.out)}</p>
                 </div>
-                <div className="flex w-full items-end justify-center gap-[3px]" style={{ height: 164 }}>
-                  <div className="w-full rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ maxWidth: 16, height: chartIn ? `${b.in > 0 ? Math.max(4, (b.in / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #059669, #34d399)" }} />
-                  <div className="w-full rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ maxWidth: 16, height: chartIn ? `${b.out > 0 ? Math.max(4, (b.out / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #E11924, rgba(225,25,36,0.55))" }} />
+                <div className="flex w-full items-end gap-[3px]" style={{ height: 100 }}>
+                  <div className="flex-1 rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ height: chartIn ? `${b.in > 0 ? Math.max(4, (b.in / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #059669, #34d399)" }} />
+                  <div className="flex-1 rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ height: chartIn ? `${b.out > 0 ? Math.max(4, (b.out / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #E11924, rgba(225,25,36,0.55))" }} />
                 </div>
               </div>
             ))}
@@ -316,6 +372,12 @@ export default function TransactionsExplorer({
           {(applied.from || applied.to) && (
             <button type="button" onClick={clearDateFilter} className="h-9 rounded-xl border border-border px-3 text-sm font-semibold text-fg-muted hover:bg-bg-soft">Clear</button>
           )}
+          <button type="button" onClick={exportCSV} title="Export CSV (current filter)" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-semibold text-fg transition-colors hover:-translate-y-0.5 hover:border-emerald-500/40 hover:text-emerald-600">
+            <Download className="h-4 w-4" /> CSV
+          </button>
+          <button type="button" onClick={exportPDF} title="Export PDF (current filter)" className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-semibold text-fg transition-colors hover:-translate-y-0.5 hover:border-brand-red/40 hover:text-brand-red">
+            <FileText className="h-4 w-4" /> PDF
+          </button>
           <div className="ml-auto flex items-center gap-2 text-sm text-fg-muted">
             <span className="hidden sm:inline">Per page</span>
             <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className={inputCls}>

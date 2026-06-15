@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.9",
+    date: "2026-06-15",
+    title: "Last 7 days everywhere · dashboard date filter · tighter flow chart",
+    changes: [
+      { kind: "improved", text: "The All Transactions flow chart now has wider bars that fill the width (no big gaps) and is shorter — the table is reachable without long scrolling." },
+      { kind: "new", text: "“Last 7 days” added to the All Transactions date filter (for the Tue–Sun weekly accounting), plus CSV + PDF export of the exact filtered view." },
+      { kind: "new", text: "The Dashboard has a date-range filter next to “New project” (Last 7 days / 30 days / this year / last year / 12 months / custom): pick a range, Apply, and the Capital-flow card shows that period’s in / out / net / transaction count — with a one-click CSV export." },
+    ],
+  },
+  {
     version: "1.3.8",
     date: "2026-06-15",
     title: "Colourful cards · richer flow chart · transaction SMS",

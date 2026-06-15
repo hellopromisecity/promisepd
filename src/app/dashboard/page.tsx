@@ -12,7 +12,6 @@ export const metadata: Metadata = { title: "Dashboard", robots: { index: false, 
 export const dynamic = "force-dynamic";
 
 const PROFIT_TYPES = new Set(["profit", "profit_share"]);
-const monthLabel = (key: string) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short" });
 
 async function tableCount(table: "profiles" | "contact_submissions"): Promise<number | null> {
   const admin = createAdminClient();
@@ -54,7 +53,7 @@ export default async function AdminDashboard() {
   let inv: DashboardData["investment"] = {
     aum: 0, invested: 0, profit: 0, withdrawn: 0, investors: 0, paying: 0,
     projects: 0, raised: 0, txnCount: 0,
-    flow: [], funding: [], topInvestors: [], recentTxns: [],
+    txns: [], funding: [], topInvestors: [], recentTxns: [],
   };
 
   if (admin) {
@@ -72,25 +71,18 @@ export default async function AdminDashboard() {
       if (b.total_balance !== 0 || b.total_investment > 0 || b.total_profit > 0 || b.total_withdrawn > 0) paying++;
     }
 
-    // monthly capital flow — gross In (+) vs Out (−), last 12 months anchored to latest txn
-    let maxM = "0000-01";
-    for (const t of txns) { const m = String(t.date).slice(0, 7); if (m > maxM) maxM = m; }
-    const [ay, am] = (maxM === "0000-01" ? "2026-06" : maxM).split("-").map(Number);
-    const keys: string[] = [];
-    for (let k = 11; k >= 0; k--) { const d = new Date(ay, am - 1 - k, 1); keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
-    const flowMap = new Map(keys.map((k) => [k, { in: 0, out: 0 }]));
+    // raised per project (for funding) + a compact txn list the client uses to
+    // recompute the capital flow for any selected date range.
     const raisedByProject = new Map<string, number>();
+    const txnList: { date: string; op: string; amount: number }[] = [];
     for (const t of txns) {
-      const m = String(t.date).slice(0, 7);
       const amt = Number(t.amount) || 0;
-      const isOut = (op.get(t.type) ?? "+") === "-";
-      const f = flowMap.get(m);
-      if (f) { if (isOut) f.out += amt; else f.in += amt; }
-      if (t.project_id && !isOut && !PROFIT_TYPES.has(String(t.type))) {
+      const o = op.get(t.type) ?? "+";
+      txnList.push({ date: String(t.date), op: o, amount: amt });
+      if (t.project_id && o !== "-" && !PROFIT_TYPES.has(String(t.type))) {
         raisedByProject.set(t.project_id, (raisedByProject.get(t.project_id) ?? 0) + amt);
       }
     }
-    const flow = keys.map((k) => ({ label: monthLabel(k), in: flowMap.get(k)!.in, out: flowMap.get(k)!.out }));
 
     const raised = [...raisedByProject.values()].reduce((s, v) => s + v, 0);
     const funding = projects
@@ -120,7 +112,7 @@ export default async function AdminDashboard() {
     inv = {
       aum, invested, profit, withdrawn, investors: investors.length, paying,
       projects: projects.length, raised, txnCount: txns.length,
-      flow, funding, topInvestors, recentTxns,
+      txns: txnList, funding, topInvestors, recentTxns,
     };
   }
 

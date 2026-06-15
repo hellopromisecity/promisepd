@@ -5,13 +5,14 @@ import Link from "next/link";
 import {
   Wallet, TrendingUp, Users, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
   Receipt, MessageSquare, Newspaper, PiggyBank, Banknote, Activity, ArrowDownRight,
+  CalendarRange, ChevronDown, Download, X,
 } from "lucide-react";
 
 export type DashboardData = {
   investment: {
     aum: number; invested: number; profit: number; withdrawn: number;
     investors: number; paying: number; projects: number; raised: number; txnCount: number;
-    flow: { label: string; in: number; out: number }[];
+    txns: { date: string; op: string; amount: number }[];
     funding: { name: string; raised: number; goal: number; pct: number }[];
     topInvestors: { name: string; balance: number }[];
     recentTxns: { name: string; type: string; op: string; amount: number; date: string; project: string | null }[];
@@ -21,6 +22,75 @@ export type DashboardData = {
   blogCount: number;
   recentLeads: { name: string; interest: string | null; created_at: string }[];
 };
+
+type Txn = { date: string; op: string; amount: number };
+
+const DASH_PRESETS = [
+  { id: "12m", label: "Last 12 months" },
+  { id: "7d", label: "Last 7 days" },
+  { id: "30d", label: "Last 30 days" },
+  { id: "this_year", label: "This year" },
+  { id: "last_year", label: "Last year" },
+  { id: "custom", label: "Custom range" },
+] as const;
+
+function presetRange(id: string): { from: string; to: string } {
+  const now = new Date();
+  const iso = (d: Date) => d.toLocaleDateString("en-CA");
+  const y = now.getFullYear();
+  if (id === "7d") { const f = new Date(now); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(now) }; }
+  if (id === "30d") { const f = new Date(now); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(now) }; }
+  if (id === "this_year") return { from: `${y}-01-01`, to: iso(now) };
+  if (id === "last_year") return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31` };
+  return { from: "", to: "" }; // 12m / custom-empty → flow falls back to last 12 months
+}
+
+/** Capital flow for a date range: In(+)/Out(−) per bucket, granularity follows
+ *  the span (≤45d daily, ≤180d weekly, else monthly); empty range → last 12 months. */
+function computeFlow(txns: Txn[], from: string, to: string) {
+  const empty = { gran: "month" as "day" | "week" | "month", bars: [] as { label: string; in: number; out: number }[], count: 0, inTotal: 0, outTotal: 0 };
+  if (!txns.length) return empty;
+  const dk = (iso: string) => iso.slice(0, 10);
+  let fromS = from, toS = to;
+  if (!fromS || !toS) {
+    let max = "0000-01-01";
+    for (const t of txns) { const d = dk(t.date); if (d > max) max = d; }
+    const maxD = new Date(`${max}T00:00:00`);
+    const minD = new Date(maxD); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
+    toS = toS || max; fromS = fromS || minD.toLocaleDateString("en-CA");
+  }
+  const fromD = new Date(`${fromS}T00:00:00`), toD = new Date(`${toS}T00:00:00`);
+  if (Number.isNaN(fromD.getTime()) || Number.isNaN(toD.getTime()) || fromD > toD) return empty;
+  const span = (toD.getTime() - fromD.getTime()) / 86400000;
+  const gran: "day" | "week" | "month" = span <= 45 ? "day" : span <= 180 ? "week" : "month";
+  const keyOf = (iso: string) => {
+    const ds = iso.slice(0, 10);
+    if (gran === "day") return ds;
+    if (gran === "month") return iso.slice(0, 7);
+    const d = new Date(`${ds}T00:00:00`); d.setDate(d.getDate() - d.getDay()); return d.toLocaleDateString("en-CA");
+  };
+  const acc = new Map<string, { in: number; out: number }>();
+  let count = 0, inTotal = 0, outTotal = 0;
+  for (const t of txns) {
+    const d = dk(t.date); if (d < fromS || d > toS) continue;
+    count++; const amt = Number(t.amount) || 0;
+    if (t.op === "-") outTotal += amt; else inTotal += amt;
+    const k = keyOf(t.date); const e = acc.get(k) ?? { in: 0, out: 0 };
+    if (t.op === "-") e.out += amt; else e.in += amt; acc.set(k, e);
+  }
+  const bars: { label: string; in: number; out: number }[] = [];
+  const push = (key: string, label: string) => { const e = acc.get(key) ?? { in: 0, out: 0 }; bars.push({ label, ...e }); };
+  if (gran === "day") {
+    for (const d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) push(d.toLocaleDateString("en-CA"), String(d.getDate()));
+  } else if (gran === "week") {
+    const d = new Date(fromD); d.setDate(d.getDate() - d.getDay());
+    for (; d <= toD; d.setDate(d.getDate() + 7)) push(d.toLocaleDateString("en-CA"), d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
+  } else {
+    const d = new Date(fromD.getFullYear(), fromD.getMonth(), 1), end = new Date(toD.getFullYear(), toD.getMonth(), 1);
+    for (; d <= end; d.setMonth(d.getMonth() + 1)) push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, d.toLocaleDateString("en-GB", { month: "short" }));
+  }
+  return { gran, bars, count, inTotal, outTotal };
+}
 
 const compact = (n: number) => {
   const v = Number(n) || 0, a = Math.abs(v);
@@ -82,8 +152,10 @@ function Kpi({
   );
 }
 
-/** Interactive capital-flow chart: In (area+line) vs Out (line), 12 months, hover tooltip. */
-function FlowChart({ flow, on }: { flow: DashboardData["investment"]["flow"]; on: boolean }) {
+/** Interactive capital-flow chart: In (area+line) vs Out (line), hover tooltip. */
+function FlowChart({ flow, on, subtitle, count, onExport }: {
+  flow: { label: string; in: number; out: number }[]; on: boolean; subtitle: string; count: number; onExport: () => void;
+}) {
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const W = 1000, H = 230, padL = 10, padR = 10, padT = 18, padB = 30;
@@ -111,12 +183,15 @@ function FlowChart({ flow, on }: { flow: DashboardData["investment"]["flow"]; on
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Activity className="h-4 w-4 text-brand-blue" /> Capital flow</h2>
-          <p className="text-xs text-fg-muted">money in vs out · last 12 months</p>
+          <p className="text-xs text-fg-muted">money in vs out · {subtitle} · {count.toLocaleString("en-US")} txns</p>
         </div>
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
           <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> In {compact(totIn)}</span>
           <span className="inline-flex items-center gap-1.5 font-semibold text-brand-red"><span className="h-2.5 w-2.5 rounded-full bg-brand-red" /> Out {compact(totOut)}</span>
           <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-600">Net {compact(totIn - totOut)}</span>
+          <button type="button" onClick={onExport} title="Export this period (CSV)" className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 font-semibold text-fg-muted transition-colors hover:border-emerald-500/40 hover:text-emerald-600">
+            <Download className="h-3.5 w-3.5" /> CSV
+          </button>
         </div>
       </div>
 
@@ -165,6 +240,34 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   const d = data.investment;
   const maxBal = useMemo(() => Math.max(1, ...d.topInvestors.map((t) => t.balance)), [d.topInvestors]);
 
+  // ── date-range filter → drives the capital-flow card ──
+  const [draftPreset, setDraftPreset] = useState("12m");
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
+  const [applied, setApplied] = useState<{ from: string; to: string; label: string }>({ from: "", to: "", label: "Last 12 months" });
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const flow = useMemo(() => computeFlow(d.txns, applied.from, applied.to), [d.txns, applied]);
+
+  function applyFilter() {
+    const label = DASH_PRESETS.find((p) => p.id === draftPreset)?.label ?? "Custom";
+    if (draftPreset === "custom") {
+      setApplied({ from: draftFrom, to: draftTo, label: draftFrom && draftTo ? `${draftFrom} → ${draftTo}` : "Custom range" });
+    } else {
+      setApplied({ ...presetRange(draftPreset), label });
+    }
+    setFilterOpen(false);
+  }
+
+  function exportFlowCsv() {
+    const head = ["Period", "In (BDT)", "Out (BDT)", "Net (BDT)"];
+    const rows = flow.bars.map((b) => [b.label, b.in, b.out, b.in - b.out]);
+    const csv = [head, ...rows, ["TOTAL", flow.inTotal, flow.outTotal, flow.inTotal - flow.outTotal]].map((r) => r.join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `capital-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`; a.click(); URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6">
       {/* header */}
@@ -179,9 +282,41 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           </h1>
           <p className="mt-0.5 text-sm text-fg-muted">Real-time view of your investment platform.</p>
         </div>
-        <Link href="/dashboard/investments/projects" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 hover:bg-brand-blue-dark">
-          <Plus className="h-4 w-4" /> New project
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* date-range filter — drives the capital flow */}
+          <div className="relative">
+            <button type="button" onClick={() => setFilterOpen((o) => !o)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40">
+              <CalendarRange className="h-4 w-4 text-brand-blue" /> {applied.label} <ChevronDown className="h-4 w-4 text-fg-faint" />
+            </button>
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setFilterOpen(false)} />
+                <div className="absolute right-0 z-40 mt-2 w-64 rounded-2xl border border-border bg-bg p-3 shadow-2xl">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wide text-fg-muted">Date range</p>
+                    <button type="button" onClick={() => setFilterOpen(false)} className="rounded p-0.5 text-fg-faint hover:text-fg"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {DASH_PRESETS.filter((p) => p.id !== "custom").map((p) => (
+                      <button key={p.id} type="button" onClick={() => setDraftPreset(p.id)} className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${draftPreset === p.id ? "bg-brand-blue text-white" : "bg-bg-soft text-fg hover:bg-brand-blue-tint"}`}>{p.label}</button>
+                    ))}
+                    <button type="button" onClick={() => setDraftPreset("custom")} className={`col-span-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${draftPreset === "custom" ? "bg-brand-blue text-white" : "bg-bg-soft text-fg hover:bg-brand-blue-tint"}`}>Custom range</button>
+                  </div>
+                  {draftPreset === "custom" && (
+                    <div className="mt-2 space-y-1.5">
+                      <input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} className="w-full rounded-lg border border-border bg-bg-soft px-2 py-1.5 text-xs outline-none focus:border-brand-blue/50" />
+                      <input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} className="w-full rounded-lg border border-border bg-bg-soft px-2 py-1.5 text-xs outline-none focus:border-brand-blue/50" />
+                    </div>
+                  )}
+                  <button type="button" onClick={applyFilter} className="mt-3 w-full rounded-lg bg-brand-blue py-2 text-xs font-bold text-white transition-colors hover:bg-brand-blue-dark">Apply</button>
+                </div>
+              </>
+            )}
+          </div>
+          <Link href="/dashboard/investments/projects" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 hover:bg-brand-blue-dark">
+            <Plus className="h-4 w-4" /> New project
+          </Link>
+        </div>
       </div>
 
       {/* hero KPIs */}
@@ -193,7 +328,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       </div>
 
       {/* capital flow */}
-      <FlowChart flow={d.flow} on={on} />
+      <FlowChart flow={flow.bars} on={on} subtitle={applied.label} count={flow.count} onExport={exportFlowCsv} />
 
       {/* funding + top investors */}
       <div className="grid gap-4 lg:grid-cols-2">
