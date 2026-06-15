@@ -6,7 +6,7 @@
  *  columns, a fixed-height scroll box with a sticky header, page-size
  *  control and pagination. Rows reuse the add/edit form + delete control. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowDownLeft,
@@ -18,6 +18,7 @@ import {
   ArrowUp,
   ArrowDown,
   ReceiptText,
+  Activity,
 } from "lucide-react";
 import { thCls, tdCls, Badge, EmptyState } from "@/components/admin/ui";
 import TxnForm, { type InvestorOption, type TypeOption, type ProjectOption } from "./TxnForm";
@@ -97,6 +98,10 @@ export default function TransactionsExplorer({
   const [draftFrom, setDraftFrom] = useState("");
   const [draftTo, setDraftTo] = useState("");
   const [applied, setApplied] = useState<{ from: string; to: string }>({ from: "", to: "" });
+
+  // grow the flow-chart bars in on first paint
+  const [chartIn, setChartIn] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setChartIn(true), 60); return () => clearTimeout(t); }, []);
 
   function applyDateFilter() {
     const r = draftPreset === "custom" ? { from: draftFrom, to: draftTo } : presetRange(draftPreset);
@@ -232,14 +237,17 @@ export default function TransactionsExplorer({
             key={s.label}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: i * 0.05 }}
-            className={`overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${s.ring} to-bg p-4`}
+            whileHover={{ y: -4 }}
+            transition={{ duration: 0.3, delay: i * 0.05 }}
+            className={`group overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${s.ring} to-bg p-4 transition-shadow hover:shadow-lg`}
           >
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{s.label}</p>
-              <s.icon className={`h-4 w-4 ${s.cls}`} />
+              <span className={`grid h-8 w-8 place-items-center rounded-lg bg-bg/70 ${s.cls} transition-transform duration-300 group-hover:scale-110`}>
+                <s.icon className="h-4 w-4" />
+              </span>
             </div>
-            <p className={`mt-1 text-xl font-extrabold tabular-nums sm:text-2xl ${s.cls}`}>
+            <p className={`mt-1.5 text-xl font-extrabold tabular-nums sm:text-2xl ${s.cls}`}>
               {s.isCount ? s.value.toLocaleString("en-US") : compact(s.value)}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-fg-faint">{s.sub}</p>
@@ -249,26 +257,37 @@ export default function TransactionsExplorer({
 
       {/* Flow chart — daily / weekly / monthly depending on the selected range */}
       {chart.bars.length > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="rounded-2xl border border-border bg-bg p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-bold uppercase tracking-wide text-fg-muted">
-              {chart.gran === "day" ? "Daily flow" : chart.gran === "week" ? "Weekly flow" : "Monthly flow"}
-            </p>
-            <div className="flex items-center gap-3 text-[11px] text-fg-muted">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> In</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-brand-red" /> Out</span>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-bg to-bg-soft/40 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-fg">
+                <Activity className="h-4 w-4 text-brand-blue" />
+                {chart.gran === "day" ? "Daily flow" : chart.gran === "week" ? "Weekly flow" : "Monthly flow"}
+              </p>
+              <p className="text-[11px] text-fg-muted">in vs out · hover a bar for details</p>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-semibold">
+              <span className="flex items-center gap-1.5 text-emerald-600"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> In</span>
+              <span className="flex items-center gap-1.5 text-brand-red"><span className="h-2.5 w-2.5 rounded-full bg-brand-red" /> Out</span>
             </div>
           </div>
-          <div className="flex items-end gap-1 pb-1" style={{ height: 136 }}>
+          <div className="relative flex items-end gap-1.5 border-b border-border" style={{ height: 196 }}>
             {chart.bars.map((b, i) => (
-              <div key={i} className="group/bar flex min-w-0 flex-1 flex-col items-center gap-1">
-                <div className="flex w-full items-end justify-center gap-[2px]" style={{ height: 104 }}>
-                  <div className="w-full max-w-[13px] rounded-t bg-emerald-500/90 transition-[height,background-color] duration-300 group-hover/bar:bg-emerald-500" style={{ height: `${b.in > 0 ? Math.max(3, (b.in / maxBar) * 100) : 0}%` }} title={`${b.label} · In ${compact(b.in)}`} />
-                  <div className="w-full max-w-[13px] rounded-t bg-brand-red/80 transition-[height,background-color] duration-300 group-hover/bar:bg-brand-red" style={{ height: `${b.out > 0 ? Math.max(3, (b.out / maxBar) * 100) : 0}%` }} title={`${b.label} · Out ${compact(b.out)}`} />
+              <div key={i} className="group/bar relative flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+                <div className="pointer-events-none absolute left-1/2 top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-bg px-2 py-1 text-[10px] shadow-lg opacity-0 transition-opacity duration-200 group-hover/bar:opacity-100">
+                  <p className="font-bold text-fg">{b.label}</p>
+                  <p className="text-emerald-600">In {compact(b.in)}</p>
+                  <p className="text-brand-red">Out {compact(b.out)}</p>
                 </div>
-                <span className="h-3 w-full truncate text-center text-[9px] text-fg-faint">{i % labelStep === 0 ? b.label : ""}</span>
+                <div className="flex w-full items-end justify-center gap-[3px]" style={{ height: 164 }}>
+                  <div className="w-full rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ maxWidth: 16, height: chartIn ? `${b.in > 0 ? Math.max(4, (b.in / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #059669, #34d399)" }} />
+                  <div className="w-full rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ maxWidth: 16, height: chartIn ? `${b.out > 0 ? Math.max(4, (b.out / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #E11924, rgba(225,25,36,0.55))" }} />
+                </div>
               </div>
             ))}
+          </div>
+          <div className="mt-1.5 flex gap-1.5">
+            {chart.bars.map((b, i) => <span key={i} className="flex-1 truncate text-center text-[9px] text-fg-faint">{i % labelStep === 0 ? b.label : ""}</span>)}
           </div>
         </motion.div>
       )}

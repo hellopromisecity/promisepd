@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.8",
+    date: "2026-06-15",
+    title: "Colourful cards · richer flow chart · transaction SMS",
+    changes: [
+      { kind: "improved", text: "Stat cards across the whole admin are now soft colourful gradient cards that gently lift on hover (with the icon popping), and the All Transactions summary cards get the same treatment." },
+      { kind: "improved", text: "The All Transactions flow chart is redesigned — taller gradient bars on a baseline, a grow-in animation, and a hover tooltip showing each period’s exact in/out." },
+      { kind: "new", text: "Adding a transaction now texts the investor (Bangladeshi numbers) through the SMS gateway — e.g. “BDT 50,000.00 has been credited to your account. Ref: TX100951” for a credit, or “debited from your account” for a withdrawal." },
+    ],
+  },
+  {
     version: "1.3.7",
     date: "2026-06-15",
     title: "Dashboard — live, real-data redesign",

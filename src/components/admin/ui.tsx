@@ -17,6 +17,27 @@ const TONE: Record<Tone, string> = {
   danger: "bg-brand-red-tint text-brand-red-dark",
 };
 
+/** Icon colours + soft gradient tints for the colourful StatCards. The gradient
+ *  is applied inline (rgb) rather than via Tailwind gradient-stop utilities — in
+ *  this Tailwind v4 setup some colour/opacity gradient stops don't get generated
+ *  reliably, so an inline gradient guarantees the colour always shows. */
+const TONE_FG: Record<Tone, string> = {
+  neutral: "text-fg-muted",
+  info: "text-brand-blue",
+  success: "text-emerald-600",
+  warning: "text-amber-600",
+  danger: "text-brand-red-dark",
+};
+const TONE_RGB: Record<Tone, string> = {
+  neutral: "100, 116, 139",
+  info: "24, 71, 161", // brand blue
+  success: "16, 185, 129", // emerald
+  warning: "245, 158, 11", // amber
+  danger: "225, 25, 36", // brand red
+};
+const toneGradient = (tone: Tone) =>
+  `linear-gradient(135deg, rgba(${TONE_RGB[tone]}, 0.13), rgba(${TONE_RGB[tone]}, 0.04))`;
+
 export function PageHeader({
   title,
   subtitle,
@@ -69,11 +90,11 @@ export function StatCard({
   tone?: Tone;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-bg p-4">
-      <span className={`grid h-9 w-9 place-items-center rounded-xl ${TONE[tone]}`}>
+    <div className="group rounded-2xl border border-border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style={{ backgroundImage: toneGradient(tone) }}>
+      <span className={`grid h-9 w-9 place-items-center rounded-xl bg-bg/70 ${TONE_FG[tone]} transition-transform duration-300 group-hover:scale-110`}>
         <Icon className="h-[18px] w-[18px]" />
       </span>
-      <p className="mt-3 text-2xl font-extrabold text-fg">{value}</p>
+      <p className="mt-3 text-2xl font-extrabold tabular-nums text-fg">{value}</p>
       <p className="text-[13px] font-semibold text-fg">{label}</p>
       {sub && <p className="text-xs text-fg-muted">{sub}</p>}
     </div>

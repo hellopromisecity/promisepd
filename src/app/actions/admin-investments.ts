@@ -23,6 +23,7 @@ import {
   ValidationError,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { sendTransactionSms } from "@/lib/sms";
 
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
 
@@ -98,10 +99,11 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError("Enter a valid amount.");
     if (!isoDate(input.date)) throw new ValidationError("Pick a date.");
 
-    // Validate FKs exist (friendlier than a raw FK error).
+    // Validate FKs exist (friendlier than a raw FK error). We also grab the
+    // investor's phone + the type's operator so a new transaction can text them.
     const [{ data: inv }, { data: ty }] = await Promise.all([
-      admin.from("investor_accounts").select("uid").eq("uid", uid).maybeSingle(),
-      admin.from("investment_types").select("name").eq("name", type).maybeSingle(),
+      admin.from("investor_accounts").select("uid, phone_number").eq("uid", uid).maybeSingle(),
+      admin.from("investment_types").select("name, operator").eq("name", type).maybeSingle(),
     ]);
     if (!inv) throw new ValidationError("That investor no longer exists.");
     if (!ty) throw new ValidationError("That transaction type doesn’t exist.");
@@ -119,6 +121,7 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
 
     let id = input.transaction_id?.trim() || null;
     let prevUid: string | null = null;
+    const creating = !id;
     if (id) {
       const { data: existing } = await admin
         .from("investor_transactions")
@@ -139,6 +142,16 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     // transaction was moved to a different investor.
     await recomputeBalance(admin, uid);
     if (prevUid && prevUid !== uid) await recomputeBalance(admin, prevUid);
+
+    // New transaction → text the investor (BD numbers only; never throws).
+    if (creating) {
+      await sendTransactionSms({
+        phone: (inv as { phone_number: string | null }).phone_number,
+        operator: (ty as { operator: string }).operator ?? "+",
+        amount,
+        txId: id!,
+      });
+    }
 
     await logAudit({
       action: input.transaction_id ? "update" : "create",
