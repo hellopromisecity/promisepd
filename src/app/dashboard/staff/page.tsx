@@ -80,9 +80,15 @@ export default async function StaffPage() {
   const BASE = "id, name, mobile, username, email, role, created_at";
 
   // `cols` is a runtime string so the typed client can't infer the row —
-  // we normalise + cast the result below.
+  // we normalise + cast the result below.  Members (investor app-users
+  // ported from the old system) are NOT staff — exclude them so the roster
+  // stays the company team, not hundreds of investors.
   const sel = (cols: string) =>
-    admin.from("profiles").select(cols).order("created_at", { ascending: true });
+    admin
+      .from("profiles")
+      .select(cols)
+      .neq("role", "member")
+      .order("created_at", { ascending: true });
 
   let res = await sel(FULL);
   if (res.error?.code === "42703") res = await sel(BASE);
@@ -150,6 +156,7 @@ export default async function StaffPage() {
   // DB accounts with no roster entry → append (directory + management).
   for (const r of rows) {
     if (matched.has(r.id)) continue;
+    if (r.role === "member") continue; // investor app-users aren't staff
     merged.push({
       key: r.id,
       name: r.name,

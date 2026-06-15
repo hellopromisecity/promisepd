@@ -19,6 +19,7 @@
  *  We normalise leading 0 / +880 / 880 so users can type whichever form
  *  they're used to. */
 
+import bcrypt from "bcryptjs";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -53,37 +54,109 @@ const NOT_CONFIGURED: AuthResult = {
   error: "অ্যাকাউন্ট সার্ভিস এখন সচল নেই। একটু পরে চেষ্টা করুন বা সরাসরি যোগাযোগ করুন।",
 };
 
-/** Accepts: "01912345678" · "+8801912345678" · "8801912345678".
- *  Returns: canonical "8801912345678" or null if invalid. */
+/** Accepts every shape a Bangladeshi mobile is typed in:
+ *    "01912345678" · "1912345678" · "+8801912345678" · "8801912345678"
+ *    "00880 1912-345678" … (spaces, dashes, +, leading 00 all tolerated).
+ *  Returns: canonical "8801912345678" or null if it isn't a BD mobile. */
 function normalizeBdMobile(raw: string): string | null {
-  const digits = (raw || "").replace(/\D/g, "");
+  let digits = (raw || "").replace(/\D/g, "");
   if (!digits) return null;
-  if (digits.length === 11 && digits.startsWith("01")) return `880${digits.slice(1)}`;
+  if (digits.startsWith("00")) digits = digits.slice(2); // intl 00 prefix
   if (digits.length === 13 && digits.startsWith("8801")) return digits;
+  if (digits.length === 11 && digits.startsWith("01")) return `880${digits.slice(1)}`;
+  if (digits.length === 10 && digits.startsWith("1")) return `8801${digits.slice(1)}`;
   return null;
 }
 
-/** Resolve a login identifier to the canonical mobile that backs the
- *  synthetic auth email.  Mobile resolves directly; username / email
- *  are looked up in profiles via the service role (RLS-exempt). */
-async function resolveMobile(identifier: string): Promise<string | null> {
+/** Build the ordered list of Supabase auth emails to try for a login
+ *  identifier.  A member can be reached several ways:
+ *    • mobile (any format)  → synthetic email of the canonical mobile
+ *    • username / id        → synthetic email of the profile's mobile
+ *    • email                → the address itself (real-email accounts)
+ *                             AND the synthetic email of whatever profile
+ *                             lists it as a contact address
+ *  Trying each in turn (same password) means the owner gets in no matter
+ *  which identifier — or which of their accounts — they sign in with. */
+async function candidateEmails(identifier: string): Promise<string[]> {
   const id = identifier.trim();
+  const out: string[] = [];
 
-  const direct = normalizeBdMobile(id);
-  if (direct) return direct;
+  const mobile = normalizeBdMobile(id);
+  if (mobile) out.push(syntheticEmail(mobile));
 
   const admin = createAdminClient();
-  if (!admin) return null;
+  if (admin) {
+    if (EMAIL_RE.test(id)) {
+      out.push(id.toLowerCase()); // a real-email auth account
+      const { data } = await admin
+        .from("profiles")
+        .select("mobile")
+        .ilike("email", id)
+        .maybeSingle();
+      if (data?.mobile) out.push(syntheticEmail(data.mobile));
+    } else if (!mobile) {
+      // Treat anything else (username, member id, code) as a username.
+      const { data } = await admin
+        .from("profiles")
+        .select("mobile")
+        .eq("username", id.toLowerCase())
+        .maybeSingle();
+      if (data?.mobile) out.push(syntheticEmail(data.mobile));
+    }
+  }
 
-  const column = EMAIL_RE.test(id) ? "email" : "username";
-  const value = column === "username" ? id.toLowerCase() : id;
-  const { data } = await admin
-    .from("profiles")
-    .select("mobile")
-    .eq(column, value)
-    .maybeSingle();
+  return [...new Set(out)]; // de-dupe, keep order
+}
 
-  return data?.mobile ?? null;
+/** Legacy password migration.  For each candidate synthetic email, find the
+ *  profile (by the mobile encoded in the address), read its auth user's
+ *  user_metadata.legacy_pw (the old bcrypt hash), and if the typed password
+ *  verifies, set it as the real Supabase password and clear the legacy hash.
+ *  Returns true once a sign-in succeeds. */
+async function tryLegacyLogin(
+  candidates: string[],
+  password: string,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const suffix = `@${AUTH_EMAIL_DOMAIN}`;
+
+  for (const email of candidates) {
+    if (!email.endsWith(suffix)) continue;
+    const mobile = email.slice(0, -suffix.length);
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("mobile", mobile)
+      .maybeSingle();
+    if (!prof?.id) continue;
+
+    const { data: got } = await admin.auth.admin.getUserById(prof.id as string);
+    const meta = (got?.user?.user_metadata ?? {}) as Record<string, unknown>;
+    const legacy = typeof meta.legacy_pw === "string" ? meta.legacy_pw : null;
+    if (!legacy) continue;
+
+    let valid = false;
+    try {
+      valid = bcrypt.compareSync(password, legacy);
+    } catch {
+      valid = false;
+    }
+    if (!valid) continue;
+
+    const { error: upErr } = await admin.auth.admin.updateUserById(prof.id as string, {
+      password,
+      user_metadata: { ...meta, legacy_pw: null },
+    });
+    if (upErr) {
+      console.error("[auth/login] legacy migrate", upErr.message);
+      continue;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error) return true;
+  }
+  return false;
 }
 
 // ── Actions ───────────────────────────────────────────────────────
@@ -95,23 +168,33 @@ export async function login(payload: LoginPayload): Promise<AuthResult> {
     return { ok: false, error: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD} অক্ষরের।` };
   }
 
-  const mobile = await resolveMobile(id);
-  if (!mobile) {
+  const candidates = await candidateEmails(id);
+  if (candidates.length === 0) {
     return { ok: false, error: "এই তথ্য দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি। সাইন আপ করুন।" };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: syntheticEmail(mobile),
-    password: payload.password,
-  });
-
-  if (error) {
-    console.error("[auth/login]", error.message);
-    return { ok: false, error: "ভুল মোবাইল/ইউজারনেম বা পাসওয়ার্ড।" };
+  let lastError: string | undefined;
+  for (const email of candidates) {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: payload.password,
+    });
+    if (!error) return { ok: true, message: "সফলভাবে লগইন হয়েছে।" };
+    lastError = error.message;
   }
 
-  return { ok: true, message: "সফলভাবে লগইন হয়েছে।" };
+  // Legacy fallback — accounts ported from the old admin.promisepd.com carry
+  // their original bcrypt password hash in user_metadata.legacy_pw.  On the
+  // first successful match we verify against it, then migrate the password
+  // into Supabase Auth (and clear the legacy hash) so every later login uses
+  // the normal flow above.  Runs ONLY after the normal sign-in failed, so it
+  // never affects accounts that were created natively.
+  const legacyOk = await tryLegacyLogin(candidates, payload.password, supabase);
+  if (legacyOk) return { ok: true, message: "সফলভাবে লগইন হয়েছে।" };
+
+  console.error("[auth/login]", lastError);
+  return { ok: false, error: "ভুল মোবাইল/ইউজারনেম/ইমেইল বা পাসওয়ার্ড।" };
 }
 
 export async function signup(payload: SignupPayload): Promise<AuthResult> {
