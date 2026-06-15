@@ -170,7 +170,7 @@ export type PortalMyProject = {
   project_id: string;
   project_name: string;
   status: string;
-  invested: number; // total_paid
+  invested: number; // sum of the member's non-profit "+" transactions for this project
   profit: number; // profit-type txns for this project
   goal: number; // per-investor target (custom share price, else project share)
   progress: number; // 0–100
@@ -230,7 +230,7 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
   const [invRes, txRes, projRes, typeRes] = await Promise.all([
     admin
       .from("investments")
-      .select("project_id, total_paid, custom_share_price, user_specific_start_date, user_specific_end_date")
+      .select("project_id, custom_share_price, user_specific_start_date, user_specific_end_date")
       .eq("uid", uid),
     admin
       .from("investor_transactions")
@@ -260,19 +260,31 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
 
   const txRows = (txRes.data ?? []) as Record<string, unknown>[];
 
-  // per-project profit (profit / profit_share transactions)
+  // Per-project "Invested" + "Profit" are summed from the member's OWN
+  // transactions, grouped by project — exactly like the legacy admin app.
+  // We deliberately do NOT use the stored investments.total_paid column: in the
+  // ported data it's a stale denormalised cache that omits whole payment types
+  // (e.g. a member's "Land Share" payments), so it can badly understate what
+  // was actually paid into a project. Invested = the member's "+" payments of
+  // non-profit types; Profit = their profit / profit_share credits.
+  const investedByProject = new Map<string, number>();
   const profitByProject = new Map<string, number>();
   for (const t of txRows) {
-    if (PROFIT_TYPES.has(String(t.type)) && t.project_id) {
-      const k = String(t.project_id);
-      profitByProject.set(k, (profitByProject.get(k) ?? 0) + (Number(t.amount) || 0));
+    if (!t.project_id) continue;
+    const k = String(t.project_id);
+    const amt = Number(t.amount) || 0;
+    const ty = String(t.type);
+    if (PROFIT_TYPES.has(ty)) {
+      profitByProject.set(k, (profitByProject.get(k) ?? 0) + amt);
+    } else if ((op.get(ty) ?? "+") === "+") {
+      investedByProject.set(k, (investedByProject.get(k) ?? 0) + amt);
     }
   }
 
   const myProjects: PortalMyProject[] = ((invRes.data ?? []) as Record<string, unknown>[]).map((v) => {
     const pid = String(v.project_id);
     const proj = byId.get(pid);
-    const invested = Number(v.total_paid) || 0;
+    const invested = investedByProject.get(pid) ?? 0;
     const goal = Number(v.custom_share_price) || Number(proj?.per_user_share_amount) || 0;
     const progress = goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : 0;
     return {

@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.3",
+    date: "2026-06-15",
+    title: "Accurate per-project investment totals",
+    changes: [
+      { kind: "fixed", text: "On the investor portal, each project’s “Invested” figure is now summed directly from that member’s own transactions for the project, so every payment type (land share, installment, booking money, etc.) is counted. Previously it read a stale cached total that could leave some payments out — e.g. a member’s land-share payments were missing from one project’s total." },
+    ],
+  },
+  {
     version: "1.3.2",
     date: "2026-06-15",
     title: "Flow chart follows your filter · clearer cursors",
