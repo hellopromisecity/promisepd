@@ -151,11 +151,25 @@ export async function listUnsubscribe(admin: Admin): Promise<UnsubscribeRequest[
 }
 
 // ── Investor self-service portal (/account) ───────────────────────
-export type PortalInvestment = {
+export type PortalMyProject = {
   project_id: string;
   project_name: string;
-  total_paid: number;
-  discount: number;
+  status: string;
+  invested: number; // total_paid
+  profit: number; // profit-type txns for this project
+  goal: number; // per-investor target (custom share price, else project share)
+  progress: number; // 0–100
+  start_date: string | null;
+  end_date: string | null;
+};
+export type PortalProject = {
+  project_id: string;
+  project_name: string;
+  status: string;
+  share_price: number | null;
+  total_required: number | null;
+  funded: number;
+  progress: number;
   start_date: string | null;
   end_date: string | null;
 };
@@ -164,20 +178,24 @@ export type PortalTxn = {
   type: string;
   operator: string; // "+" | "-"
   amount: number;
-  date: string;
+  date: string; // ISO (with time)
   project_name: string | null;
   rashid_number: string | null;
   description: string | null;
 };
 export type InvestorPortal = {
   uid: string;
+  fid: string | null;
   full_name: string;
   is_active: boolean;
   is_verified: boolean;
   balance: InvestorBalance;
-  investments: PortalInvestment[];
+  myProjects: PortalMyProject[];
+  allProjects: PortalProject[];
   transactions: PortalTxn[];
 };
+
+const PROFIT_TYPES = new Set(["profit", "profit_share"]);
 
 /** Everything a logged-in investor may see about THEMSELVES, fetched by
  *  their profile id (the auth user id).  Returns null if this member isn't
@@ -188,7 +206,7 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
   if (!admin) return null;
   const { data: acc } = await admin
     .from("investor_accounts")
-    .select("uid, full_name, is_active, is_verified, balance")
+    .select("uid, fid, full_name, is_active, is_verified, balance")
     .eq("profile_id", profileId)
     .maybeSingle();
   if (!acc) return null;
@@ -197,46 +215,96 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
   const [invRes, txRes, projRes, typeRes] = await Promise.all([
     admin
       .from("investments")
-      .select("project_id, total_paid, discount, user_specific_start_date, user_specific_end_date")
+      .select("project_id, total_paid, custom_share_price, user_specific_start_date, user_specific_end_date")
       .eq("uid", uid),
     admin
       .from("investor_transactions")
       .select("transaction_id, type, amount, date, project_id, rashid_number, description")
       .eq("uid", uid)
       .order("date", { ascending: false }),
-    admin.from("investment_projects").select("project_id, project_name"),
+    admin
+      .from("investment_projects")
+      .select("project_id, project_name, status, per_user_share_amount, total_amount_required, current_funded_amount, project_progress, start_date, end_date"),
     admin.from("investment_types").select("name, operator"),
   ]);
 
-  const pName = new Map(((projRes.data ?? []) as { project_id: string; project_name: string }[]).map((p) => [p.project_id, p.project_name]));
+  type ProjRow = {
+    project_id: string;
+    project_name: string;
+    status: string;
+    per_user_share_amount: number | null;
+    total_amount_required: number | null;
+    current_funded_amount: number | null;
+    project_progress: number | null;
+    start_date: string | null;
+    end_date: string | null;
+  };
+  const projects = (projRes.data ?? []) as ProjRow[];
+  const byId = new Map(projects.map((p) => [p.project_id, p]));
   const op = new Map(((typeRes.data ?? []) as { name: string; operator: string }[]).map((t) => [t.name, t.operator]));
 
-  const investments: PortalInvestment[] = ((invRes.data ?? []) as Record<string, unknown>[]).map((v) => ({
-    project_id: String(v.project_id),
-    project_name: pName.get(String(v.project_id)) ?? String(v.project_id),
-    total_paid: Number(v.total_paid) || 0,
-    discount: Number(v.discount) || 0,
-    start_date: (v.user_specific_start_date as string | null) ?? null,
-    end_date: (v.user_specific_end_date as string | null) ?? null,
+  const txRows = (txRes.data ?? []) as Record<string, unknown>[];
+
+  // per-project profit (profit / profit_share transactions)
+  const profitByProject = new Map<string, number>();
+  for (const t of txRows) {
+    if (PROFIT_TYPES.has(String(t.type)) && t.project_id) {
+      const k = String(t.project_id);
+      profitByProject.set(k, (profitByProject.get(k) ?? 0) + (Number(t.amount) || 0));
+    }
+  }
+
+  const myProjects: PortalMyProject[] = ((invRes.data ?? []) as Record<string, unknown>[]).map((v) => {
+    const pid = String(v.project_id);
+    const proj = byId.get(pid);
+    const invested = Number(v.total_paid) || 0;
+    const goal = Number(v.custom_share_price) || Number(proj?.per_user_share_amount) || 0;
+    const progress = goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : 0;
+    return {
+      project_id: pid,
+      project_name: proj?.project_name ?? pid,
+      status: proj?.status ?? "—",
+      invested,
+      profit: profitByProject.get(pid) ?? 0,
+      goal,
+      progress,
+      start_date: (v.user_specific_start_date as string | null) ?? proj?.start_date ?? null,
+      end_date: (v.user_specific_end_date as string | null) ?? proj?.end_date ?? null,
+    };
+  });
+
+  const allProjects: PortalProject[] = projects.map((p) => ({
+    project_id: p.project_id,
+    project_name: p.project_name,
+    status: p.status,
+    share_price: p.per_user_share_amount,
+    total_required: p.total_amount_required,
+    funded: Number(p.current_funded_amount) || 0,
+    progress: Math.min(100, Math.round(Number(p.project_progress) || 0)),
+    start_date: p.start_date,
+    end_date: p.end_date,
   }));
-  const transactions: PortalTxn[] = ((txRes.data ?? []) as Record<string, unknown>[]).map((t) => ({
+
+  const transactions: PortalTxn[] = txRows.map((t) => ({
     transaction_id: String(t.transaction_id),
     type: String(t.type),
     operator: op.get(String(t.type)) ?? "+",
     amount: Number(t.amount) || 0,
     date: String(t.date),
-    project_name: t.project_id ? pName.get(String(t.project_id)) ?? null : null,
+    project_name: t.project_id ? byId.get(String(t.project_id))?.project_name ?? null : null,
     rashid_number: (t.rashid_number as string | null) ?? null,
     description: (t.description as string | null) ?? null,
   }));
 
   return {
     uid,
+    fid: (acc.fid as string | null) ?? null,
     full_name: acc.full_name,
     is_active: acc.is_active,
     is_verified: acc.is_verified,
     balance: bal(acc.balance as InvestorBalance | null),
-    investments,
+    myProjects,
+    allProjects,
     transactions,
   };
 }
