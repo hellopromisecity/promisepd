@@ -22,11 +22,18 @@ import {
   MessageCircle,
   LogOut,
   ChevronRight,
+  Wallet,
+  TrendingUp,
+  ArrowDownRight,
+  PiggyBank,
+  Receipt,
+  BadgeCheck,
 } from "lucide-react";
 import { DICT, localizedPath, type Locale } from "@/lib/i18n";
 import { toBn } from "@/lib/bn";
 import { useLocale } from "./LocaleProvider";
 import type { Member } from "@/lib/auth";
+import type { InvestorPortal } from "@/lib/investments";
 import { logout } from "@/app/actions/auth";
 
 /** Canonical 8801XXXXXXXXX → local 01XXXXXXXXX, in the right numerals. */
@@ -35,12 +42,47 @@ function displayMobile(canonical: string, locale: Locale): string {
   return locale === "en" ? local : toBn(local);
 }
 
-export default function AccountView({ member }: { member: Member }) {
+export default function AccountView({
+  member,
+  investment,
+}: {
+  member: Member;
+  investment?: InvestorPortal | null;
+}) {
   const locale = useLocale();
   const t = DICT[locale].account;
   const lp = (href: string) => localizedPath(href, locale);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  // Bilingual money / date helpers for the investor portal.
+  const en = locale === "en";
+  const money = (n: number) => {
+    const s = Math.round(Number(n) || 0).toLocaleString("en-US");
+    return `৳${en ? s : toBn(s)}`;
+  };
+  const fmtD = (d: string) => {
+    if (!d) return "—";
+    const out = new Date(d.includes("T") ? d : `${d}T00:00:00`).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    return en ? out : toBn(out);
+  };
+  const L = {
+    invHead: en ? "My Investment" : "আমার বিনিয়োগ",
+    invested: en ? "Invested" : "বিনিয়োগ",
+    profit: en ? "Profit" : "মুনাফা",
+    withdrawn: en ? "Withdrawn" : "উত্তোলন",
+    balance: en ? "Balance" : "ব্যালেন্স",
+    projects: en ? "My Projects" : "আমার প্রকল্প",
+    paid: en ? "Paid" : "মোট জমা",
+    transactions: en ? "Transactions" : "লেনদেন",
+    receipt: en ? "রসিদ" : "রসিদ",
+    showing: en ? "Showing latest 60" : "সর্বশেষ ৬০টি দেখানো হচ্ছে",
+    verified: en ? "Verified" : "ভেরিফাইড",
+  };
 
   function onLogout() {
     startTransition(async () => {
@@ -81,6 +123,108 @@ export default function AccountView({ member }: { member: Member }) {
         </h1>
         <p className="mt-1.5 text-sm text-fg-muted">{t.subtitle}</p>
       </motion.div>
+
+      {/* Investor portal — only for members ported from the investment app */}
+      {investment && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.03 }}
+          className="mt-8 space-y-6"
+        >
+          {/* Balance hero */}
+          <div className="grad-border p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-fg-faint font-semibold">{L.balance}</p>
+              {investment.is_verified && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  <BadgeCheck className="h-3 w-3" /> {L.verified}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 flex items-center gap-2 text-3xl font-extrabold text-brand-blue tabular-nums">
+              <Wallet className="h-7 w-7 text-brand-blue/70" />
+              {money(investment.balance.total_balance)}
+            </p>
+            <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-4">
+              {[
+                { icon: TrendingUp, label: L.invested, value: investment.balance.total_investment, cls: "text-emerald-600" },
+                { icon: PiggyBank, label: L.profit, value: investment.balance.total_profit, cls: "text-brand-blue" },
+                { icon: ArrowDownRight, label: L.withdrawn, value: investment.balance.total_withdrawn, cls: "text-brand-red-dark" },
+              ].map(({ icon: Icon, label, value, cls }) => (
+                <div key={label}>
+                  <p className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-fg-faint font-semibold">
+                    <Icon className="h-3.5 w-3.5" /> {label}
+                  </p>
+                  <p className={`mt-0.5 text-base font-extrabold tabular-nums ${cls}`}>{money(value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Projects invested in */}
+          {investment.investments.length > 0 && (
+            <div>
+              <h2 className="text-sm font-bold text-fg-muted uppercase tracking-[0.14em]">{L.projects}</h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {investment.investments.map((iv) => (
+                  <div key={iv.project_id} className="rounded-2xl border border-border bg-bg-soft p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-blue-tint text-brand-blue">
+                        <Building2 className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-fg">{iv.project_name}</p>
+                        <p className="mt-0.5 text-xs text-fg-muted">
+                          {L.paid}: <span className="font-semibold text-fg">{money(iv.total_paid)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Transaction history */}
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg-muted uppercase tracking-[0.14em]">
+              <Receipt className="h-4 w-4" /> {L.transactions}
+            </h2>
+            {investment.transactions.length === 0 ? (
+              <p className="mt-3 rounded-2xl border border-dashed border-border bg-bg-soft px-4 py-6 text-center text-sm text-fg-muted">
+                {en ? "No transactions yet." : "এখনো কোনো লেনদেন নেই।"}
+              </p>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-bg">
+                <ul className="divide-y divide-border">
+                  {investment.transactions.slice(0, 60).map((tx) => {
+                    const minus = tx.operator === "-";
+                    return (
+                      <li key={tx.transaction_id} className="flex items-center gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold capitalize text-fg">{tx.type.replace(/_/g, " ")}</p>
+                          <p className="truncate text-[11px] text-fg-muted">
+                            {fmtD(tx.date)}
+                            {tx.project_name ? ` · ${tx.project_name}` : ""}
+                            {tx.rashid_number ? ` · ${L.receipt} ${en ? tx.rashid_number : toBn(tx.rashid_number)}` : ""}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 text-sm font-bold tabular-nums ${minus ? "text-brand-red-dark" : "text-emerald-600"}`}>
+                          {minus ? "−" : "+"}{money(tx.amount)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {investment.transactions.length > 60 && (
+                  <p className="border-t border-border px-4 py-2 text-center text-[11px] text-fg-muted">{L.showing}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* Profile card */}
       <motion.div

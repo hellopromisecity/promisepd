@@ -150,6 +150,97 @@ export async function listUnsubscribe(admin: Admin): Promise<UnsubscribeRequest[
   return (data ?? []) as UnsubscribeRequest[];
 }
 
+// ── Investor self-service portal (/account) ───────────────────────
+export type PortalInvestment = {
+  project_id: string;
+  project_name: string;
+  total_paid: number;
+  discount: number;
+  start_date: string | null;
+  end_date: string | null;
+};
+export type PortalTxn = {
+  transaction_id: string;
+  type: string;
+  operator: string; // "+" | "-"
+  amount: number;
+  date: string;
+  project_name: string | null;
+  rashid_number: string | null;
+  description: string | null;
+};
+export type InvestorPortal = {
+  uid: string;
+  full_name: string;
+  is_active: boolean;
+  is_verified: boolean;
+  balance: InvestorBalance;
+  investments: PortalInvestment[];
+  transactions: PortalTxn[];
+};
+
+/** Everything a logged-in investor may see about THEMSELVES, fetched by
+ *  their profile id (the auth user id).  Returns null if this member isn't
+ *  a ported investor.  Service-role read, but scoped strictly to the one
+ *  profile_id passed in — a member can only ever load their own data. */
+export async function investorPortalData(profileId: string): Promise<InvestorPortal | null> {
+  const admin = getAdmin();
+  if (!admin) return null;
+  const { data: acc } = await admin
+    .from("investor_accounts")
+    .select("uid, full_name, is_active, is_verified, balance")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (!acc) return null;
+  const uid = acc.uid;
+
+  const [invRes, txRes, projRes, typeRes] = await Promise.all([
+    admin
+      .from("investments")
+      .select("project_id, total_paid, discount, user_specific_start_date, user_specific_end_date")
+      .eq("uid", uid),
+    admin
+      .from("investor_transactions")
+      .select("transaction_id, type, amount, date, project_id, rashid_number, description")
+      .eq("uid", uid)
+      .order("date", { ascending: false }),
+    admin.from("investment_projects").select("project_id, project_name"),
+    admin.from("investment_types").select("name, operator"),
+  ]);
+
+  const pName = new Map(((projRes.data ?? []) as { project_id: string; project_name: string }[]).map((p) => [p.project_id, p.project_name]));
+  const op = new Map(((typeRes.data ?? []) as { name: string; operator: string }[]).map((t) => [t.name, t.operator]));
+
+  const investments: PortalInvestment[] = ((invRes.data ?? []) as Record<string, unknown>[]).map((v) => ({
+    project_id: String(v.project_id),
+    project_name: pName.get(String(v.project_id)) ?? String(v.project_id),
+    total_paid: Number(v.total_paid) || 0,
+    discount: Number(v.discount) || 0,
+    start_date: (v.user_specific_start_date as string | null) ?? null,
+    end_date: (v.user_specific_end_date as string | null) ?? null,
+  }));
+  const transactions: PortalTxn[] = ((txRes.data ?? []) as Record<string, unknown>[]).map((t) => ({
+    transaction_id: String(t.transaction_id),
+    type: String(t.type),
+    operator: op.get(String(t.type)) ?? "+",
+    amount: Number(t.amount) || 0,
+    date: String(t.date),
+    project_name: t.project_id ? pName.get(String(t.project_id)) ?? null : null,
+    rashid_number: (t.rashid_number as string | null) ?? null,
+    description: (t.description as string | null) ?? null,
+  }));
+
+  return {
+    uid,
+    full_name: acc.full_name,
+    is_active: acc.is_active,
+    is_verified: acc.is_verified,
+    balance: bal(acc.balance as InvestorBalance | null),
+    investments,
+    transactions,
+  };
+}
+
 /** uid -> investor name, and project_id -> project name (for joins in lists). */
 export async function nameMaps(admin: Admin): Promise<{
   investorName: Map<string, string>;

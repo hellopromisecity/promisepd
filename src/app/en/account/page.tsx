@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import AccountView from "@/components/AccountView";
 import { getCurrentUser, isStaff } from "@/lib/auth";
+import { investorPortalData } from "@/lib/investments";
 
 const PAGE_TITLE = "My account — PromisePD";
 
@@ -19,10 +20,12 @@ export default async function AccountPageEn() {
   if (!member) redirect("/en/login?next=/en/account");
   if (isStaff(member.role)) redirect("/dashboard");
 
+  const investment = await investorPortalData(member.id);
+
   return (
     <section className="relative pt-24 pb-10 min-h-[80svh]">
       <div className="absolute inset-0 -z-10 mesh-bg-soft" />
-      <AccountView member={member} />
+      <AccountView member={member} investment={investment} />
     </section>
   );
 }
