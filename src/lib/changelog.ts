@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.7",
+    date: "2026-06-15",
+    title: "Dashboard — live, real-data redesign",
+    changes: [
+      { kind: "improved", text: "The main Dashboard is rebuilt entirely on real investment data: animated KPIs (total balance, total invested, investors + how many are paying, projects + amount raised) and a clean secondary strip (profit, withdrawn, transactions, members, leads, blog)." },
+      { kind: "new", text: "An interactive “Capital flow” chart — real money in vs out across the last 12 months, with a hover tooltip showing each month’s figures — replaces the old sample chart." },
+      { kind: "new", text: "Live Project-funding bars (raised vs goal), a Top-investors chart, and a Recent-transactions feed, all from real data, alongside recent enquiries." },
+    ],
+  },
+  {
     version: "1.3.6",
     date: "2026-06-15",
     title: "Paying / non-paying filter · attendance is staff-only",
