@@ -24,6 +24,45 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.1",
+    date: "2026-06-15",
+    title: "A sidebar you arrange · Investments up top",
+    changes: [
+      { kind: "new", text: "Drag any sidebar item up or down (grab the handle that appears on hover) to arrange the menu your way — the order is remembered on your device." },
+      { kind: "changed", text: "Investments now sits right under Dashboard for quick access." },
+    ],
+  },
+  {
+    version: "1.3.0",
+    date: "2026-06-15",
+    title: "The investor platform — fully ported in",
+    changes: [
+      { kind: "new", text: "The entire investor platform from the old app now lives inside Promise City, under a new “Investments” menu — App Users, Projects, All Transactions, Transaction Types and Unsubscribe Requests." },
+      { kind: "new", text: "Every investor, balance, investment and transaction was imported exactly — and investors sign in with their ORIGINAL password (no reset needed)." },
+      { kind: "new", text: "Investor portal on the account page: each investor sees their balance, projects (with progress) and full transaction history, opens any transaction for details, and downloads a PDF receipt or a full statement." },
+      { kind: "new", text: "Admins can add / edit / delete transactions (balances recalculate automatically), edit investors, manage projects & types, and approve / reject unsubscribe requests." },
+    ],
+  },
+  {
+    version: "1.2.10",
+    date: "2026-06-15",
+    title: "Attendance shows the real day",
+    changes: [
+      { kind: "fixed", text: "A day with no attendance now clearly says “No attendance taken” — instead of wrongly showing everyone present. Each date shows its own real data." },
+      { kind: "new", text: "A “Take today’s attendance” button to start the day; once saved it reads “Today’s attendance taken”, with an Edit option." },
+    ],
+  },
+  {
+    version: "1.2.9",
+    date: "2026-06-15",
+    title: "Bullet-fast dashboard, tuned for Bangladesh",
+    changes: [
+      { kind: "improved", text: "Every dashboard section loads markedly faster — data queries run in parallel and the session is verified locally (one less round-trip per click)." },
+      { kind: "improved", text: "Servers moved to the Singapore region — pages now load 2–3× faster for visitors in Bangladesh." },
+      { kind: "fixed", text: "The dashboard “Blog posts” count is now live (it counts published posts too)." },
+    ],
+  },
+  {
     version: "1.2.8",
     date: "2026-06-14",
     title: "Attendance, beautified · edit your own profile",

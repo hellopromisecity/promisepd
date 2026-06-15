@@ -50,6 +50,17 @@ export const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
 /** Full nav, in display order (mirrors the agreed dashboard sections). */
 export const ADMIN_NAV: NavEntry[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, min: "staff" },
+  {
+    label: "Investments",
+    icon: Landmark,
+    children: [
+      { label: "App Users", href: "/dashboard/investments/users", icon: UsersRound, min: "admin" },
+      { label: "Projects", href: "/dashboard/investments/projects", icon: Briefcase, min: "admin" },
+      { label: "All Transactions", href: "/dashboard/investments/transactions", icon: ReceiptText, min: "admin" },
+      { label: "Transaction Types", href: "/dashboard/investments/types", icon: Tags, min: "admin" },
+      { label: "Unsubscribe Requests", href: "/dashboard/investments/unsubscribe", icon: UserMinus, min: "admin" },
+    ],
+  },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "admin" },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "staff" },
@@ -65,17 +76,6 @@ export const ADMIN_NAV: NavEntry[] = [
   { label: "Projects", href: "/dashboard/projects", icon: Building, min: "manager" },
   { label: "Income", href: "/dashboard/income", icon: TrendingUp, min: "admin" },
   { label: "Expenses", href: "/dashboard/expenses", icon: TrendingDown, min: "manager" },
-  {
-    label: "Investments",
-    icon: Landmark,
-    children: [
-      { label: "App Users", href: "/dashboard/investments/users", icon: UsersRound, min: "admin" },
-      { label: "Projects", href: "/dashboard/investments/projects", icon: Briefcase, min: "admin" },
-      { label: "All Transactions", href: "/dashboard/investments/transactions", icon: ReceiptText, min: "admin" },
-      { label: "Transaction Types", href: "/dashboard/investments/types", icon: Tags, min: "admin" },
-      { label: "Unsubscribe Requests", href: "/dashboard/investments/unsubscribe", icon: UserMinus, min: "admin" },
-    ],
-  },
   {
     label: "Marketing",
     icon: Megaphone,
