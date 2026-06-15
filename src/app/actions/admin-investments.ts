@@ -180,6 +180,7 @@ export async function deleteInvestorTransaction(transactionId: string): Promise<
 // ── Investors (app users) ─────────────────────────────────────────
 export type InvestorInput = {
   full_name: string;
+  fid?: string | null;
   email?: string | null;
   is_active: boolean;
   is_verified: boolean;
@@ -198,6 +199,7 @@ export async function updateInvestor(uid: string, input: InvestorInput): Promise
       .from("investor_accounts")
       .update({
         full_name: name,
+        fid: input.fid?.trim() || null,
         email: input.email?.trim() || null,
         is_active: !!input.is_active,
         is_verified: !!input.is_verified,
@@ -208,6 +210,106 @@ export async function updateInvestor(uid: string, input: InvestorInput): Promise
     await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Updated investor ${name}` });
     revalidatePath("/dashboard/investments/users");
     return { message: "Investor saved." };
+  });
+}
+
+/** Quick activate / deactivate toggle (the red person icon in the old app). */
+export async function setInvestorActive(uid: string, active: boolean): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!uid) throw new ValidationError("Missing investor.");
+    const { error } = await admin.from("investor_accounts").update({ is_active: !!active }).eq("uid", uid);
+    if (error) throw new Error(error.message);
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `${active ? "Activated" : "Deactivated"} investor ${uid}` });
+    revalidatePath("/dashboard/investments/users");
+    return { message: active ? "Investor activated." : "Investor deactivated." };
+  });
+}
+
+/** Add a brand-new app user — mirrors the old admin's "Add User".  Creates a
+ *  login (auth user under the synthetic email), seeds the profile as a member,
+ *  and opens a fresh investor_account with a zero balance.  The investor can
+ *  then sign in with the mobile + password and see their portal at /account. */
+const AUTH_EMAIL_DOMAIN = "users.promisepd.app";
+/** Canonical mobile (digits): BD local 01XXXXXXXXX → 8801XXXXXXXXX; else digits as-is. */
+function canonMobile(raw: string): string {
+  const d = (raw || "").replace(/\D/g, "");
+  if (d.startsWith("0") && d.length === 11) return "880" + d.slice(1);
+  return d;
+}
+
+export type NewInvestorInput = {
+  full_name: string;
+  phone: string;
+  password: string;
+  fid?: string | null;
+  email?: string | null;
+  is_active: boolean;
+  is_verified: boolean;
+};
+
+export async function createInvestor(input: NewInvestorInput): Promise<ActionResult<{ uid: string }>> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+
+    const name = input.full_name?.trim();
+    if (!name || name.length < 2) throw new ValidationError("Full name is required.");
+    const mobile = canonMobile(input.phone ?? "");
+    if (mobile.length < 10) throw new ValidationError("Enter a valid phone number (with country code).");
+    if (!input.password || input.password.length < 6) throw new ValidationError("Password must be at least 6 characters.");
+    const email = input.email?.trim() || null;
+
+    // 1) auth login (synthetic email, pre-confirmed) → the trigger seeds profiles
+    const { data: created, error: cErr } = await admin.auth.admin.createUser({
+      email: `${mobile}@${AUTH_EMAIL_DOMAIN}`,
+      password: input.password,
+      email_confirm: true,
+      user_metadata: { name, mobile, email },
+    });
+    if (cErr || !created?.user) {
+      const m = cErr?.message?.toLowerCase() ?? "";
+      if (m.includes("already") || m.includes("registered") || m.includes("exists")) {
+        throw new ValidationError("An account with this phone already exists.");
+      }
+      throw cErr ?? new Error("Could not create the login.");
+    }
+    const id = created.user.id;
+
+    // 2) profile as member
+    const { error: pErr } = await admin.from("profiles").upsert({ id, name, mobile, email, role: "member" }, { onConflict: "id" });
+    if (pErr) {
+      await admin.auth.admin.deleteUser(id).catch(() => {});
+      throw new Error(pErr.message);
+    }
+
+    // 3) investor account with a fresh zero balance
+    const uid = await nextId(admin, "investor_accounts", "uid", "U", 100001);
+    const { error: iErr } = await admin.from("investor_accounts").insert({
+      uid,
+      profile_id: id,
+      fid: input.fid?.trim() || null,
+      full_name: name,
+      phone_number: "+" + mobile,
+      email,
+      language: "bn",
+      is_verified: !!input.is_verified,
+      is_active: !!input.is_active,
+      balance: { total_investment: 0, total_profit: 0, total_withdrawn: 0, total_balance: 0 },
+    });
+    if (iErr) {
+      // roll back the orphaned login so a retry can succeed
+      await admin.auth.admin.deleteUser(id).catch(() => {});
+      if (/duplicate key|unique/i.test(iErr.message)) throw new ValidationError("That phone or FID is already in use.");
+      throw new Error(iErr.message);
+    }
+
+    await logAudit({ action: "create", entity: "investor", entityId: uid, detail: `Added app user ${name} (${uid})` });
+    revalidatePath("/dashboard/investments/users");
+    return { data: { uid }, message: "App user created." };
   });
 }
 

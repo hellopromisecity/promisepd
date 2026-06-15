@@ -1,29 +1,17 @@
 import { redirect } from "next/navigation";
-import { UsersRound, UserCheck, Wallet, TrendingUp } from "lucide-react";
+import { UsersRound } from "lucide-react";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
+import { PageHeader, EmptyState } from "@/components/admin/ui";
 import {
-  PageHeader,
-  StatCard,
-  Badge,
-  EmptyState,
-  TableShell,
-  thCls,
-  tdCls,
-} from "@/components/admin/ui";
-import { listInvestors, bal, taka, type InvestorAccount } from "@/lib/investments";
-import InvestorEdit from "./InvestorEdit";
+  listInvestors, listTypes, listProjects, listTransactions, bal,
+  type InvestorAccount, type InvestmentType, type InvestmentProject, type InvestorTransaction,
+} from "@/lib/investments";
+import AppUsersExplorer from "./AppUsersExplorer";
+import type { AppUser, UserTxn } from "./shared";
 
 export const dynamic = "force-dynamic";
-
 export const metadata = { title: "App Users", robots: { index: false } };
-
-/** Prefer the local 01… form for a +880 number; otherwise show as-is. */
-function localPhone(p: string): string {
-  const d = (p || "").replace(/\D/g, "");
-  if (d.startsWith("880") && d.length === 13) return "0" + d.slice(3);
-  return p || "—";
-}
 
 export default async function InvestorUsersPage() {
   const me = await getCurrentUser();
@@ -39,90 +27,58 @@ export default async function InvestorUsersPage() {
     );
   }
 
-  const investors: InvestorAccount[] = await listInvestors(admin);
-  const active = investors.filter((i) => i.is_active).length;
-  const totalBalance = investors.reduce((s, i) => s + bal(i.balance).total_balance, 0);
-  const totalInvested = investors.reduce((s, i) => s + bal(i.balance).total_investment, 0);
+  const [investors, types, projects, txns]: [InvestorAccount[], InvestmentType[], InvestmentProject[], InvestorTransaction[]] =
+    await Promise.all([listInvestors(admin), listTypes(admin), listProjects(admin), listTransactions(admin)]);
 
-  // Highest balance first — the accounts that matter most on top.
-  const rows = [...investors].sort((a, b) => bal(b.balance).total_balance - bal(a.balance).total_balance);
+  const op = new Map(types.map((t) => [t.name, t.operator]));
+  const pname = new Map(projects.map((p) => [p.project_id, p.project_name]));
+
+  // group every investor's transactions (already newest-first from the reader)
+  const byUid = new Map<string, UserTxn[]>();
+  for (const t of txns) {
+    const list = byUid.get(t.uid) ?? [];
+    list.push({
+      transaction_id: t.transaction_id,
+      date: t.date,
+      type: t.type,
+      operator: op.get(t.type) ?? "+",
+      amount: Number(t.amount) || 0,
+      project_id: t.project_id,
+      project_name: t.project_id ? pname.get(t.project_id) ?? null : null,
+      rashid_number: t.rashid_number,
+      description: t.description,
+    });
+    byUid.set(t.uid, list);
+  }
+
+  const users: AppUser[] = investors.map((i) => {
+    const b = bal(i.balance);
+    return {
+      uid: i.uid,
+      fid: i.fid,
+      full_name: i.full_name,
+      phone_number: i.phone_number,
+      email: i.email,
+      language: i.language,
+      is_verified: i.is_verified,
+      is_active: i.is_active,
+      created_at: i.created_at,
+      last_login: i.last_login,
+      invested: b.total_investment,
+      profit: b.total_profit,
+      withdrawn: b.total_withdrawn,
+      balance: b.total_balance,
+      txns: byUid.get(i.uid) ?? [],
+    };
+  });
+
+  const typeOpts = types.map((t) => ({ name: t.name, operator: t.operator }));
+  const projectOpts = projects.map((p) => ({ project_id: p.project_id, project_name: p.project_name }));
 
   return (
     <div className="space-y-6">
-      <PageHeader title="App Users" subtitle={`${investors.length} investor accounts ported from the app.`} />
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Investors" value={investors.length} sub="total accounts" icon={UsersRound} tone="info" />
-        <StatCard label="Active" value={active} sub="is_active = true" icon={UserCheck} tone="success" />
-        <StatCard label="Total invested" value={taka(totalInvested)} sub="across all" icon={TrendingUp} tone="warning" />
-        <StatCard label="Total balance" value={taka(totalBalance)} sub="current holdings" icon={Wallet} tone="info" />
-      </div>
-
-      {rows.length === 0 ? (
-        <EmptyState icon={UsersRound} title="No investors yet" message="Imported investor accounts will appear here." />
-      ) : (
-        <TableShell>
-          <thead>
-            <tr>
-              <th className={thCls}>Investor</th>
-              <th className={`${thCls} text-right`}>Invested</th>
-              <th className={`${thCls} text-right`}>Profit</th>
-              <th className={`${thCls} text-right`}>Withdrawn</th>
-              <th className={`${thCls} text-right`}>Balance</th>
-              <th className={thCls}>Status</th>
-              <th className={`${thCls} text-right`}>Edit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((i) => {
-              const b = bal(i.balance);
-              return (
-                <tr key={i.uid}>
-                  <td className={tdCls}>
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-blue-tint text-xs font-bold text-brand-blue">
-                        {(i.full_name?.[0] ?? "?").toUpperCase()}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-fg">
-                          {i.full_name || "Unnamed"}
-                          {i.is_verified && <span className="ml-1.5 text-[10px] font-semibold text-emerald-600">✓ verified</span>}
-                        </p>
-                        <p className="truncate text-xs text-fg-muted">
-                          {localPhone(i.phone_number)}
-                          <span className="ml-1.5 font-mono text-fg-faint">{i.uid}</span>
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className={`${tdCls} text-right text-fg-muted`}>{taka(b.total_investment)}</td>
-                  <td className={`${tdCls} text-right text-emerald-600`}>{taka(b.total_profit)}</td>
-                  <td className={`${tdCls} text-right text-fg-muted`}>{taka(b.total_withdrawn)}</td>
-                  <td className={`${tdCls} text-right font-bold ${b.total_balance < 0 ? "text-brand-red-dark" : "text-fg"}`}>
-                    {taka(b.total_balance)}
-                  </td>
-                  <td className={tdCls}>
-                    <Badge tone={i.is_active ? "success" : "neutral"}>{i.is_active ? "active" : "inactive"}</Badge>
-                  </td>
-                  <td className={tdCls}>
-                    <div className="flex justify-end">
-                      <InvestorEdit
-                        investor={{
-                          uid: i.uid,
-                          full_name: i.full_name,
-                          email: i.email,
-                          is_active: i.is_active,
-                          is_verified: i.is_verified,
-                        }}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
-      )}
+      <PageHeader title="App Users" subtitle={`${investors.length} investor accounts — search, filter, manage, and export.`} />
+      <AppUsersExplorer users={users} types={typeOpts} projects={projectOpts} />
     </div>
   );
 }

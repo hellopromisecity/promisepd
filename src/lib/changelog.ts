@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.4",
+    date: "2026-06-15",
+    title: "App Users — a complete, powerful redesign",
+    changes: [
+      { kind: "improved", text: "The App Users admin page is rebuilt end to end: animated summary cards (total users, verified vs unverified, total invested, assets under management), verified/active percentage rings, and a “top investors by balance” chart." },
+      { kind: "improved", text: "Full-text search (name, UID, phone, FID, email), a status filter (all / verified / unverified / active / inactive), sortable columns, page sizes of 10/25/50/100, and a scrollable in-card table with sticky header." },
+      { kind: "new", text: "Export the current view to CSV (full Unicode) or a clean branded PDF report." },
+      { kind: "new", text: "Per-user actions in one place: view a full profile + financial summary, manage transactions (add / edit / delete with the balance recomputed live), edit details, one-click activate/deactivate, and add a brand-new app user — which also creates their login." },
+    ],
+  },
+  {
     version: "1.3.3",
     date: "2026-06-15",
     title: "Accurate per-project investment totals",
