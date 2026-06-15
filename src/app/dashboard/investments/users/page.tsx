@@ -12,6 +12,7 @@ import {
   tdCls,
 } from "@/components/admin/ui";
 import { listInvestors, bal, taka, type InvestorAccount } from "@/lib/investments";
+import InvestorEdit from "./InvestorEdit";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,7 @@ export default async function InvestorUsersPage() {
               <th className={`${thCls} text-right`}>Withdrawn</th>
               <th className={`${thCls} text-right`}>Balance</th>
               <th className={thCls}>Status</th>
+              <th className={`${thCls} text-right`}>Edit</th>
             </tr>
           </thead>
           <tbody>
@@ -101,6 +103,19 @@ export default async function InvestorUsersPage() {
                   </td>
                   <td className={tdCls}>
                     <Badge tone={i.is_active ? "success" : "neutral"}>{i.is_active ? "active" : "inactive"}</Badge>
+                  </td>
+                  <td className={tdCls}>
+                    <div className="flex justify-end">
+                      <InvestorEdit
+                        investor={{
+                          uid: i.uid,
+                          full_name: i.full_name,
+                          email: i.email,
+                          is_active: i.is_active,
+                          is_verified: i.is_verified,
+                        }}
+                      />
+                    </div>
                   </td>
                 </tr>
               );

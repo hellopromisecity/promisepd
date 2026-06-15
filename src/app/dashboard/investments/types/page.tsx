@@ -12,6 +12,7 @@ import {
   tdCls,
 } from "@/components/admin/ui";
 import { listTypes, type InvestmentType } from "@/lib/investments";
+import TypeForm from "./TypeForm";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,11 @@ export default async function TransactionTypesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transaction Types" subtitle={`${types.length} types ported from the app.`} />
+      <PageHeader
+        title="Transaction Types"
+        subtitle={`${types.length} types ported from the app.`}
+        action={<TypeForm />}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Types" value={types.length} sub="total" icon={Tags} tone="info" />
@@ -65,6 +70,7 @@ export default async function TransactionTypesPage() {
               <th className={`${thCls} text-right`}>Used</th>
               <th className={thCls}>Editable</th>
               <th className={thCls}>Status</th>
+              <th className={`${thCls} text-right`}>Edit</th>
             </tr>
           </thead>
           <tbody>
@@ -83,6 +89,11 @@ export default async function TransactionTypesPage() {
                 </td>
                 <td className={tdCls}>
                   <Badge tone={t.is_active ? "success" : "neutral"}>{t.is_active ? "active" : "inactive"}</Badge>
+                </td>
+                <td className={tdCls}>
+                  <div className="flex justify-end">
+                    <TypeForm type={{ name: t.name, operator: t.operator, classification: t.classification, is_active: t.is_active }} />
+                  </div>
                 </td>
               </tr>
             ))}

@@ -13,6 +13,7 @@ import {
   type Tone,
 } from "@/components/admin/ui";
 import { listUnsubscribe, nameMaps, fmtDate, type UnsubscribeRequest } from "@/lib/investments";
+import UnsubActions from "./UnsubActions";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export default async function UnsubscribePage() {
               <th className={thCls}>Requested</th>
               <th className={thCls}>Reviewed</th>
               <th className={thCls}>Notes</th>
+              <th className={`${thCls} text-right`}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -86,6 +88,9 @@ export default async function UnsubscribePage() {
                   {r.reviewed_at ? `${fmtDate(r.reviewed_at)}${r.reviewed_by ? ` · ${r.reviewed_by}` : ""}` : "—"}
                 </td>
                 <td className={`${tdCls} text-fg-muted`}>{r.admin_notes || "—"}</td>
+                <td className={tdCls}>
+                  <UnsubActions id={r.id} status={r.status} />
+                </td>
               </tr>
             ))}
           </tbody>

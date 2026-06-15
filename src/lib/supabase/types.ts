@@ -483,6 +483,176 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["marketing_point_items"]["Insert"]>;
         Relationships: [];
       };
+      investment_projects: {
+        Row: {
+          project_id: string;
+          project_name: string;
+          status: string;
+          project_address: string | null;
+          project_details: string | null;
+          total_amount_required: number | null;
+          per_user_share_amount: number | null;
+          hide_total_amount: boolean;
+          hide_share_price: boolean;
+          current_funded_amount: number;
+          project_progress: number;
+          start_date: string | null;
+          end_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          project_id: string;
+          project_name: string;
+          status: string;
+          project_address?: string | null;
+          project_details?: string | null;
+          total_amount_required?: number | null;
+          per_user_share_amount?: number | null;
+          hide_total_amount?: boolean;
+          hide_share_price?: boolean;
+          current_funded_amount?: number;
+          project_progress?: number;
+          start_date?: string | null;
+          end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["investment_projects"]["Insert"]>;
+        Relationships: [];
+      };
+      investment_types: {
+        Row: {
+          name: string;
+          operator: string;
+          classification: string;
+          is_editable: boolean;
+          is_active: boolean;
+          sort_order: number;
+        };
+        Insert: {
+          name: string;
+          operator: string;
+          classification: string;
+          is_editable?: boolean;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["investment_types"]["Insert"]>;
+        Relationships: [];
+      };
+      investor_accounts: {
+        Row: {
+          uid: string;
+          profile_id: string | null;
+          fid: string | null;
+          full_name: string;
+          phone_number: string;
+          email: string | null;
+          language: string;
+          is_verified: boolean;
+          is_active: boolean;
+          balance: Record<string, number> | null;
+          last_login: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          uid: string;
+          profile_id?: string | null;
+          fid?: string | null;
+          full_name?: string;
+          phone_number: string;
+          email?: string | null;
+          language?: string;
+          is_verified?: boolean;
+          is_active?: boolean;
+          balance?: Record<string, number> | null;
+          last_login?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["investor_accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      investments: {
+        Row: {
+          id: string;
+          uid: string;
+          project_id: string;
+          total_paid: number;
+          custom_share_price: number | null;
+          discount: number;
+          user_specific_start_date: string | null;
+          user_specific_end_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          uid: string;
+          project_id: string;
+          total_paid?: number;
+          custom_share_price?: number | null;
+          discount?: number;
+          user_specific_start_date?: string | null;
+          user_specific_end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["investments"]["Insert"]>;
+        Relationships: [];
+      };
+      investor_transactions: {
+        Row: {
+          transaction_id: string;
+          rashid_number: string | null;
+          uid: string;
+          project_id: string | null;
+          date: string;
+          amount: number;
+          type: string;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          transaction_id: string;
+          rashid_number?: string | null;
+          uid: string;
+          project_id?: string | null;
+          date: string;
+          amount: number;
+          type: string;
+          description?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["investor_transactions"]["Insert"]>;
+        Relationships: [];
+      };
+      investor_unsubscribe_requests: {
+        Row: {
+          id: string;
+          uid: string;
+          project_id: string;
+          status: string;
+          requested_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          admin_notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          uid: string;
+          project_id: string;
+          status?: string;
+          requested_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          admin_notes?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["investor_unsubscribe_requests"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

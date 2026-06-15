@@ -13,6 +13,7 @@ import {
   type Tone,
 } from "@/components/admin/ui";
 import { listProjects, taka, fmtDate, type InvestmentProject } from "@/lib/investments";
+import ProjectForm from "./ProjectForm";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,11 @@ export default async function InvestmentProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Investment Projects" subtitle={`${projects.length} projects ported from the app.`} />
+      <PageHeader
+        title="Investment Projects"
+        subtitle={`${projects.length} projects ported from the app.`}
+        action={<ProjectForm />}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Projects" value={projects.length} sub="total" icon={Briefcase} tone="info" />
@@ -68,6 +73,7 @@ export default async function InvestmentProjectsPage() {
               <th className={thCls}>Progress</th>
               <th className={`${thCls} text-right`}>Share price</th>
               <th className={thCls}>Period</th>
+              <th className={`${thCls} text-right`}>Edit</th>
             </tr>
           </thead>
           <tbody>
@@ -104,6 +110,23 @@ export default async function InvestmentProjectsPage() {
                   </td>
                   <td className={`${tdCls} whitespace-nowrap text-xs text-fg-muted`}>
                     {p.start_date || p.end_date ? `${fmtDate(p.start_date)} – ${fmtDate(p.end_date)}` : "—"}
+                  </td>
+                  <td className={tdCls}>
+                    <div className="flex justify-end">
+                      <ProjectForm
+                        project={{
+                          project_id: p.project_id,
+                          project_name: p.project_name,
+                          status: p.status,
+                          project_address: p.project_address,
+                          total_amount_required: p.total_amount_required,
+                          per_user_share_amount: p.per_user_share_amount,
+                          project_progress: p.project_progress,
+                          start_date: p.start_date,
+                          end_date: p.end_date,
+                        }}
+                      />
+                    </div>
                   </td>
                 </tr>
               );

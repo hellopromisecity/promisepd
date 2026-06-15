@@ -14,11 +14,15 @@ import {
 import {
   listTransactions,
   listTypes,
+  listInvestors,
+  listProjects,
   nameMaps,
   taka,
   fmtDate,
   type InvestorTransaction,
 } from "@/lib/investments";
+import TxnForm from "./TxnForm";
+import TxnDelete from "./TxnDelete";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +44,27 @@ export default async function InvestorTransactionsPage() {
     );
   }
 
-  const [all, types, maps] = await Promise.all([
+  const [all, types, maps, investors, projects] = await Promise.all([
     listTransactions(admin),
     listTypes(admin),
     nameMaps(admin),
+    listInvestors(admin),
+    listProjects(admin),
   ]);
   const op = new Map(types.map((t) => [t.name, t.operator]));
+
+  // Options for the add/edit form.
+  const localPhone = (p: string) => {
+    const d = (p || "").replace(/\D/g, "");
+    return d.startsWith("880") && d.length === 13 ? "0" + d.slice(3) : p;
+  };
+  const investorOptions = investors.map((i) => ({
+    uid: i.uid,
+    label: `${i.full_name || "Unnamed"} — ${localPhone(i.phone_number)}`,
+  }));
+  const typeOptions = types.map((t) => ({ name: t.name, operator: t.operator }));
+  const projectOptions = projects.map((p) => ({ project_id: p.project_id, project_name: p.project_name }));
+  const formProps = { investors: investorOptions, types: typeOptions, projects: projectOptions };
 
   let inflow = 0;
   let outflow = 0;
@@ -59,7 +78,11 @@ export default async function InvestorTransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="All Transactions" subtitle={`${all.length} investor transactions ported from the app.`} />
+      <PageHeader
+        title="All Transactions"
+        subtitle={`${all.length} investor transactions ported from the app.`}
+        action={<TxnForm {...formProps} />}
+      />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Transactions" value={all.length} sub="all time" icon={ReceiptText} tone="info" />
@@ -86,6 +109,7 @@ export default async function InvestorTransactionsPage() {
                 <th className={`${thCls} text-right`}>Amount</th>
                 <th className={thCls}>Project</th>
                 <th className={thCls}>Receipt</th>
+                <th className={`${thCls} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -110,6 +134,24 @@ export default async function InvestorTransactionsPage() {
                       {t.project_id ? maps.projectName.get(t.project_id) || t.project_id : "—"}
                     </td>
                     <td className={`${tdCls} whitespace-nowrap font-mono text-xs text-fg-faint`}>{t.rashid_number || "—"}</td>
+                    <td className={tdCls}>
+                      <div className="flex items-center justify-end gap-1">
+                        <TxnForm
+                          {...formProps}
+                          txn={{
+                            transaction_id: t.transaction_id,
+                            uid: t.uid,
+                            type: t.type,
+                            amount: Number(t.amount) || 0,
+                            date: (t.date || "").slice(0, 10),
+                            project_id: t.project_id,
+                            rashid_number: t.rashid_number,
+                            description: t.description,
+                          }}
+                        />
+                        <TxnDelete id={t.transaction_id} label={t.transaction_id} />
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
