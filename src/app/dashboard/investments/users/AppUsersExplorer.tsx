@@ -13,10 +13,16 @@ import InvestorEdit from "./InvestorEdit";
 import AddUser from "./AddUser";
 
 type SortKey = "name" | "invested" | "profit" | "balance" | "joined";
-type StatusFilter = "all" | "verified" | "unverified" | "active" | "inactive";
+type StatusFilter = "all" | "verified" | "unverified" | "active" | "inactive" | "paying" | "nonpaying";
 
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
+/** Paying = any money activity (invested / profit / withdrawn); else non-paying. */
+const isPaying = (u: AppUser) => u.invested > 0 || u.profit > 0 || u.withdrawn > 0 || u.balance !== 0;
+const FILTER_WORD: Record<StatusFilter, string> = {
+  all: "users", verified: "verified", unverified: "unverified", active: "active",
+  inactive: "inactive", paying: "paying", nonpaying: "non-paying",
+};
 
 export default function AppUsersExplorer({
   users, types, projects,
@@ -34,16 +40,18 @@ export default function AppUsersExplorer({
 
   // ── headline stats (over ALL users, not the filter) ──
   const s = useMemo(() => {
-    let verified = 0, active = 0, invested = 0, profit = 0, aum = 0;
+    let verified = 0, active = 0, paying = 0, invested = 0, profit = 0, aum = 0;
     for (const u of users) {
       if (u.is_verified) verified++;
       if (u.is_active) active++;
+      if (isPaying(u)) paying++;
       invested += u.invested; profit += u.profit; aum += u.balance;
     }
     const total = users.length || 1;
     return {
       total: users.length, verified, unverified: users.length - verified,
-      active, inactive: users.length - active, invested, profit, aum,
+      active, inactive: users.length - active, paying, nonpaying: users.length - paying,
+      invested, profit, aum,
       verifiedPct: Math.round((verified / total) * 100),
       activePct: Math.round((active / total) * 100),
     };
@@ -60,6 +68,8 @@ export default function AppUsersExplorer({
       if (status === "unverified" && u.is_verified) return false;
       if (status === "active" && !u.is_active) return false;
       if (status === "inactive" && u.is_active) return false;
+      if (status === "paying" && !isPaying(u)) return false;
+      if (status === "nonpaying" && isPaying(u)) return false;
       if (!needle) return true;
       return (
         u.full_name.toLowerCase().includes(needle) ||
@@ -254,7 +264,10 @@ export default function AppUsersExplorer({
 
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <div className="relative min-w-[220px] flex-1">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-brand-blue/30 bg-brand-blue-tint px-3 py-2.5 text-sm font-bold text-brand-blue" title="Users matching the current filter & search">
+          <Users className="h-4 w-4" /> {total.toLocaleString("en-US")} <span className="font-medium text-brand-blue/70">{FILTER_WORD[status]}</span>
+        </span>
+        <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
           <input
             value={q} onChange={(e) => setQ(e.target.value)}
@@ -263,11 +276,13 @@ export default function AppUsersExplorer({
           />
         </div>
         <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
-          <option value="all">All users</option>
-          <option value="verified">Verified</option>
-          <option value="unverified">Unverified</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="all">All users ({s.total})</option>
+          <option value="paying">Paying ({s.paying})</option>
+          <option value="nonpaying">Non-paying ({s.nonpaying})</option>
+          <option value="verified">Verified ({s.verified})</option>
+          <option value="unverified">Unverified ({s.unverified})</option>
+          <option value="active">Active ({s.active})</option>
+          <option value="inactive">Inactive ({s.inactive})</option>
         </select>
         <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / page</option>)}

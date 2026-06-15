@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.6",
+    date: "2026-06-15",
+    title: "Paying / non-paying filter · attendance is staff-only",
+    changes: [
+      { kind: "new", text: "App Users: filter by Paying vs Non-paying — paying = anyone who has put in (or moved) any money; non-paying = zero-activity signups. A live count chip shows how many users match the current filter, and every filter option shows its own count." },
+      { kind: "fixed", text: "Attendance now lists only staff / employees — investor app users (role “member”) are no longer pulled into the daily roster, so the totals reflect real staff." },
+    ],
+  },
+  {
     version: "1.3.5",
     date: "2026-06-15",
     title: "Projects — full redesign with investor management",

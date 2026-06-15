@@ -114,10 +114,12 @@ export default async function AttendancePage({
 
   // ----- Manager / admin -----
   if (isManager(me.role)) {
-    // Full company directory (roster + accounts).  `employee_code` only
+    // Staff directory (roster + accounts).  Investor app users live in the
+    // same profiles table with role='member' — they are NOT employees, so
+    // exclude them here (attendance is staff-only).  `employee_code` only
     // exists after migration 0016 — fall back so this never errors out.
     const selProfiles = (cols: string) =>
-      admin.from("profiles").select(cols).order("name", { ascending: true });
+      admin.from("profiles").select(cols).neq("role", "member").order("name", { ascending: true });
 
     // Resolve the window first, then fetch the roster AND the attendance
     // for it IN PARALLEL (they share no data) — one round-trip, not two.
