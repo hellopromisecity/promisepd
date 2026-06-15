@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.2",
+    date: "2026-06-15",
+    title: "Flow chart follows your filter · clearer cursors",
+    changes: [
+      { kind: "improved", text: "The All Transactions flow chart now matches the selected date range — daily bars for short ranges, weekly for medium, monthly for long — instead of always monthly, with bars evenly spaced across the whole range." },
+      { kind: "fixed", text: "Buttons, toggles and other clickable controls now show the hand cursor on hover (with smooth transitions), not the plain arrow." },
+    ],
+  },
+  {
     version: "1.3.1",
     date: "2026-06-15",
     title: "A sidebar you arrange · Investments up top",

@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Tailwind v4's preflight no longer sets cursor:pointer on buttons — restore
+   it for every interactive control so clickable things show the hand cursor
+   (with the smooth transitions the components already declare). */
+button:not(:disabled),
+[role="switch"]:not([aria-disabled="true"]),
+summary,
+label[for],
+select {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
 @theme inline {
   /* === Brand palette — EXACT codes provided by client ===
      Red    #E11924 (logo red)
