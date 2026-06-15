@@ -133,13 +133,28 @@ export async function listTypes(admin: Admin): Promise<InvestmentType[]> {
 }
 
 export async function listTransactions(admin: Admin, limit?: number): Promise<InvestorTransaction[]> {
-  let q = admin
-    .from("investor_transactions")
-    .select("*")
-    .order("date", { ascending: false });
-  if (limit) q = q.limit(limit);
-  const { data } = await q;
-  return (data ?? []) as InvestorTransaction[];
+  if (limit) {
+    const { data } = await admin
+      .from("investor_transactions")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(limit);
+    return (data ?? []) as InvestorTransaction[];
+  }
+  // No limit → fetch ALL rows. PostgREST returns at most ~1000 per request,
+  // so page through with range() until a short page comes back.
+  const out: InvestorTransaction[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin
+      .from("investor_transactions")
+      .select("*")
+      .order("date", { ascending: false })
+      .range(from, from + 999);
+    if (error || !data?.length) break;
+    out.push(...(data as InvestorTransaction[]));
+    if (data.length < 1000) break;
+  }
+  return out;
 }
 
 export async function listUnsubscribe(admin: Admin): Promise<UnsubscribeRequest[]> {
