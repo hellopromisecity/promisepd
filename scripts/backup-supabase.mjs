@@ -31,8 +31,9 @@ const repoDir = join(__dirname, "..");
 const envFile = join(repoDir, ".env.local");
 
 // ---- settings (safe to edit) ------------------------------------------------
-const home = process.env.USERPROFILE || process.env.HOME || ".";
-const BackupRoot = join(home, "Downloads", "backup", "promisecity-supabase");
+// Kept on the D: drive so backups never eat into C:. Override with the
+// PROMISEPD_BACKUP_DIR env var if you move it.
+const BackupRoot = process.env.PROMISEPD_BACKUP_DIR || "D:\\promisepdbackup";
 const KeepDaily = 14, KeepWeekly = 8, KeepMonthly = 12;
 const PageSize = 1000;
 // -----------------------------------------------------------------------------

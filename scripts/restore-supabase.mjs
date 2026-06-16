@@ -25,8 +25,7 @@ import { createClient } from "@supabase/supabase-js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoDir = join(__dirname, "..");
 const envFile = join(repoDir, ".env.local");
-const home = process.env.USERPROFILE || process.env.HOME || ".";
-const BackupRoot = join(home, "Downloads", "backup", "promisecity-supabase");
+const BackupRoot = process.env.PROMISEPD_BACKUP_DIR || "D:\\promisepdbackup";
 const BatchSize = 500;
 
 // Parents first so foreign keys resolve; unknown tables go last.
