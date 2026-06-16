@@ -62,13 +62,25 @@ async function recomputeBalance(admin: Admin, uid: string) {
   return balance;
 }
 
-/** Next sequential id with a prefix, continuing the legacy numbering. */
+/** Next sequential id with a prefix, continuing the legacy numbering.
+ *
+ *  Pages through ALL rows: Supabase caps a plain `.select()` at 1000 rows, so
+ *  once a table passes 1000 (investor_transactions did — 1006+), an unpaged
+ *  scan misses the newest ids, computes a stale max, and `max + 1` collides
+ *  with an existing primary key → the insert fails ("duplicate key"). Paging
+ *  in 1000-row windows guarantees we see the true maximum. */
 async function nextId(admin: Admin, table: string, col: string, prefix: string, start: number): Promise<string> {
-  const { data } = await admin.from(table).select(col);
+  const PAGE = 1000;
   let max = start - 1;
-  for (const r of (data ?? []) as Record<string, unknown>[]) {
-    const n = parseInt(String(r[col] ?? "").replace(/\D/g, ""), 10);
-    if (Number.isFinite(n) && n > max) max = n;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin.from(table).select(col).range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    for (const r of rows) {
+      const n = parseInt(String(r[col] ?? "").replace(/\D/g, ""), 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    if (rows.length < PAGE) break; // last page
   }
   return `${prefix}${max + 1}`;
 }
@@ -133,9 +145,21 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       const { error } = await admin.from("investor_transactions").update(row).eq("transaction_id", id);
       if (error) throw new Error(error.message);
     } else {
-      id = await nextId(admin, "investor_transactions", "transaction_id", "TX", 100001);
-      const { error } = await admin.from("investor_transactions").insert({ transaction_id: id, ...row });
-      if (error) throw new Error(error.message);
+      // Allocate a fresh sequential id and insert.  Retry on a unique-key
+      // violation in case two admins add at the very same moment (each
+      // recompute then sees the other's row and picks a higher number).
+      let lastErr = "";
+      for (let attempt = 0; attempt < 5 && !id; attempt++) {
+        const candidate = await nextId(admin, "investor_transactions", "transaction_id", "TX", 100001);
+        const { error } = await admin.from("investor_transactions").insert({ transaction_id: candidate, ...row });
+        if (!error) {
+          id = candidate;
+          break;
+        }
+        lastErr = error.message;
+        if (!/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+      }
+      if (!id) throw new Error(lastErr || "Could not allocate a transaction id.");
     }
 
     // Recompute the affected investor(s) — and the previous owner if a

@@ -52,6 +52,8 @@ const RANGES: { key: Range; label: string }[] = [
 ];
 
 const fmtPts = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
+/** Percentage with one decimal (e.g. 1.3%, 17%) — trailing .0 dropped. */
+const fmtPct = (n: number) => `${Math.round((Number(n) || 0) * 10) / 10}%`;
 function fmtBDT(n: number) {
   n = Number(n) || 0;
   if (n >= 1e7) return "৳ " + (n / 1e7).toFixed(2).replace(/\.?0+$/, "") + " Cr";
@@ -70,9 +72,10 @@ function rangeBounds(range: Range, customFrom = "", customTo = ""): [number | nu
 }
 
 export default function MarketingOfficers({
-  officers, items, entries,
+  officers, items, entries, clientsByOfficer, payingUsers, companyFund,
 }: {
   officers: Officer[]; items: PointItem[]; entries: Entry[];
+  clientsByOfficer: Record<string, number>; payingUsers: number; companyFund: number;
 }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<null | "officer" | "points" | "values">(null);
@@ -190,7 +193,7 @@ export default function MarketingOfficers({
           </>
         )}
         <Select value={typeFilter} onChange={setTypeFilter} options={[{ value: "all", label: "All roles" }, ...OFFICER_TYPES.map((t) => ({ value: t.code, label: t.label }))]} />
-        <ExportMenu rows={filtered} range={range} />
+        <ExportMenu rows={filtered} range={range} clientsByOfficer={clientsByOfficer} payingUsers={payingUsers} companyFund={companyFund} />
       </div>
 
       {officers.length === 0 ? (
@@ -206,11 +209,11 @@ export default function MarketingOfficers({
                   <th className="px-4 py-3 font-semibold">#</th>
                   <SortableTh label="Officer" active={sortKey === "name"} dir={sortDir} onClick={() => toggleSort("name")} />
                   <th className="px-4 py-3 font-semibold">Type</th>
-                  <th className="px-4 py-3 font-semibold">Position</th>
-                  <th className="px-4 py-3 font-semibold">District</th>
                   <SortableTh label="AFR" active={sortKey === "afr"} dir={sortDir} onClick={() => toggleSort("afr")} align="right" />
                   <SortableTh label="Income" active={sortKey === "income"} dir={sortDir} onClick={() => toggleSort("income")} align="right" />
                   <SortableTh label="Points" active={sortKey === "points"} dir={sortDir} onClick={() => toggleSort("points")} align="right" />
+                  <th className="px-4 py-3 text-right font-semibold" title="Total User % — this officer's distinct clients as a share of all paying customers">TUPAC</th>
+                  <th className="px-4 py-3 text-right font-semibold" title="Total Fund Raised AFR % — this officer's AFR as a share of the company's total fund">TFRAF</th>
                   <th className="px-4 py-3 text-right font-semibold"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -233,12 +236,21 @@ export default function MarketingOfficers({
                         <div className="font-semibold text-fg">{o.name}</div>
                         {o.officer_code && <div className="text-xs text-fg-faint">{o.officer_code}</div>}
                       </td>
-                      <td className="px-4 py-3"><Badge tone={TYPE_TONE[o.officer_type] ?? "neutral"}>{o.officer_type}</Badge></td>
-                      <td className="px-4 py-3 text-fg-muted">{o.position || "—"}</td>
-                      <td className="px-4 py-3 text-fg-muted">{o.district || "—"}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={TYPE_TONE[o.officer_type] ?? "neutral"}>{o.officer_type}</Badge>
+                        {o.position && <div className="mt-1 text-xs text-fg-muted">{o.position}</div>}
+                        {o.district && <div className="text-[11px] text-fg-faint">{o.district}</div>}
+                      </td>
                       <td className="px-4 py-3 text-right text-fg">{fmtBDT(o.rAfr)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-emerald-700">{fmtBDT(o.rIncome)}</td>
                       <td className="px-4 py-3 text-right font-bold text-fg">{fmtPts(o.rPoints)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-semibold text-brand-blue">{fmtPct(payingUsers > 0 ? ((clientsByOfficer[o.id] ?? 0) / payingUsers) * 100 : 0)}</div>
+                        <div className="text-[11px] text-fg-faint">{clientsByOfficer[o.id] ?? 0} / {payingUsers}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-semibold text-emerald-700">{fmtPct(companyFund > 0 ? (o.afr / companyFund) * 100 : 0)}</div>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1 text-fg-faint">
                           <button onClick={() => { setEditing(o); setDialog("officer"); }} title="Edit" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue"><Pencil className="h-4 w-4" /></button>
@@ -315,15 +327,18 @@ function Pagination({ page, totalPages, onPage }: { page: number; totalPages: nu
   );
 }
 
-function ExportMenu({ rows, range }: { rows: (Officer & { rPoints: number; rAfr: number; rIncome: number })[]; range: Range }) {
+function ExportMenu({ rows, range, clientsByOfficer, payingUsers, companyFund }: { rows: (Officer & { rPoints: number; rAfr: number; rIncome: number })[]; range: Range; clientsByOfficer: Record<string, number>; payingUsers: number; companyFund: number }) {
   const [open, setOpen] = useState(false);
+  const pct1 = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
   const data = () =>
     rows.map((o, i) => ({
       "#": i + 1, Name: o.name, ID: o.officer_code ?? "", Type: o.officer_type,
       Position: o.position ?? "", District: o.district ?? "",
-      AFR: Math.round(o.rAfr), Income: Math.round(o.rIncome), Points: Math.round(o.rPoints * 100) / 100,
+      Users: clientsByOfficer[o.id] ?? 0, "TUPAC%": pct1(clientsByOfficer[o.id] ?? 0, payingUsers),
+      AFR: Math.round(o.rAfr), "TFRAF%": pct1(o.afr, companyFund),
+      Income: Math.round(o.rIncome), Points: Math.round(o.rPoints * 100) / 100,
     }));
-  const HEADERS = ["#", "Name", "ID", "Type", "Position", "District", "AFR", "Income", "Points"];
+  const HEADERS = ["#", "Name", "ID", "Type", "Position", "District", "Users", "TUPAC%", "AFR", "TFRAF%", "Income", "Points"];
 
   function exportCSV() {
     const d = data();

@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.4",
+    date: "2026-06-16",
+    title: "Fix: can't add transactions · marketing TUPAC + TFRAF columns",
+    changes: [
+      { kind: "fixed", text: "Adding a transaction for any investor failed with “Something went wrong”. Once the transactions table passed 1,000 rows, the next-id generator (which only saw the first 1,000) kept reusing an existing id and the insert was rejected. It now scans every row and retries on a clash, so transactions save reliably again." },
+      { kind: "improved", text: "Marketing leaderboard: the Type column now stacks the role badge, position and district together — freeing room for two new columns. TUPAC shows each officer’s distinct clients as a % of all paying customers (e.g. 4 / 309 = 1.3%); TFRAF shows their AFR as a % of the company’s total fund." },
+    ],
+  },
+  {
     version: "1.4.3",
     date: "2026-06-16",
     title: "Signup phone hint — drop the leading 0, accept it either way",

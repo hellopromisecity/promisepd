@@ -41,7 +41,7 @@ export default async function MarketingOverviewPage() {
   const since = new Date();
   since.setFullYear(since.getFullYear() - 2);
 
-  const [officersRes, itemsRes, entriesRes] = await Promise.all([
+  const [officersRes, itemsRes, entriesRes, clientsRes] = await Promise.all([
     admin
       .from("marketing_officers")
       .select("id, name, officer_type, position, district, officer_code, mobile, points, afr_total, income_total")
@@ -56,7 +56,39 @@ export default async function MarketingOverviewPage() {
       .from("marketing_point_entries")
       .select("officer_id, points, afr, income, sale_date, created_at")
       .gte("created_at", since.toISOString()),
+    // Lifetime client list per officer (for TUPAC) — distinct buyers an
+    // officer logged across all their point-award entries.
+    admin.from("marketing_point_entries").select("officer_id, client_id, client_name"),
   ]);
+
+  // TUPAC numerator: distinct clients per officer (key on client_id, else name).
+  const clientsByOfficer: Record<string, number> = {};
+  {
+    const seen: Record<string, Set<string>> = {};
+    for (const e of clientsRes.data ?? []) {
+      const key = ((e.client_id ?? "").trim() || (e.client_name ?? "").trim()).toLowerCase();
+      if (!key) continue;
+      (seen[e.officer_id] ??= new Set<string>()).add(key);
+    }
+    for (const id in seen) clientsByOfficer[id] = seen[id].size;
+  }
+
+  // Company-wide investor figures: total paying users (TUPAC denominator) and
+  // total fund raised (TFRAF denominator).  Paged — a plain select caps at 1000.
+  let payingUsers = 0;
+  let companyFund = 0;
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin.from("investor_accounts").select("balance").range(from, from + 999);
+    const rows = data ?? [];
+    for (const r of rows) {
+      const b = (r.balance ?? {}) as { total_investment?: number; total_balance?: number };
+      const inv = Number(b.total_investment) || 0;
+      const bal = Number(b.total_balance) || 0;
+      if (inv > 0 || bal > 0) payingUsers++;
+      companyFund += inv;
+    }
+    if (rows.length < 1000) break;
+  }
 
   // numeric columns arrive as strings from PostgREST — coerce to numbers.
   const officers: Officer[] = (officersRes.data ?? []).map((o) => ({
@@ -79,7 +111,14 @@ export default async function MarketingOverviewPage() {
         subtitle="Officer leaderboard — ranked by points. Add officers and award points per sale."
         action={followupsLink}
       />
-      <MarketingOfficers officers={officers} items={items} entries={entries} />
+      <MarketingOfficers
+        officers={officers}
+        items={items}
+        entries={entries}
+        clientsByOfficer={clientsByOfficer}
+        payingUsers={payingUsers}
+        companyFund={companyFund}
+      />
     </div>
   );
 }
