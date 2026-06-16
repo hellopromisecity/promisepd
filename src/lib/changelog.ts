@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.3",
+    date: "2026-06-16",
+    title: "Signup phone hint — drop the leading 0, accept it either way",
+    changes: [
+      { kind: "improved", text: "Since the country code (+880) already sits in the selector, the number placeholder now shows “1XXXXXXXXX” instead of “01XXXXXXXXX”." },
+      { kind: "fixed", text: "If someone types a leading 0 out of habit (e.g. 01712…), it’s still accepted — the system strips it automatically and never shows an error. Works for every country, not just Bangladesh." },
+    ],
+  },
+  {
     version: "1.4.2",
     date: "2026-06-16",
     title: "Signup — international phone field with country selector",

@@ -72,9 +72,11 @@ export default function PhoneInput({
     };
   }, [open]);
 
-  // BD writes mobiles as 01XXXXXXXXX; elsewhere users type the local number
-  // without the country code (which the button already shows).
-  const localPlaceholder = selected.dial === "880" ? "01XXXXXXXXX" : "1XXXXXXXXX";
+  // The dial code already sits in the button, so the local part is typed
+  // WITHOUT it — for BD that's "1XXXXXXXXX" (the national trunk 0 is dropped).
+  // If a user types a leading 0 anyway, the server still accepts it (see
+  // normalizeMobile in src/app/actions/auth.ts), so this is a hint, not a rule.
+  const localPlaceholder = "1XXXXXXXXX";
 
   return (
     <div ref={ref} className="relative">
