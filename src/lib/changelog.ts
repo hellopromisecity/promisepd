@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.6",
+    date: "2026-06-16",
+    title: "Staff can log in by email (handy when they're also an investor)",
+    changes: [
+      { kind: "new", text: "When adding a dashboard staff member you can now leave Mobile blank and use Email + password as their login. This fixes the “account with this mobile already exists” error for someone who is already an investor — they get a separate admin login by email, while their investor account (mobile + password) stays completely separate and untouched." },
+    ],
+  },
+  {
     version: "1.4.5",
     date: "2026-06-16",
     title: "Faster page speed — lighter, calmer hero (esp. mobile)",

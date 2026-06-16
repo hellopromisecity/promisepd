@@ -142,24 +142,37 @@ export async function createStaff(input: StaffInput): Promise<ActionResult<{ id:
     const name = input.name?.trim();
     if (!name || name.length < 2) throw new ValidationError("Full name is required.");
 
-    const mobile = normalizeBdMobile(input.mobile ?? "");
-    if (!mobile) throw new ValidationError("Enter a valid Bangladeshi mobile (01XXXXXXXXX).");
-
     if (!input.password || input.password.length < 6) {
       throw new ValidationError("Password must be at least 6 characters.");
     }
 
-    const role: Role = ROLES.includes(input.role as Role) ? (input.role as Role) : "staff";
     const username = input.username?.trim().toLowerCase() || null;
     const email = input.email?.trim() || null;
     if (email && !EMAIL_RE.test(email)) throw new ValidationError("Email format is invalid.");
 
+    // Login id: a mobile (→ synthetic auth email) OR, for dashboard staff who
+    // sign in with EMAIL, the real email itself (no mobile needed). So someone
+    // who's already an investor (a mobile account) can get a SEPARATE admin
+    // account keyed by their email — no collision with their investment.
+    const mobileRaw = (input.mobile ?? "").trim();
+    let mobile: string | null = null;
+    let authEmail: string;
+    if (mobileRaw) {
+      mobile = normalizeBdMobile(mobileRaw);
+      if (!mobile) throw new ValidationError("Enter a valid Bangladeshi mobile (01XXXXXXXXX), or leave it blank and use email as the login.");
+      authEmail = syntheticEmail(mobile);
+    } else {
+      if (!email) throw new ValidationError("Give an email (the dashboard login) or a mobile number.");
+      authEmail = email.toLowerCase();
+    }
+
+    const role: Role = ROLES.includes(input.role as Role) ? (input.role as Role) : "staff";
     const employee_code = input.employee_code?.trim() || (await nextEmployeeCode(admin));
 
-    // Create the auth user (synthetic email, pre-confirmed).  The
+    // Create the auth user (email pre-confirmed, never mailed).  The
     // on_auth_user_created trigger seeds public.profiles.
     const { data: created, error: cErr } = await admin.auth.admin.createUser({
-      email: syntheticEmail(mobile),
+      email: authEmail,
       password: input.password,
       email_confirm: true,
       user_metadata: { name, mobile, username, email },
@@ -167,7 +180,11 @@ export async function createStaff(input: StaffInput): Promise<ActionResult<{ id:
     if (cErr || !created?.user) {
       const m = cErr?.message?.toLowerCase() ?? "";
       if (m.includes("already") || m.includes("registered") || m.includes("exists")) {
-        throw new ValidationError("An account with this mobile already exists.");
+        throw new ValidationError(
+          mobile
+            ? "An account with this mobile already exists."
+            : "An account with this email already exists.",
+        );
       }
       throw cErr ?? new Error("Could not create the user.");
     }

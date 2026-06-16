@@ -51,7 +51,7 @@ export type Database = {
         Row: {
           id: string;
           name: string;
-          mobile: string;
+          mobile: string | null;
           username: string | null;
           email: string | null;
           role: string;
@@ -66,7 +66,7 @@ export type Database = {
         Insert: {
           id: string;
           name: string;
-          mobile: string;
+          mobile: string | null;
           username?: string | null;
           email?: string | null;
           role?: string;

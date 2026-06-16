@@ -167,17 +167,22 @@ function StaffFormModal({
           <Field label="Full name *" value={form.name} onChange={set("name")} placeholder="e.g. Kamrul Hasan" />
 
           {editing ? (
-            <Field label="Mobile (login — fixed)" value={form.mobile} onChange={() => {}} disabled />
+            <>
+              <Field label="Mobile (login — fixed)" value={form.mobile} onChange={() => {}} disabled />
+              <Field label="Email (optional)" value={form.email ?? ""} onChange={set("email")} placeholder="staff@example.com" />
+            </>
           ) : (
             <>
-              <Field label="Mobile * (used to log in)" value={form.mobile} onChange={set("mobile")} placeholder="01XXXXXXXXX" />
+              <p className="rounded-lg bg-brand-blue-tint px-3 py-2 text-xs leading-relaxed text-brand-blue-dark">
+                Dashboard staff log in with <span className="font-semibold">email + password</span>. Leave mobile blank — handy when the person is already an investor (their mobile account stays separate). Add a mobile only if they should also sign in by phone.
+              </p>
+              <Field label="Email (used to log in)" value={form.email ?? ""} onChange={set("email")} placeholder="staff@example.com" />
+              <Field label="Mobile (optional)" value={form.mobile} onChange={set("mobile")} placeholder="01XXXXXXXXX — or leave blank" />
               <Field label="Username (optional)" value={form.username ?? ""} onChange={set("username")} placeholder="kamrul" />
               <Field label="Password *" type="password" value={form.password ?? ""} onChange={set("password")} placeholder="min 6 characters" />
               <Selectish label="Role" value={form.role} onChange={set("role")} options={ROLES.map((r) => [r, r])} />
             </>
           )}
-
-          <Field label="Email (optional)" value={form.email ?? ""} onChange={set("email")} placeholder="staff@example.com" />
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Employee code" value={String(form.employee_code ?? "")} onChange={set("employee_code")} placeholder={editing ? "" : "auto if blank · 100"} />
