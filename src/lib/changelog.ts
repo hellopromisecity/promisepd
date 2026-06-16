@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.2",
+    date: "2026-06-16",
+    title: "Signup — international phone field with country selector",
+    changes: [
+      { kind: "new", text: "The signup mobile field now has a country-code selector. Bangladesh (+880) is the default since most members are local; tap the flag to pick any of 59 countries (Gulf states, neighbours, Western hubs) with a quick search box. The number is still required — there’s no OTP / verification step." },
+      { kind: "improved", text: "Login now also accepts a full international number, so members who signed up with a non-Bangladeshi number (and no email/username) can still log in by typing their number." },
+    ],
+  },
+  {
     version: "1.4.1",
     date: "2026-06-16",
     title: "Cleaner investor app — compact header, settings, preset filters",

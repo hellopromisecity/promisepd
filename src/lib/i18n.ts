@@ -230,6 +230,8 @@ type Dict = {
     loginId: string;
     mobile: string;
     mobileHint: string;
+    countrySearch: string;
+    countrySelect: string;
     emailOrUser: string;
     phEmailOrUser: string;
     password: string;
@@ -510,6 +512,8 @@ export const DICT: Record<Locale, Dict> = {
       loginId: "মোবাইল / ইউজারনেম / ইমেইল",
       mobile: "মোবাইল নম্বর",
       mobileHint: "শুধু মোবাইল + পাসওয়ার্ড দিয়েই দ্রুত লগইন করতে পারবেন।",
+      countrySearch: "দেশ খুঁজুন...",
+      countrySelect: "দেশ নির্বাচন করুন",
       emailOrUser: "ইমেইল বা ইউজারনেম (ঐচ্ছিক)",
       phEmailOrUser: "you@example.com  অথবা  kamrul95",
       password: "পাসওয়ার্ড",
@@ -788,6 +792,8 @@ export const DICT: Record<Locale, Dict> = {
       loginId: "Mobile / username / email",
       mobile: "Mobile number",
       mobileHint: "Just mobile + password lets you log in fast.",
+      countrySearch: "Search country...",
+      countrySelect: "Select country",
       emailOrUser: "Email or username (optional)",
       phEmailOrUser: "you@example.com  or  kamrul95",
       password: "Password",

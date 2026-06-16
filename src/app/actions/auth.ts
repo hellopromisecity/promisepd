@@ -32,6 +32,8 @@ export type LoginPayload = {
 export type SignupPayload = {
   name: string;
   mobile: string;
+  /** Country calling code (no "+"), e.g. "880" (BD, default), "1", "971". */
+  dialCode?: string;
   email?: string;
   username?: string;
   password: string;
@@ -68,6 +70,23 @@ function normalizeBdMobile(raw: string): string | null {
   return null;
 }
 
+/** Canonicalise a phone for ANY country, given the selected dial code.
+ *  Bangladesh (+880) delegates to normalizeBdMobile so existing accounts stay
+ *  byte-for-byte identical (the synthetic auth email depends on it).  Other
+ *  countries: strip a national trunk "0", prepend the dial code, sanity-check
+ *  the E.164 length (8–15 digits).  Returns canonical digits-only, or null. */
+function normalizeMobile(dialCode: string, raw: string): string | null {
+  const dc = (dialCode || "").replace(/\D/g, "");
+  if (!dc || dc === "880") return normalizeBdMobile(raw);
+  let local = (raw || "").replace(/\D/g, "");
+  if (local.startsWith("00")) local = local.slice(2); // tolerate intl 00 prefix
+  local = local.replace(/^0+/, ""); // drop national trunk zero(s)
+  if (!local) return null;
+  const full = dc + local;
+  if (full.length < 8 || full.length > 15) return null;
+  return full;
+}
+
 /** Build the ordered list of Supabase auth emails to try for a login
  *  identifier.  A member can be reached several ways:
  *    • mobile (any format)  → synthetic email of the canonical mobile
@@ -83,6 +102,17 @@ async function candidateEmails(identifier: string): Promise<string[]> {
 
   const mobile = normalizeBdMobile(id);
   if (mobile) out.push(syntheticEmail(mobile));
+
+  // Generic international fallback: a non-BD member may have signed up with
+  // only their number (no email/username) and logs in by typing it in full.
+  // Accept the digits (tolerating +, 00, spaces, dashes) when it reads like an
+  // E.164 number.  De-duped below, so it never double-tries a BD match.
+  if (!EMAIL_RE.test(id)) {
+    let intl = id.replace(/^\+/, "");
+    if (intl.replace(/\D/g, "").startsWith("00")) intl = intl.replace(/\D/g, "").slice(2);
+    intl = intl.replace(/\D/g, "");
+    if (intl.length >= 8 && intl.length <= 15) out.push(syntheticEmail(intl));
+  }
 
   const admin = createAdminClient();
   if (admin) {
@@ -201,9 +231,16 @@ export async function signup(payload: SignupPayload): Promise<AuthResult> {
   const name = payload.name?.trim();
   if (!name || name.length < 2) return { ok: false, error: "পূর্ণ নাম দিন।" };
 
-  const mobile = normalizeBdMobile(payload.mobile ?? "");
+  const dialCode = (payload.dialCode || "880").replace(/\D/g, "") || "880";
+  const mobile = normalizeMobile(dialCode, payload.mobile ?? "");
   if (!mobile) {
-    return { ok: false, error: "সঠিক বাংলাদেশী মোবাইল নম্বর দিন (০১XXXXXXXXX)।" };
+    return {
+      ok: false,
+      error:
+        dialCode === "880"
+          ? "সঠিক বাংলাদেশী মোবাইল নম্বর দিন (০১XXXXXXXXX)।"
+          : "সঠিক মোবাইল নম্বর দিন।",
+    };
   }
   if (!payload.password || payload.password.length < MIN_PASSWORD) {
     return { ok: false, error: `পাসওয়ার্ড কমপক্ষে ${MIN_PASSWORD} অক্ষরের হতে হবে।` };

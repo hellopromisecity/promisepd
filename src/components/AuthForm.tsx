@@ -40,6 +40,8 @@ import {
 } from "@/app/actions/auth";
 import { DICT, localizedPath } from "@/lib/i18n";
 import { useLocale } from "./LocaleProvider";
+import PhoneInput from "./PhoneInput";
+import { DEFAULT_COUNTRY, countryByCode } from "@/lib/countries";
 
 type Mode = "login" | "signup";
 
@@ -51,6 +53,8 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
+  // Signup-only: selected country (ISO code) for the phone dial-code.
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   // Combined "email or username" — the input auto-routes to the
   // right server field on submit based on whether it contains "@".
   const [emailOrUsername, setEmailOrUsername] = useState("");
@@ -76,6 +80,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         res = await signup({
           name,
           mobile,
+          dialCode: countryByCode(country).dial,
           email: isEmail ? trimmed : undefined,
           username: !isEmail && trimmed ? trimmed : undefined,
           password,
@@ -87,6 +92,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         if (mode === "signup") {
           setName("");
           setMobile("");
+          setCountry(DEFAULT_COUNTRY);
           setEmailOrUsername("");
         }
         // Honour a same-origin ?next= (set by the auth middleware), else
@@ -134,21 +140,21 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           icon={Phone}
           value={identifier}
           onChange={setIdentifier}
-          placeholder="01XXXXXXXXX"
-          inputMode="tel"
+          placeholder="01XXXXXXXXX / username / email"
+          inputMode="text"
           autoComplete="username"
         />
       ) : (
-        <Field
+        <PhoneInput
           label={a.mobile}
           required
-          icon={Phone}
+          country={country}
+          onCountryChange={setCountry}
           value={mobile}
           onChange={setMobile}
-          placeholder="01XXXXXXXXX"
-          inputMode="tel"
-          autoComplete="tel"
           hint={a.mobileHint}
+          searchPlaceholder={a.countrySearch}
+          selectLabel={a.countrySelect}
         />
       )}
 
