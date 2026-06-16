@@ -84,13 +84,28 @@ node -e "const z=require('zlib'),f=require('fs');const p=process.env.USERPROFILE
 
 ## How to restore
 
-1. Recreate the schema on a fresh Supabase project (or local Postgres) by
-   running the SQL files in `supabase/migrations/` in order (Supabase dashboard
-   → SQL Editor).
-2. Load the data back from a snapshot. The data is plain JSON keyed by table, so
-   a short Node script can `upsert` each table's rows with the service-role key.
-   Ask and one can be added as `scripts/restore-supabase.mjs` (kept separate
-   because it writes to the database).
+Restore is a short process — not one click — because a snapshot holds the data,
+while the table structure lives in `supabase/migrations/`.
+
+1. **Recreate the schema** on a fresh Supabase project (or local Postgres): run
+   the SQL files in `supabase/migrations/` in order (Supabase dashboard → SQL
+   Editor).
+2. **Load the data back** with `restore-supabase.mjs` (parents-first so foreign
+   keys resolve). It is dry-run by default and refuses to write to the live
+   project unless forced:
+
+   ```powershell
+   # see exactly what would be restored (safe, no writes):
+   node scripts\restore-supabase.mjs
+
+   # restore into the recovery project (its own URL + service key):
+   node scripts\restore-supabase.mjs --target-url <url> --target-key <service_key> --confirm
+
+   # restore just some tables:
+   node scripts\restore-supabase.mjs --only investor_accounts,investments --target-url ... --target-key ... --confirm
+   ```
+
+   Use `--file <path>` to restore an older snapshot instead of the latest.
 
 The login accounts themselves (`auth` schema) are managed and backed up by
 Supabase on their side; this snapshot covers all **business data** in the
