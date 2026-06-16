@@ -10,13 +10,18 @@
 $ErrorActionPreference = "Stop"
 
 $TaskName = "PromiseCity Supabase Backup"
-$Script   = Join-Path $PSScriptRoot "backup-supabase.ps1"
+$Mjs      = Join-Path $PSScriptRoot "backup-supabase.mjs"
+$RepoDir  = Split-Path -Parent $PSScriptRoot
 $At       = "02:00"   # daily run time (24h). Missed runs catch up when the PC next turns on.
 
-if (-not (Test-Path $Script)) { throw "backup-supabase.ps1 not found next to this script." }
-$pwsh = (Get-Command powershell.exe).Source
+if (-not (Test-Path $Mjs)) { throw "backup-supabase.mjs not found next to this script." }
+# Bake Node's ABSOLUTE path into the task. A scheduled task's environment may
+# not carry the Node install dir on PATH, so resolving it now (rather than
+# relying on PATH at run time) is what makes the task actually fire.
+$node = (Get-Command node -ErrorAction SilentlyContinue).Source
+if (-not $node) { throw "Node.js not found in PATH. Open a shell where 'node -v' works, then re-run this." }
 
-$action   = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Script`""
+$action   = New-ScheduledTaskAction -Execute $node -Argument "`"$Mjs`"" -WorkingDirectory $RepoDir
 $trigger  = New-ScheduledTaskTrigger -Daily -At $At
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
