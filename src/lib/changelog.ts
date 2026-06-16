@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    date: "2026-06-16",
+    title: "Account header polish — language switcher + clearer IDs",
+    changes: [
+      { kind: "improved", text: "The investor account header now carries the বাং/EN language switcher alongside the settings + logout controls, neatly in the top-right. UID and FID each sit on their own line so the full IDs are always visible (no more truncation)." },
+    ],
+  },
+  {
     version: "1.3.10",
     date: "2026-06-16",
     title: "Investor app: native PWA feel · project popups · in-app settings",

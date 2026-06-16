@@ -38,6 +38,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useLocale } from "./LocaleProvider";
+import LangSwitcher from "./LangSwitcher";
 import { toBn } from "@/lib/bn";
 import { logout } from "@/app/actions/auth";
 import { updateMyProfile, changeMyPassword } from "@/app/actions/account";
@@ -100,26 +101,30 @@ export default function InvestorPortal({ data, member }: { data: PortalData; mem
   return (
     <div className="space-y-5">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-4 shadow-sm">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
-          {avatar}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 truncate text-base font-extrabold text-fg">
-            {data.full_name || "—"}
-            {data.is_verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />}
-          </p>
-          <p className="truncate text-[11px] text-fg-muted">
-            UID: {en ? data.uid : toBn(data.uid)}
-            {data.fid ? ` · FID: ${en ? data.fid : toBn(data.fid)}` : ""}
-          </p>
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="rounded-2xl border border-border bg-bg p-4 shadow-sm">
+        {/* top-right controls: language + settings + logout */}
+        <div className="mb-3 flex items-center justify-end gap-1.5">
+          <LangSwitcher />
+          <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
+            <Settings className="h-5 w-5" />
+          </button>
+          <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
+            {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+          </button>
         </div>
-        <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
-          <Settings className="h-5 w-5" />
-        </button>
-        <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
-          {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
+            {avatar}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 text-base font-extrabold text-fg">
+              <span className="truncate">{data.full_name || "—"}</span>
+              {data.is_verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />}
+            </p>
+            <p className="text-[11px] text-fg-muted">UID: {en ? data.uid : toBn(data.uid)}</p>
+            {data.fid && <p className="text-[11px] text-fg-muted">FID: {en ? data.fid : toBn(data.fid)}</p>}
+          </div>
+        </div>
       </motion.div>
 
       {/* Balance hero */}
