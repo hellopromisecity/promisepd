@@ -163,7 +163,7 @@ export default function RootLayout({
         <main id="main" className="relative">
           {children}
         </main>
-        <SiteChrome>
+        <SiteChrome extra={["/login", "/en/login"]}>
           <Footer />
           <ScrollToTop />
           <WhatsAppFAB />
