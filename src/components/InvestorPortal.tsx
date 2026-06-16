@@ -36,6 +36,7 @@ import {
   Loader2,
   Check,
   KeyRound,
+  Globe,
 } from "lucide-react";
 import { useLocale } from "./LocaleProvider";
 import LangSwitcher from "./LangSwitcher";
@@ -101,29 +102,25 @@ export default function InvestorPortal({ data, member }: { data: PortalData; mem
   return (
     <div className="space-y-5">
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="rounded-2xl border border-border bg-bg p-4 shadow-sm">
-        {/* top-right controls: language + settings + logout */}
-        <div className="mb-3 flex items-center justify-end gap-1.5">
-          <LangSwitcher />
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-4 shadow-sm">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
+          {avatar}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-base font-extrabold text-fg">
+            <span className="truncate">{data.full_name || "—"}</span>
+            {data.is_verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />}
+          </p>
+          <p className="text-[11px] text-fg-muted">UID: {en ? data.uid : toBn(data.uid)}</p>
+          {data.fid && <p className="text-[11px] text-fg-muted">FID: {en ? data.fid : toBn(data.fid)}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
             <Settings className="h-5 w-5" />
           </button>
           <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
             {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
           </button>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
-            {avatar}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 text-base font-extrabold text-fg">
-              <span className="truncate">{data.full_name || "—"}</span>
-              {data.is_verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />}
-            </p>
-            <p className="text-[11px] text-fg-muted">UID: {en ? data.uid : toBn(data.uid)}</p>
-            {data.fid && <p className="text-[11px] text-fg-muted">FID: {en ? data.fid : toBn(data.fid)}</p>}
-          </div>
         </div>
       </motion.div>
 
@@ -301,10 +298,30 @@ function ProjectSheet({ selId, data, L, en, tk, pct, dOnly, onClose }: any) {
 }
 
 // ── Transactions ─────────────────────────────────────────────────
+const TXN_PRESETS = [
+  { id: "all", bn: "সব সময়", en: "Lifetime" },
+  { id: "7d", bn: "গত ৭ দিন", en: "Last 7 days" },
+  { id: "30d", bn: "গত ৩০ দিন", en: "Last 30 days" },
+  { id: "90d", bn: "গত ৯০ দিন", en: "Last 90 days" },
+  { id: "this_year", bn: "এ বছর", en: "This year" },
+  { id: "last_year", bn: "গত বছর", en: "Last year" },
+] as const;
+function txnRange(id: string): { from: string; to: string } {
+  const now = new Date();
+  const iso = (d: Date) => d.toLocaleDateString("en-CA");
+  const y = now.getFullYear();
+  if (id === "7d") { const f = new Date(now); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(now) }; }
+  if (id === "30d") { const f = new Date(now); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(now) }; }
+  if (id === "90d") { const f = new Date(now); f.setDate(f.getDate() - 89); return { from: iso(f), to: iso(now) }; }
+  if (id === "this_year") return { from: `${y}-01-01`, to: iso(now) };
+  if (id === "last_year") return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31` };
+  return { from: "", to: "" };
+}
+
 function Transactions({ data, L, en, tk, num, dOnly }: any) {
   const [q, setQ] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [preset, setPreset] = useState("all");
+  const { from, to } = useMemo(() => txnRange(preset), [preset]);
   const [sel, setSel] = useState<PortalTxn | null>(null);
 
   const rows: PortalTxn[] = useMemo(() => {
@@ -401,11 +418,11 @@ function Transactions({ data, L, en, tk, num, dOnly }: any) {
         </div>
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 shrink-0 text-fg-faint" />
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label={L.from} className="h-9 flex-1 rounded-xl border border-border bg-bg-soft px-2 text-xs outline-none focus:border-brand-blue/50" />
-          <span className="text-fg-faint">–</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label={L.to} className="h-9 flex-1 rounded-xl border border-border bg-bg-soft px-2 text-xs outline-none focus:border-brand-blue/50" />
-          {(from || to || q) && (
-            <button type="button" onClick={() => { setFrom(""); setTo(""); setQ(""); }} className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-blue hover:bg-brand-blue-tint">×</button>
+          <select value={preset} onChange={(e) => setPreset(e.target.value)} aria-label={en ? "Date range" : "সময়সীমা"} className="h-9 flex-1 rounded-xl border border-border bg-bg-soft px-2 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
+            {TXN_PRESETS.map((p) => <option key={p.id} value={p.id}>{en ? p.en : p.bn}</option>)}
+          </select>
+          {(preset !== "all" || q) && (
+            <button type="button" onClick={() => { setPreset("all"); setQ(""); }} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-brand-blue hover:bg-brand-blue-tint">×</button>
           )}
         </div>
       </div>
@@ -535,6 +552,11 @@ function SettingsSheet({ open, en, member, fullName, onClose }: any) {
             <div className="sticky top-0 flex items-center justify-between border-b border-border bg-bg/95 px-5 py-4 backdrop-blur">
               <h3 className="flex items-center gap-2 text-base font-extrabold text-fg"><Settings className="h-5 w-5 text-brand-blue" /> {T.title}</h3>
               <button type="button" onClick={() => !pending && onClose()} className="grid h-8 w-8 place-items-center rounded-full text-fg-muted hover:bg-bg-soft"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fg-muted"><Globe className="h-3.5 w-3.5" /> {en ? "Language" : "ভাষা"}</span>
+              <LangSwitcher />
             </div>
 
             {msg && <div className={`mx-5 mt-4 rounded-xl px-3 py-2 text-xs font-semibold ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-brand-red-tint text-brand-red-dark"}`}>{msg.text}</div>}

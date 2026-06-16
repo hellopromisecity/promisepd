@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.1",
+    date: "2026-06-16",
+    title: "Cleaner investor app — compact header, settings, preset filters",
+    changes: [
+      { kind: "improved", text: "The investor account header is now a single compact row — avatar, name, and UID/FID on their own lines, with the settings + logout icons tucked neatly beside the name. No more oversized box." },
+      { kind: "changed", text: "The বাং/EN language switcher moved into the in-app Settings sheet (top row), keeping the header clean." },
+      { kind: "improved", text: "Transactions filter: the From/To date pickers are replaced with a smart preset dropdown — All time / Last 7, 30, 90 days / This year / Last year." },
+      { kind: "fixed", text: "The website footer now stays on the browser login page but disappears inside the installed PWA, so the app feels native (no marketing footer)." },
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-06-16",
     title: "Account header polish — language switcher + clearer IDs",

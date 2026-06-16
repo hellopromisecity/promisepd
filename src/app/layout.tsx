@@ -139,6 +139,15 @@ export default function RootLayout({
         <JsonLd data={organizationSchema()} />
         <JsonLd data={websiteSchema()} />
         <JsonLd data={localBusinessSchema()} />
+        {/* Footer + FABs stay on the website but disappear inside the installed
+            PWA so it feels native. Raw <style> on purpose: Tailwind v4's
+            Lightning CSS drops this rule if it lives in globals.css. */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html:
+              "@media all and (display-mode:standalone){.pwa-hide{display:none!important}}",
+          }}
+        />
       </head>
       <body className="min-h-screen bg-bg text-fg antialiased selection:bg-brand-blue selection:text-white">
         {/* Google Analytics 4 (gtag.js) — site-wide visitor tracking. */}
@@ -163,12 +172,14 @@ export default function RootLayout({
         <main id="main" className="relative">
           {children}
         </main>
-        <SiteChrome extra={["/login", "/en/login"]}>
-          <Footer />
-          <ScrollToTop />
-          <WhatsAppFAB />
-          <PWAInstallPrompt />
-        </SiteChrome>
+        <div className="pwa-hide">
+          <SiteChrome>
+            <Footer />
+            <ScrollToTop />
+            <WhatsAppFAB />
+            <PWAInstallPrompt />
+          </SiteChrome>
+        </div>
         <RegisterSW />
         {/* Site-wide branded dialog + toast (replace native confirm/alert). */}
         <DialogHost />

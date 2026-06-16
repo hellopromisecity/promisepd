@@ -14,6 +14,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* NOTE: the PWA-only "hide footer/FABs" rule lives as a raw <style> tag in
+   layout.tsx, NOT here. Tailwind v4's Lightning CSS compiler silently drops a
+   `.pwa-hide` rule that uses display:contents + a (display-mode: standalone)
+   media query, so it must bypass the CSS pipeline. See app/layout.tsx. */
+
 /* Smooth modal / popover entrance (used across the admin dashboard). */
 @keyframes pop {
   from {
