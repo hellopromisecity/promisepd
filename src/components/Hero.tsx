@@ -34,6 +34,7 @@ import { DIVISION_EN } from "@/lib/site.en";
 import { DICT, localizedPath } from "@/lib/i18n";
 import { useLocale } from "./LocaleProvider";
 import { toBn } from "@/lib/bn";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 const ICONS: Record<string, LucideIcon> = {
   Building2,
@@ -91,6 +92,9 @@ const ACCENT_CURSOR: Record<string, string> = {
 export default function Hero() {
   const ref = useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
+  // Phones skip the (purely cosmetic) typewriter — saves char-by-char
+  // re-rendering + layout reflow on the weakest devices.
+  const isMobile = useIsMobile();
   const [idx, setIdx] = useState(0);
 
   const { scrollYProgress } = useScroll({
@@ -221,7 +225,7 @@ export default function Hero() {
                       text={titleType}
                       speed={45}
                       cursorColor={ACCENT_CURSOR[current.accent]}
-                      animate={playEffects}
+                      animate={playEffects && !isMobile}
                     />
                   )}
                 </h1>
@@ -383,7 +387,6 @@ export default function Hero() {
                             width={112}
                             height={112}
                             className="h-full w-full object-contain"
-                            priority={idx === 0}
                           />
                         ) : (
                           <Icon className="h-12 w-12 sm:h-14 sm:w-14 text-fg" />

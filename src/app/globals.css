@@ -318,6 +318,11 @@ h4 {
   z-index: -1;
 }
 
+/* NOTE: the "disable decorative animations on mobile" rule lives as a raw
+   <style> in layout.tsx, NOT here — Tailwind v4's Lightning CSS silently drops
+   a hand-written @media(max-width) block from globals.css (same gotcha as the
+   .pwa-hide rule). See app/layout.tsx. */
+
 /* === Grid background (subtle blue tint) === */
 .grid-bg {
   background-image:

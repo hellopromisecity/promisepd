@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.5",
+    date: "2026-06-16",
+    title: "Faster page speed — lighter, calmer hero (esp. mobile)",
+    changes: [
+      { kind: "improved", text: "On phones, the hero's always-running decorative animations (blurred blobs, gradient shimmer, button shine) and the headline typewriter now hold still — freeing the mobile main thread for a noticeably snappier load. The desktop experience is unchanged." },
+      { kind: "improved", text: "The big architectural backdrop (the largest, slowest image) now serves at a lighter quality that's invisible under its colour wash — roughly half the bytes, so the hero paints faster (better LCP)." },
+      { kind: "improved", text: "Removed an unused network preconnect and an extra high-priority image preload, so the main image starts loading sooner." },
+    ],
+  },
+  {
     version: "1.4.4",
     date: "2026-06-16",
     title: "Fix: can't add transactions · marketing TUPAC + TFRAF columns",

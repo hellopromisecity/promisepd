@@ -132,9 +132,9 @@ export default function RootLayout({
   return (
     <html lang="bn" className={bn.variable}>
       <head>
-        {/* Preconnect to remote origins used above the fold or for fonts. */}
-        <link rel="preconnect" href="https://api.dicebear.com" crossOrigin="" />
-        <link rel="dns-prefetch" href="https://api.dicebear.com" />
+        {/* No preconnect to api.dicebear.com — avatars from it don't appear
+            above the fold on the public pages, so PageSpeed flagged it as an
+            unused preconnect. They still load fine on demand where used. */}
         {/* Site-wide structured data (Organization, WebSite, LocalBusiness). */}
         <JsonLd data={organizationSchema()} />
         <JsonLd data={websiteSchema()} />
@@ -144,8 +144,13 @@ export default function RootLayout({
             Lightning CSS drops this rule if it lives in globals.css. */}
         <style
           dangerouslySetInnerHTML={{
-            __html:
+            __html: [
+              // Footer + FABs disappear inside the installed PWA.
               "@media all and (display-mode:standalone){.pwa-hide{display:none!important}}",
+              // Mobile performance: freeze the always-running decorative
+              // animations on phones (blobs, gradient shimmer, button shine).
+              "@media (max-width:768px){.animate-blob,.text-grad,.btn-shine::after,.grad-border::before{animation:none!important}}",
+            ].join(""),
           }}
         />
       </head>

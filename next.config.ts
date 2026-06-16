@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
 
   images: {
     formats: ["image/avif", "image/webp"],
+    // Next 16 only serves qualities listed here (default is just [75]).
+    // 55 is used for the washed hero backdrops (PropertyBackdrop) to cut the
+    // LCP image size; 75 stays the default for every other <Image>.
+    qualities: [55, 75],
     remotePatterns: [
       { protocol: "https", hostname: "api.dicebear.com" },
       // YouTube video thumbnails for the /gallery "ভিডিও" tab.

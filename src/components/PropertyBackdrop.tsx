@@ -46,6 +46,10 @@ export type PropertyBackdropProps = {
   /** Blue overlay strength.  Higher = more brand-anchored, lower
    *  = more photographic. */
   bluewash?: "soft" | "medium" | "strong";
+  /** Next/Image quality (1-100).  The backdrop sits at low opacity under a
+   *  brand wash + white fade, so a low quality is visually invisible but
+   *  roughly halves the bytes of this (usually LCP) image. */
+  quality?: number;
 };
 
 const BLUE_WASH = {
@@ -65,6 +69,7 @@ export default function PropertyBackdrop({
   position = "center",
   blur = false,
   bluewash = "soft",
+  quality = 55,
 }: PropertyBackdropProps) {
   const sources = Array.isArray(src) ? src : [src];
   const reduce = useReducedMotion();
@@ -111,6 +116,7 @@ export default function PropertyBackdrop({
             // Only the first frame is LCP — later ones load while
             // the hero is already painted.
             priority={idx === 0}
+            quality={quality}
             sizes="100vw"
             className={`object-cover scale-105 ${blur ? "blur-[2px]" : ""}`}
             style={{ objectPosition: position }}
