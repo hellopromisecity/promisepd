@@ -25,20 +25,36 @@ import {
   CalendarDays,
   BadgeCheck,
   FileText,
+  ChevronRight,
+  MapPin,
+  Lock,
+  User,
+  Phone,
+  Mail,
+  Eye,
+  EyeOff,
+  Loader2,
+  Check,
+  KeyRound,
 } from "lucide-react";
 import { useLocale } from "./LocaleProvider";
 import { toBn } from "@/lib/bn";
 import { logout } from "@/app/actions/auth";
-import type { InvestorPortal as PortalData, PortalTxn } from "@/lib/investments";
+import { updateMyProfile, changeMyPassword } from "@/app/actions/account";
+import type { InvestorPortal as PortalData, PortalTxn, PortalProject } from "@/lib/investments";
 
 type Tab = "my" | "all" | "txn";
+export type PortalMember = { name: string; mobile: string; email: string | null };
 
-export default function InvestorPortal({ data }: { data: PortalData }) {
+export default function InvestorPortal({ data, member }: { data: PortalData; member?: PortalMember }) {
   const locale = useLocale();
   const en = locale === "en";
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("my");
   const [pendingOut, startOut] = useTransition();
+  const [selId, setSelId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const avatar = (data.full_name || "?").trim().charAt(0).toUpperCase();
 
   // ── formatters ──────────────────────────────────────────────────
   const num = (n: number) => Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -85,8 +101,8 @@ export default function InvestorPortal({ data }: { data: PortalData }) {
     <div className="space-y-5">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-4 shadow-sm">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-brand-blue text-white shadow-[var(--shadow-brand)]">
-          <Building2 className="h-6 w-6" />
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
+          {avatar}
         </span>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-base font-extrabold text-fg">
@@ -98,8 +114,11 @@ export default function InvestorPortal({ data }: { data: PortalData }) {
             {data.fid ? ` · FID: ${en ? data.fid : toBn(data.fid)}` : ""}
           </p>
         </div>
+        <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
+          <Settings className="h-5 w-5" />
+        </button>
         <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
-          {pendingOut ? <Settings className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+          {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
         </button>
       </motion.div>
 
@@ -133,28 +152,34 @@ export default function InvestorPortal({ data }: { data: PortalData }) {
 
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-          {tab === "my" && <MyProjects data={data} L={L} tk={tk} pct={pct} dOnly={dOnly} />}
-          {tab === "all" && <AllProjects data={data} L={L} tk={tk} pct={pct} dOnly={dOnly} />}
+          {tab === "my" && <MyProjects data={data} L={L} tk={tk} pct={pct} dOnly={dOnly} onOpen={setSelId} />}
+          {tab === "all" && <AllProjects data={data} L={L} tk={tk} pct={pct} dOnly={dOnly} onOpen={setSelId} />}
           {tab === "txn" && <Transactions data={data} L={L} en={en} tk={tk} num={num} dOnly={dOnly} />}
         </motion.div>
       </AnimatePresence>
+
+      <ProjectSheet selId={selId} data={data} L={L} en={en} tk={tk} pct={pct} dOnly={dOnly} onClose={() => setSelId(null)} />
+      <SettingsSheet open={settingsOpen} en={en} member={member} fullName={data.full_name} phone={member?.mobile ?? ""} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
 
 // ── My Projects ──────────────────────────────────────────────────
-function MyProjects({ data, L, tk, pct, dOnly }: any) {
+function MyProjects({ data, L, tk, pct, dOnly, onOpen }: any) {
   if (data.myProjects.length === 0) return <Empty msg={L.noProj} />;
   return (
     <div className="space-y-3">
       {data.myProjects.map((p: any) => (
-        <div key={p.project_id} className="rounded-2xl border border-border bg-bg p-4 shadow-sm">
+        <button key={p.project_id} type="button" onClick={() => onOpen(p.project_id)} className="block w-full rounded-2xl border border-border bg-bg p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md active:scale-[.99]">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate font-bold text-fg">{p.project_name}</p>
               <p className="text-[11px] text-fg-faint">PID: {p.project_id}</p>
             </div>
-            <StatusPill status={p.status} />
+            <div className="flex shrink-0 items-center gap-1.5">
+              <StatusPill status={p.status} />
+              <ChevronRight className="h-4 w-4 text-fg-faint" />
+            </div>
           </div>
           {(p.start_date || p.end_date) && (
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-fg-muted">
@@ -175,7 +200,7 @@ function MyProjects({ data, L, tk, pct, dOnly }: any) {
           {p.goal > 0 && (
             <div className="mt-2.5">
               <div className="h-2 overflow-hidden rounded-full bg-bg-soft">
-                <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${p.progress}%` }} />
+                <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-emerald-500 transition-all" style={{ width: `${p.progress}%` }} />
               </div>
               <div className="mt-1 flex justify-between text-[11px] text-fg-muted">
                 <span>{L.goal}: {tk(p.goal)}</span>
@@ -183,24 +208,27 @@ function MyProjects({ data, L, tk, pct, dOnly }: any) {
               </div>
             </div>
           )}
-        </div>
+        </button>
       ))}
     </div>
   );
 }
 
 // ── All Projects ─────────────────────────────────────────────────
-function AllProjects({ data, L, tk, pct, dOnly }: any) {
+function AllProjects({ data, L, tk, pct, dOnly, onOpen }: any) {
   return (
     <div className="space-y-3">
       {data.allProjects.map((p: any) => (
-        <div key={p.project_id} className="rounded-2xl border border-border bg-bg p-4 shadow-sm">
+        <button key={p.project_id} type="button" onClick={() => onOpen(p.project_id)} className="block w-full rounded-2xl border border-border bg-bg p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-md active:scale-[.99]">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate font-bold text-fg">{p.project_name}</p>
               <p className="text-[11px] text-fg-faint">PID: {p.project_id}</p>
             </div>
-            <StatusPill status={p.status} />
+            <div className="flex shrink-0 items-center gap-1.5">
+              <StatusPill status={p.status} />
+              <ChevronRight className="h-4 w-4 text-fg-faint" />
+            </div>
           </div>
           {(p.start_date || p.end_date) && (
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-fg-muted">
@@ -219,9 +247,51 @@ function AllProjects({ data, L, tk, pct, dOnly }: any) {
               <p className="mt-1 text-right text-[11px] font-semibold text-fg-muted">{pct(p.progress)}</p>
             </div>
           )}
-        </div>
+        </button>
       ))}
     </div>
+  );
+}
+
+// ── Project detail popup (tap a project card) ────────────────────
+function ProjectSheet({ selId, data, L, en, tk, pct, dOnly, onClose }: any) {
+  const proj: PortalProject | undefined = data.allProjects.find((p: PortalProject) => p.project_id === selId);
+  const mine = data.myProjects.find((p: any) => p.project_id === selId);
+  const open = !!selId && !!proj;
+  return (
+    <AnimatePresence>
+      {open && proj && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-end bg-black/40 backdrop-blur-sm sm:place-items-center" onClick={onClose}>
+          <motion.div initial={{ y: 40, opacity: 0.6 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-border bg-bg shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-bg/95 px-5 py-4 backdrop-blur">
+              <h3 className="min-w-0 truncate text-base font-extrabold text-fg">{proj.project_name}</h3>
+              <button type="button" onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-fg-muted hover:bg-bg-soft"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="flex items-center gap-2"><StatusPill status={proj.status} /><span className="font-mono text-[11px] text-fg-faint">{proj.project_id}</span></div>
+              {proj.details && <p className="whitespace-pre-line text-sm leading-relaxed text-fg-muted">{proj.details}</p>}
+              {mine && (
+                <div className="grid grid-cols-2 gap-3 rounded-2xl bg-gradient-to-br from-brand-blue-tint/60 to-bg p-3">
+                  <div><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.invested}</p><p className="font-extrabold tabular-nums text-fg">{tk(mine.invested)}</p></div>
+                  <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p><p className="font-extrabold tabular-nums text-emerald-600">{tk(mine.profit)}</p></div>
+                </div>
+              )}
+              {(mine?.goal > 0 || proj.progress > 0) && (
+                <div>
+                  <div className="h-2 overflow-hidden rounded-full bg-bg-soft"><div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-emerald-500" style={{ width: `${mine?.progress ?? proj.progress}%` }} /></div>
+                  <p className="mt-1 text-right text-[11px] font-semibold text-fg-muted">{pct(mine?.progress ?? proj.progress)}</p>
+                </div>
+              )}
+              <dl className="space-y-2.5">
+                {proj.address && <Detail icon={MapPin} k={en ? "Address" : "ঠিকানা"} v={proj.address} />}
+                {proj.share_price != null && <Detail icon={Wallet} k={L.sharePrice} v={tk(proj.share_price)} />}
+                {(proj.start_date || proj.end_date) && <Detail icon={CalendarDays} k={en ? "Period" : "সময়কাল"} v={`${dOnly(proj.start_date)} – ${dOnly(proj.end_date)}`} />}
+              </dl>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -407,6 +477,93 @@ function Transactions({ data, L, en, tk, num, dOnly }: any) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ── Settings sheet (profile + password) ─────────────────────────
+function SettingsSheet({ open, en, member, fullName, onClose }: any) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showPw, setShowPw] = useState(false);
+  const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand-blue/50";
+  const labelCls = "mb-1 flex items-center gap-1.5 text-xs font-semibold text-fg-muted";
+  const localPhone = (m: string) => (m && m.startsWith("880") ? `0${m.slice(3)}` : m || "");
+  // The synthetic auth email (…@users.promisepd.app) is internal — never show
+  // it as the member's contact email.
+  const realEmail = member?.email && !/@users\.promisepd\.app$/i.test(member.email) ? member.email : "";
+
+  function saveProfile(fd: FormData) {
+    setMsg(null);
+    start(async () => {
+      const res = await updateMyProfile({ name: String(fd.get("name") || ""), email: String(fd.get("email") || ""), phone: String(fd.get("phone") || "") });
+      setMsg(res.ok ? { ok: true, text: res.message } : { ok: false, text: res.error });
+      if (res.ok) router.refresh();
+    });
+  }
+  function savePassword(fd: FormData) {
+    setMsg(null);
+    start(async () => {
+      const res = await changeMyPassword({ currentPassword: String(fd.get("cur") || ""), newPassword: String(fd.get("new") || "") });
+      setMsg(res.ok ? { ok: true, text: res.message } : { ok: false, text: res.error });
+    });
+  }
+
+  const T = {
+    title: en ? "Settings" : "সেটিংস",
+    profile: en ? "Profile" : "প্রোফাইল",
+    name: en ? "Full name" : "পূর্ণ নাম",
+    email: en ? "Email" : "ইমেইল",
+    phone: en ? "Phone (login number)" : "মোবাইল (লগইন নম্বর)",
+    save: en ? "Save changes" : "সংরক্ষণ করুন",
+    security: en ? "Change password" : "পাসওয়ার্ড পরিবর্তন",
+    cur: en ? "Current password" : "বর্তমান পাসওয়ার্ড",
+    npw: en ? "New password" : "নতুন পাসওয়ার্ড",
+    update: en ? "Update password" : "পাসওয়ার্ড আপডেট",
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-end bg-black/40 backdrop-blur-sm sm:place-items-center" onClick={() => !pending && onClose()}>
+          <motion.div initial={{ y: 40, opacity: 0.6 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-border bg-bg shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 flex items-center justify-between border-b border-border bg-bg/95 px-5 py-4 backdrop-blur">
+              <h3 className="flex items-center gap-2 text-base font-extrabold text-fg"><Settings className="h-5 w-5 text-brand-blue" /> {T.title}</h3>
+              <button type="button" onClick={() => !pending && onClose()} className="grid h-8 w-8 place-items-center rounded-full text-fg-muted hover:bg-bg-soft"><X className="h-5 w-5" /></button>
+            </div>
+
+            {msg && <div className={`mx-5 mt-4 rounded-xl px-3 py-2 text-xs font-semibold ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-brand-red-tint text-brand-red-dark"}`}>{msg.text}</div>}
+
+            <form action={saveProfile} className="space-y-3 p-5">
+              <p className="text-xs font-bold uppercase tracking-wide text-fg-muted">{T.profile}</p>
+              <div><label className={labelCls}><User className="h-3.5 w-3.5" /> {T.name}</label><input name="name" required defaultValue={fullName ?? member?.name ?? ""} className={inputCls} /></div>
+              <div><label className={labelCls}><Mail className="h-3.5 w-3.5" /> {T.email}</label><input name="email" type="email" defaultValue={realEmail} placeholder="—" className={inputCls} /></div>
+              <div><label className={labelCls}><Phone className="h-3.5 w-3.5" /> {T.phone}</label><input name="phone" defaultValue={localPhone(member?.mobile ?? "")} placeholder="01XXXXXXXXX" className={inputCls} /></div>
+              <button type="submit" disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue py-2.5 text-sm font-bold text-white shadow-[var(--shadow-brand)] transition-colors hover:bg-brand-blue-dark disabled:opacity-60">
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {T.save}
+              </button>
+            </form>
+
+            <div className="border-t border-border" />
+
+            <form action={savePassword} className="space-y-3 p-5">
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fg-muted"><KeyRound className="h-3.5 w-3.5" /> {T.security}</p>
+              <div><label className={labelCls}><Lock className="h-3.5 w-3.5" /> {T.cur}</label><input name="cur" type={showPw ? "text" : "password"} required className={inputCls} /></div>
+              <div>
+                <label className={labelCls}><Lock className="h-3.5 w-3.5" /> {T.npw}</label>
+                <div className="relative">
+                  <input name="new" type={showPw ? "text" : "password"} required minLength={6} className={`${inputCls} pr-10`} />
+                  <button type="button" onClick={() => setShowPw((s) => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-fg-muted hover:text-fg">{showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                </div>
+              </div>
+              <button type="submit" disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-bg py-2.5 text-sm font-bold text-fg transition-colors hover:border-brand-blue/40 disabled:opacity-60">
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {T.update}
+              </button>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

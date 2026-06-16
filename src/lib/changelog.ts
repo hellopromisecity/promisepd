@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.10",
+    date: "2026-06-16",
+    title: "Investor app: native PWA feel · project popups · in-app settings",
+    changes: [
+      { kind: "improved", text: "The member /account portal is now a clean standalone app — no public navbar, footer, WhatsApp button or scroll-to-top. The top shows the investor’s avatar + name instead of a “login” button, so it feels like a real installed app, not a marketing page." },
+      { kind: "new", text: "Tap any project (My Projects or All Projects) to open a detail popup — full description, status, address, share price and period, plus your invested / profit / progress." },
+      { kind: "new", text: "An in-app Settings sheet (the gear icon) lets the investor update their name, email and login number, and change their password — all self-service." },
+    ],
+  },
+  {
     version: "1.3.9",
     date: "2026-06-15",
     title: "Last 7 days everywhere · dashboard date filter · tighter flow chart",

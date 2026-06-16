@@ -271,6 +271,8 @@ export type PortalProject = {
   project_id: string;
   project_name: string;
   status: string;
+  address: string | null;
+  details: string | null;
   share_price: number | null;
   total_required: number | null;
   funded: number;
@@ -329,7 +331,7 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
       .order("date", { ascending: false }),
     admin
       .from("investment_projects")
-      .select("project_id, project_name, status, per_user_share_amount, total_amount_required, current_funded_amount, project_progress, start_date, end_date"),
+      .select("project_id, project_name, status, project_address, project_details, per_user_share_amount, total_amount_required, current_funded_amount, project_progress, start_date, end_date"),
     admin.from("investment_types").select("name, operator"),
   ]);
 
@@ -337,6 +339,8 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
     project_id: string;
     project_name: string;
     status: string;
+    project_address: string | null;
+    project_details: string | null;
     per_user_share_amount: number | null;
     total_amount_required: number | null;
     current_funded_amount: number | null;
@@ -394,6 +398,8 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
     project_id: p.project_id,
     project_name: p.project_name,
     status: p.status,
+    address: p.project_address,
+    details: p.project_details,
     share_price: p.per_user_share_amount,
     total_required: p.total_amount_required,
     funded: Number(p.current_funded_amount) || 0,
