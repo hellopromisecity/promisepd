@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { TrendingUp, CalendarRange } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PROJECTS } from "@/lib/site";
 import { PageHeader, StatCard, EmptyState } from "@/components/admin/ui";
@@ -20,7 +20,7 @@ const PROJECT_NAMES: Record<string, string> = Object.fromEntries(
 
 export default async function IncomePage() {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const admin = getAdmin();
   if (!admin) {

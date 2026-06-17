@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.7",
+    date: "2026-06-17",
+    title: "Staff: no duplicate rows · owner-only role changes · manager full view",
+    changes: [
+      { kind: "fixed", text: "A staff member who also has a login (e.g. an investor made admin) no longer shows up twice — the office-roster row and the account now merge into one row with their role and controls, matched by employee code even when the login has no mobile." },
+      { kind: "improved", text: "Role upgrade / downgrade is now restricted to the owner (founder) only. Other admins can still manage staff records, but cannot change anyone's role — so the hierarchy can't be reshuffled by a second admin." },
+      { kind: "improved", text: "Managers now see the full dashboard, just like admins (all sections visible). Role changes stay owner-only." },
+    ],
+  },
+  {
     version: "1.4.6",
     date: "2026-06-16",
     title: "Staff can log in by email (handy when they're also an investor)",

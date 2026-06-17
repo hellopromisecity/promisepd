@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { UserMinus, Clock, CheckCheck } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import {
   PageHeader,
@@ -29,7 +29,7 @@ function statusTone(s: string): Tone {
 
 export default async function UnsubscribePage() {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const admin = getAdmin();
   if (!admin) {

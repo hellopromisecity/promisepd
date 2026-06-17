@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ReceiptText } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PageHeader, EmptyState } from "@/components/admin/ui";
 import { listTransactions, listTypes, listInvestors, listProjects, nameMaps } from "@/lib/investments";
@@ -17,7 +17,7 @@ const localPhone = (p: string) => {
 
 export default async function InvestorTransactionsPage() {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const admin = getAdmin();
   if (!admin) {

@@ -56,7 +56,11 @@ export default async function StaffPage() {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
 
-  const canEditRoles = isAdmin(me.role);
+  // Only the owner (super-admin, set via SUPER_ADMIN_EMAILS) may change roles
+  // — so a second admin can't reshuffle the hierarchy or demote the founder.
+  const canEditRoles = me.isOwner;
+  // Any admin can manage staff records (add / edit / delete / create login).
+  const canManageStaff = isAdmin(me.role);
   const admin = getAdmin();
 
   if (!admin) {
@@ -114,7 +118,11 @@ export default async function StaffPage() {
   // account it's enriched with role / salary / management.  Accounts with
   // no roster entry (e.g. a member who self-registered) are appended.
   const byMobile = new Map<string, ProfileRow>();
-  for (const r of rows) byMobile.set(canonicalMobile(r.mobile), r);
+  const byCode = new Map<string, ProfileRow>();
+  for (const r of rows) {
+    if (r.mobile) byMobile.set(canonicalMobile(r.mobile), r);
+    if (r.employee_code) byCode.set(r.employee_code.trim().toUpperCase(), r);
+  }
 
   type MergedRow = {
     key: string;
@@ -141,7 +149,12 @@ export default async function StaffPage() {
   const matched = new Set<string>();
   const merged: MergedRow[] = uniqueRoster.map((e) => {
     const canon = canonicalMobile(e.mobile);
-    const account = byMobile.get(canon) ?? null;
+    // Match by mobile first; fall back to employee code so an email-only
+    // account (no mobile — e.g. a staffer who's also an investor) still
+    // links to its roster row instead of showing as a duplicate.
+    const account =
+      (canon ? byMobile.get(canon) : null) ??
+      ((e.idNo ? byCode.get(e.idNo.trim().toUpperCase()) : null) ?? null);
     if (account) matched.add(account.id);
     return {
       key: account?.id ?? (canon || e.idNo),
@@ -177,7 +190,7 @@ export default async function StaffPage() {
       <PageHeader
         title="Staff"
         subtitle="Company roster, pay & access."
-        action={canEditRoles ? <AddStaffButton /> : undefined}
+        action={canManageStaff ? <AddStaffButton /> : undefined}
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -203,7 +216,7 @@ export default async function StaffPage() {
               <th className={thCls}>Salary (net)</th>
               <th className={thCls}>Role</th>
               <th className={thCls}>Status</th>
-              {canEditRoles && <th className={thCls}>Actions</th>}
+              {canManageStaff && <th className={thCls}>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -251,7 +264,7 @@ export default async function StaffPage() {
                       <span className="text-fg-faint">—</span>
                     )}
                   </td>
-                  {canEditRoles && (
+                  {canManageStaff && (
                     <td className={tdCls}>
                       {acc ? (
                         // Admin can edit ANY profile — including their own

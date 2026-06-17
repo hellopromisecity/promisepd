@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Briefcase, MapPin } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { EmptyState } from "@/components/admin/ui";
 import { projectWithInvestors, listInvestors } from "@/lib/investments";
@@ -15,7 +15,7 @@ export const metadata = { title: "Project", robots: { index: false } };
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
   const { id } = await props.params;
 
   const admin = getAdmin();

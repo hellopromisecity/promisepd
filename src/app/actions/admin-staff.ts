@@ -12,6 +12,7 @@ import {
   requireStaff,
   requireManager,
   requireAdmin,
+  requireOwner,
   getAdmin,
   logAudit,
   runAction,
@@ -86,7 +87,7 @@ async function nextEmployeeCode(
  *  management). */
 export async function setRole(memberId: string, role: Role): Promise<ActionResult> {
   return runAction(async () => {
-    await requireAdmin();
+    await requireOwner(); // role changes are owner-only
     if (!memberId) throw new Error("Missing member");
     if (!ROLES.includes(role)) throw new Error("Invalid role");
 

@@ -47,6 +47,9 @@ export type Member = {
   username: string | null;
   email: string | null;
   role: Role;
+  /** Env-designated owner (SUPER_ADMIN_EMAILS) — the founder. Always admin,
+   *  and the only one allowed to change other members' roles. */
+  isOwner: boolean;
   avatarUrl: string | null;
   createdAt: string | null;
 };
@@ -88,9 +91,8 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
     const mobile = profile?.mobile || meta.mobile || claimPhone || "";
 
     // Env-designated owner is always admin; otherwise use the DB role.
-    const role: Role = isSuperAdmin(email, mobile)
-      ? "admin"
-      : ((profile?.role ?? "member") as Role);
+    const owner = isSuperAdmin(email, mobile);
+    const role: Role = owner ? "admin" : ((profile?.role ?? "member") as Role);
 
     return {
       id: userId,
@@ -99,6 +101,7 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
       username: profile?.username ?? meta.username ?? null,
       email,
       role,
+      isOwner: owner,
       avatarUrl: (profile as { avatar_url?: string | null } | null)?.avatar_url ?? null,
       createdAt: profile?.created_at ?? null,
     };

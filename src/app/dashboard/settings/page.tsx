@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Settings as SettingsIcon, ShieldOff } from "lucide-react";
 
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader, Card, EmptyState } from "@/components/admin/ui";
@@ -43,7 +43,7 @@ export default async function SettingsPage() {
     );
   }
 
-  const showOrg = isAdmin(me.role);
+  const showOrg = isManager(me.role);
 
   // Current avatar (Member doesn't carry avatar_url, so read it directly).
   const { data: profileRow } = await admin

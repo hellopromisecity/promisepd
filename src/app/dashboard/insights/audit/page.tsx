@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Activity, LogIn, ScrollText } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import {
   PageHeader,
@@ -71,7 +71,7 @@ export default async function AuditLogPage({
   searchParams: Promise<{ action?: string; entity?: string }>;
 }) {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const sp = await searchParams;
   const action = (sp.action ?? "").trim();

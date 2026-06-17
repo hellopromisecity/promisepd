@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Tags, Plus, Minus, ToggleRight } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PageHeader, StatCard, EmptyState } from "@/components/admin/ui";
 import { listTypes } from "@/lib/investments";
@@ -13,7 +13,7 @@ export const metadata = { title: "Transaction Types", robots: { index: false } }
 
 export default async function TransactionTypesPage() {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const admin = getAdmin();
   if (!admin) {

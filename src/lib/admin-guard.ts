@@ -42,6 +42,16 @@ export const requireStaff = () => requireRole(isStaff);
 export const requireManager = () => requireRole(isManager);
 export const requireAdmin = () => requireRole(isAdmin);
 
+/** Only the env-designated owner / founder (SUPER_ADMIN_EMAILS).  Used for the
+ *  most sensitive actions — changing roles — so even a second admin can't
+ *  reshuffle the hierarchy. */
+export async function requireOwner(): Promise<Member> {
+  const member = await getCurrentUser();
+  if (!member) throw new AuthzError("Not signed in");
+  if (!member.isOwner) throw new AuthzError("Only the owner can change roles.");
+  return member;
+}
+
 /** Append an audit-log entry.  Best-effort; swallows all errors. */
 export async function logAudit(entry: {
   action: string;

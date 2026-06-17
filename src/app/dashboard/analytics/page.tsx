@@ -4,7 +4,7 @@ import {
   BarChart3, Users, UserPlus, Activity, Eye, Clock, CalendarDays,
   Globe, FileText, Search, CheckCircle2, XCircle, KeyRound,
 } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { PageHeader, Card, StatCard, EmptyState } from "@/components/admin/ui";
 import { analyticsConfigured, getAnalytics, RANGE_LABELS, type DateRange } from "@/lib/analytics";
 import RangeSelect from "./RangeSelect";
@@ -19,7 +19,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const sp = await searchParams;
   const range = (Object.keys(RANGE_LABELS).includes(sp.range ?? "") ? sp.range : "30d") as DateRange;

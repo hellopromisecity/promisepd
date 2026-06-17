@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Building2, Banknote, Smartphone, Wallet } from "lucide-react";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import {
   PageHeader,
@@ -38,7 +38,7 @@ const TYPE_ICON: Record<string, typeof Building2> = {
 
 export default async function BankCashPage() {
   const me = await getCurrentUser();
-  if (!me || !isAdmin(me.role)) redirect("/account");
+  if (!me || !isManager(me.role)) redirect("/account");
 
   const admin = getAdmin();
   if (!admin) {
