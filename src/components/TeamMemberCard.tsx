@@ -115,10 +115,10 @@ export default function TeamMemberCard({
                 href={member.socials.facebook}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group/fb flex items-center gap-2 text-sm font-medium text-fg hover:text-brand-blue transition-colors"
+                className="flex items-center gap-2 text-sm font-medium text-fg no-underline hover:text-brand-blue transition-colors"
               >
                 <FacebookIcon className="h-3.5 w-3.5 shrink-0 text-brand-blue" />
-                <span className="group-hover/fb:underline">{isEn ? "Facebook profile" : "ফেসবুক প্রোফাইল"}</span>
+                <span>{isEn ? "Facebook profile" : "ফেসবুক প্রোফাইল"}</span>
               </a>
             )}
           </div>
