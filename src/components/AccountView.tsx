@@ -64,17 +64,16 @@ export default function AccountView({
 
   // ── Investor app experience (the ported members) ──
   if (investment) {
+    // Greeting + subtitle are handed to InvestorPortal so they live inside its
+    // sticky app-bar (they stay pinned with the name/UID/FID while the rest of
+    // the portal scrolls) rather than scrolling away as a separate block.
     return (
-      <div className="mx-auto max-w-2xl px-4 pb-20 sm:px-6">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="mb-5">
-          <h1 className="text-xl font-extrabold text-fg sm:text-2xl">
-            {t.greeting}{firstName ? `, ${firstName}` : ""} 👋
-          </h1>
-          <p className="mt-0.5 text-sm text-fg-muted">{t.subtitle}</p>
-        </motion.div>
+      <div className="mx-auto max-w-2xl px-4 pb-20 sm:px-6 sm:pt-1">
         <InvestorPortal
           data={investment}
           member={{ name: member.name, mobile: member.mobile, email: member.email }}
+          greeting={`${t.greeting}${firstName ? `, ${firstName}` : ""}`}
+          subtitle={t.subtitle}
         />
       </div>
     );

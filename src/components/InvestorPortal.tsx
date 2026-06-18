@@ -48,7 +48,7 @@ import type { InvestorPortal as PortalData, PortalTxn, PortalProject } from "@/l
 type Tab = "my" | "all" | "txn";
 export type PortalMember = { name: string; mobile: string; email: string | null };
 
-export default function InvestorPortal({ data, member }: { data: PortalData; member?: PortalMember }) {
+export default function InvestorPortal({ data, member, greeting, subtitle }: { data: PortalData; member?: PortalMember; greeting?: string; subtitle?: string }) {
   const locale = useLocale();
   const en = locale === "en";
   const router = useRouter();
@@ -101,28 +101,40 @@ export default function InvestorPortal({ data, member }: { data: PortalData; mem
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-4 shadow-sm">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
-          {avatar}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-base font-extrabold text-fg">
-            <span className="truncate">{data.full_name || "—"}</span>
-            {data.is_verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />}
-          </p>
-          <p className="text-[11px] text-fg-muted">UID: {en ? data.uid : toBn(data.uid)}</p>
-          {data.fid && <p className="text-[11px] text-fg-muted">FID: {en ? data.fid : toBn(data.fid)}</p>}
+      {/* Sticky app-bar — the greeting + identity (name / UID / FID) stay
+          pinned to the top while balance, projects and transactions scroll
+          underneath.  /account hides the public navbar, so `top-0` docks the
+          bar to the viewport edge.  Full-bleed (-mx) with a blurred backdrop
+          so scrolling content slides cleanly beneath it. */}
+      <div className="sticky top-0 z-30 -mx-4 border-b border-border/60 bg-bg/85 px-4 pb-3 pt-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+        {greeting && (
+          <div className="mb-2.5">
+            <h1 className="text-lg font-extrabold leading-tight text-fg sm:text-xl">{greeting} 👋</h1>
+            {subtitle && <p className="mt-0.5 text-[11px] text-fg-muted sm:text-xs">{subtitle}</p>}
+          </div>
+        )}
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-bg p-3 shadow-sm">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue to-brand-blue-dark text-lg font-extrabold text-white shadow-[var(--shadow-brand)]">
+            {avatar}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 text-base font-extrabold text-fg">
+              <span className="truncate">{data.full_name || "—"}</span>
+              {data.is_verified && <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-500" />}
+            </p>
+            <p className="text-[11px] text-fg-muted">UID: {en ? data.uid : toBn(data.uid)}</p>
+            {data.fid && <p className="text-[11px] text-fg-muted">FID: {en ? data.fid : toBn(data.fid)}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
+              <Settings className="h-5 w-5" />
+            </button>
+            <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
+              {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
-            <Settings className="h-5 w-5" />
-          </button>
-          <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
-            {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
-          </button>
-        </div>
-      </motion.div>
+      </div>
 
       {/* Balance hero */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }} className="overflow-hidden rounded-2xl border border-brand-blue/20 bg-gradient-to-br from-brand-blue-tint/60 to-bg p-5 sm:p-6">

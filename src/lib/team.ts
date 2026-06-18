@@ -61,11 +61,13 @@ export const TEAM_MEMBERS: TeamMember[] = [
     slug: "mustaqeem-billah",
     name: "মুস্তাকীম বিল্লাহ",
     nameEn: "Mustaqeem Billah",
-    role: "Development Support",
+    role: "Engineer Support",
     bio: "এই ওয়েবসাইট ও ডিজিটাল ইকোসিস্টেমের পেছনের ইঞ্জিনিয়ার। সাইটের যেকোনো জায়গায় বাগ বা সমস্যা দেখলে সরাসরি তাঁকে রিপোর্ট করুন — দ্রুত সমাধান নিন।",
     phone: "+8801767682381",
     email: "itsinjamul@gmail.com",
-    photo: "/developer.webp",
+    // Versioned filename — /public images are served immutable, so bump the
+    // suffix whenever the headshot changes (developer.png → developer-v2.webp).
+    photo: "/developer-v2.webp",
     accent: "ash",
   },
 ];

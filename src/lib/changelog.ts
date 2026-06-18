@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.8",
+    date: "2026-06-18",
+    title: "Polished PWA splash + icon · sticky investor header · team update",
+    changes: [
+      { kind: "fixed", text: "The installed-app splash screen no longer shows the logo trapped inside a dark rounded box. The app icon was using a transparent logo where a full-bleed one is required, so the system filled the gaps with a dark frame. The whole icon set was regenerated from the brand logo (now also served as a lighter WebP), so the home-screen icon and splash look clean and crisp." },
+      { kind: "new", text: "Added branded launch screens for iPhone — opening the installed app now shows the Promise City logo on a clean screen instead of a blank white flash, on every common iPhone size." },
+      { kind: "improved", text: "In the investor app, the welcome line and your identity card (name · UID · FID, with settings & logout) now stay pinned to the top while balance, projects and transactions scroll underneath — so who you are and the key actions are always one tap away." },
+      { kind: "changed", text: "Team page: Mustaqeem Billah's photo was updated and his title changed from “Development Support” to “Engineer Support”." },
+    ],
+  },
+  {
     version: "1.4.7",
     date: "2026-06-17",
     title: "Staff: no duplicate rows · owner-only role changes · manager full view",

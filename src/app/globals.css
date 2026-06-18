@@ -119,6 +119,13 @@ body {
   font-size: 1rem;
   line-height: 1.7;
   scroll-behavior: smooth;
+  /* Horizontal-overflow clipping is applied as `overflow-x: clip` from the
+     raw <style> in layout.tsx — NOT here.  Plain `overflow-x: hidden` forces
+     `overflow-y` to compute to `auto`, turning the body into a nested
+     scrollport that breaks `position: sticky` (the investor portal's pinned
+     header).  `clip` clips identically without creating a scroll container.
+     It lives in layout.tsx because Lightning CSS silently drops it here.
+     This `hidden` stays as the fallback for browsers without `clip`. */
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
