@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.10",
+    date: "2026-06-18",
+    title: "Unified app icon (final.webp) everywhere · lighter /public",
+    changes: [
+      { kind: "improved", text: "The new rounded-square Promise City mark (final.webp) is now the single brand icon used everywhere — the PWA install/home-screen icon, the Android & iOS splash screens, and the browser / Google favicon — all regenerated from one source for a consistent look." },
+      { kind: "changed", text: "Converted the icon source to WebP and removed unused PNG/JPEG files from the site’s public assets (old logo sources, leftover brand images), keeping the project lean. Live, referenced images are untouched." },
+    ],
+  },
+  {
     version: "1.4.9",
     date: "2026-06-18",
     title: "Brand tagline · Google logo · investor site chrome · clearer logout",
