@@ -330,7 +330,7 @@ export const TEAM_EN = {
   bios: {
     "kamrul-hasan": "Founder and Managing Director of Promise Group. With over 15 years of experience, he has set a new standard of transparency and trust in Dhaka's real-estate industry.",
     "md-rashedul-islam": "Responsible for day-to-day operations, client service, and office coordination. His foremost task is making sure every booking, site visit, and follow-up runs flawlessly. He is the trusted first point of contact for our clients.",
-    "mustaqeem-billah": "The engineer behind this website and our wider digital ecosystem. If you spot a bug or any issue anywhere on the site, report it to him directly for a swift resolution.",
+    "mustaqeem-billah": "The engineer behind this website and our wider digital ecosystem. If you spot a bug or any issue anywhere on the site, report it to him directly for a swift resolution. For any custom website, software, or digital service, feel free to get in touch.",
   } as Record<string, string>,
 };
 

@@ -8,6 +8,15 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Phone, Mail } from "lucide-react";
+
+/** Facebook "f" mark — lucide dropped brand icons, so inline the logo. */
+function FacebookIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
 import { type TeamMember } from "@/lib/team";
 import { TEAM_EN } from "@/lib/pages.en";
 import { useLocale } from "./LocaleProvider";
@@ -81,7 +90,7 @@ export default function TeamMemberCard({
           </p>
         )}
 
-        {(member.phone || member.email) && (
+        {(member.phone || member.email || member.socials?.facebook) && (
           <div className="mt-5 pt-5 border-t border-border space-y-2">
             {member.phone && (
               <a
@@ -99,6 +108,17 @@ export default function TeamMemberCard({
               >
                 <Mail className="h-3.5 w-3.5 text-fg-muted shrink-0" />
                 <span className="truncate">{member.email}</span>
+              </a>
+            )}
+            {member.socials?.facebook && (
+              <a
+                href={member.socials.facebook}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group/fb flex items-center gap-2 text-sm font-medium text-fg hover:text-brand-blue transition-colors"
+              >
+                <FacebookIcon className="h-3.5 w-3.5 shrink-0 text-brand-blue" />
+                <span className="group-hover/fb:underline">{isEn ? "Facebook profile" : "ফেসবুক প্রোফাইল"}</span>
               </a>
             )}
           </div>

@@ -41,6 +41,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     // changes so visitors don't stay stuck on the old render.
     photo: "/ceo-v2.webp",
     accent: "blue",
+    socials: { facebook: "https://www.facebook.com/kamrulhasan.kamrulhasan.77770194" },
   },
   {
     slug: "md-rashedul-islam",
@@ -56,19 +57,21 @@ export const TEAM_MEMBERS: TeamMember[] = [
     // the suffix (-v2, -v3, …) whenever the headshot changes.
     photo: "/manager-v2.webp",
     accent: "red",
+    socials: { facebook: "https://www.facebook.com/md.affan.501/" },
   },
   {
     slug: "mustaqeem-billah",
     name: "মুস্তাকীম বিল্লাহ",
     nameEn: "Mustaqeem Billah",
     role: "Engineer Support",
-    bio: "এই ওয়েবসাইট ও ডিজিটাল ইকোসিস্টেমের পেছনের ইঞ্জিনিয়ার। সাইটের যেকোনো জায়গায় বাগ বা সমস্যা দেখলে সরাসরি তাঁকে রিপোর্ট করুন — দ্রুত সমাধান নিন।",
+    bio: "এই ওয়েবসাইট ও ডিজিটাল ইকোসিস্টেমের পেছনের ইঞ্জিনিয়ার। সাইটের যেকোনো জায়গায় বাগ বা সমস্যা দেখলে সরাসরি তাঁকে রিপোর্ট করুন — দ্রুত সমাধান নিন। যেকোনো কাস্টম ওয়েবসাইট, সফটওয়্যার বা ডিজিটাল সেবা পেতে যোগাযোগ করুন।",
     phone: "+8801767682381",
     email: "itsinjamul@gmail.com",
     // Versioned filename — /public images are served immutable, so bump the
     // suffix whenever the headshot changes (developer.png → developer-v2.webp).
     photo: "/developer-v2.webp",
     accent: "ash",
+    socials: { facebook: "https://www.facebook.com/learnwithinjamul" },
   },
 ];
 
