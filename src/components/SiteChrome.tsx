@@ -9,15 +9,14 @@ import { usePathname } from "next/navigation";
 
 export default function SiteChrome({ children, extra = [] }: { children: React.ReactNode; extra?: string[] }) {
   const pathname = usePathname() || "/";
-  // The /admin dashboard and the member /account app both supply their own
-  // shell — no public navbar / footer / FABs there (so the member PWA feels
-  // like a real app, not a marketing page with a login button on top).
-  // `extra` lets a specific chrome (e.g. the footer + FABs) hide on a few more
-  // paths — used to keep /login clean (no footer / WhatsApp / scroll-to-top).
+  // The /admin dashboard supplies its own shell — never any public chrome.
+  // /account (the investor portal) now KEEPS the public navbar + footer in the
+  // browser (so investors can navigate the site), but they're wrapped in
+  // `.pwa-hide` (see layout.tsx) so the installed PWA still feels like a real
+  // app with no chrome.  `extra` lets a specific chrome (e.g. the footer + FABs)
+  // hide on a few more paths — used to keep /login clean.
   const isApp =
     pathname.startsWith("/dashboard") ||
-    pathname === "/account" ||
-    pathname === "/en/account" ||
     extra.includes(pathname);
   if (isApp) return null;
   return <>{children}</>;

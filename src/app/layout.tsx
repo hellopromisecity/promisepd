@@ -170,6 +170,13 @@ export default function RootLayout({
               // portal's pinned header) silently stop sticking.  Raw <style> on
               // purpose: Lightning CSS drops this when written in globals.css.
               "@supports (overflow:clip){html,body{overflow-x:clip!important}}",
+              // /account (investor portal): in the BROWSER the page must clear
+              // the fixed navbar and the sticky header docks just below it.
+              // Inside the installed PWA the navbar is hidden (.pwa-hide), so
+              // both collapse to the top edge.
+              ".acct-shell{padding-top:5.25rem}@media(min-width:640px){.acct-shell{padding-top:6rem}}",
+              ".acct-sticky{top:76px}@media(min-width:640px){.acct-sticky{top:84px}}",
+              "@media all and (display-mode:standalone){.acct-shell{padding-top:1.25rem!important}.acct-sticky{top:0!important}}",
             ].join(""),
           }}
         />
@@ -191,9 +198,14 @@ export default function RootLayout({
           zIndex={2000}
         />
         <SkipLink />
-        <SiteChrome>
-          <Navbar />
-        </SiteChrome>
+        {/* Navbar shows on the website (including /account, so investors can
+            navigate the site), but `.pwa-hide` removes it inside the installed
+            PWA so the app feels native — matching the already-hidden footer. */}
+        <div className="pwa-hide">
+          <SiteChrome>
+            <Navbar />
+          </SiteChrome>
+        </div>
         <main id="main" className="relative">
           {children}
         </main>

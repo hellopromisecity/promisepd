@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.9",
+    date: "2026-06-18",
+    title: "Brand tagline · Google logo · investor site chrome · clearer logout",
+    changes: [
+      { kind: "changed", text: "English tagline corrected everywhere from “Where dreams come true” to “Where dreams are real” (matches স্বপ্ন যেখানে বাস্তব)." },
+      { kind: "fixed", text: "Search engines (Google) will now show the blue Promise City logo as the site favicon instead of a generic icon — added a proper multi-size favicon. (Google refreshes its cached icon over a few days/weeks.)" },
+      { kind: "improved", text: "Investors visiting their account on the website now keep the site header (navigation) and footer, so they can move around the site. Inside the installed mobile app (PWA) the header/footer stay hidden for a clean, native app feel." },
+      { kind: "improved", text: "The investor logout button is now red with a “Logout” label under it, so it’s obvious what it does. Settings got a matching label too." },
+    ],
+  },
+  {
     version: "1.4.8",
     date: "2026-06-18",
     title: "Polished PWA splash + icon · sticky investor header · team update",

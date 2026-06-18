@@ -46,7 +46,7 @@ const COPY = {
     footnote: "সম্পূর্ণ ফ্রি · কোনো অ্যাপ স্টোর লাগবে না",
   },
   en: {
-    tagline: "Where dreams come true",
+    tagline: "Where dreams are real",
     close: "Close",
     eyebrow: "New · Fast · Offline",
     head: "Install the PromisePD app",

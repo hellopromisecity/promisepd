@@ -106,7 +106,7 @@ export default function InvestorPortal({ data, member, greeting, subtitle }: { d
           underneath.  /account hides the public navbar, so `top-0` docks the
           bar to the viewport edge.  Full-bleed (-mx) with a blurred backdrop
           so scrolling content slides cleanly beneath it. */}
-      <div className="sticky top-0 z-30 -mx-4 border-b border-border/60 bg-bg/85 px-4 pb-3 pt-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+      <div className="sticky acct-sticky z-30 -mx-4 border-b border-border/60 bg-bg/85 px-4 pb-3 pt-3 backdrop-blur-md sm:-mx-6 sm:px-6">
         {greeting && (
           <div className="mb-2.5">
             <h1 className="text-lg font-extrabold leading-tight text-fg sm:text-xl">{greeting} 👋</h1>
@@ -126,11 +126,14 @@ export default function InvestorPortal({ data, member, greeting, subtitle }: { d
             {data.fid && <p className="text-[11px] text-fg-muted">FID: {en ? data.fid : toBn(data.fid)}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
+            <button type="button" onClick={() => setSettingsOpen(true)} title={en ? "Settings" : "সেটিংস"} className="flex flex-col items-center gap-0.5 rounded-xl px-2 py-1 text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-blue">
               <Settings className="h-5 w-5" />
+              <span className="text-[10px] font-semibold leading-none">{en ? "Settings" : "সেটিংস"}</span>
             </button>
-            <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="grid h-9 w-9 place-items-center rounded-xl text-fg-muted transition-colors hover:bg-bg-soft hover:text-brand-red-dark disabled:opacity-50">
+            {/* Logout: red icon + label so it's unmistakable what it does. */}
+            <button type="button" onClick={doLogout} disabled={pendingOut} title={L.logout} className="flex flex-col items-center gap-0.5 rounded-xl px-2 py-1 text-brand-red-dark transition-colors hover:bg-brand-red-tint disabled:opacity-50">
               {pendingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+              <span className="text-[10px] font-semibold leading-none">{L.logout}</span>
             </button>
           </div>
         </div>

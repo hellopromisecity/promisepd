@@ -576,7 +576,7 @@ export const DICT: Record<Locale, Dict> = {
     langName: "English",
     footer: {
       brand: "Promise City",
-      tagline: "Where dreams come true",
+      tagline: "Where dreams are real",
       about:
         "Serving the people of Dhaka for 15+ years — real estate, construction, savings, Hajj and design.",
       follow: "Follow us",

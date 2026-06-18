@@ -28,7 +28,7 @@ export default async function AccountPage() {
   const investment = await investorPortalData(member.id);
 
   return (
-    <section className="relative pt-5 pb-10 min-h-[100svh] sm:pt-7">
+    <section className="relative acct-shell pb-10 min-h-[100svh]">
       <div className="absolute inset-0 -z-10 mesh-bg-soft" />
       <AccountView member={member} investment={investment} />
     </section>
