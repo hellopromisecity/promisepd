@@ -640,6 +640,9 @@ export const PROJECTS: Project[] = [
       note: "ল্যান্ড শেয়ার ৫,২০,০০০ টাকা সম্পূর্ণ পরিশোধ হলে প্রমিস সিটি জমির দলিল করে দেবে। এরপর ভবন নির্মাণে শুধু প্রকৃত নির্মাণ খরচ + মাত্র ১০% সার্ভিস চার্জ — আপনার নির্মাণের A-Z খরচ অ্যাপ, ওয়েবসাইট বা অফিসে এসে সরাসরি দেখতে পারবেন। কেউ ২০২৭ সালের ডিসেম্বরের মধ্যে সম্পূর্ণ ল্যান্ড শেয়ার দিলে তখনই জমির দলিল ও ২০২৯ সালে ফ্ল্যাট হস্তান্তর — ইন শা আল্লাহ।",
     },
     buildings: { total: 30, soldOut: 11, nowBooking: 12 },
+    // Project documentary — rendered as the polished figure in the middle of
+    // the "About" section (midVideo = videoIds[0]) in ProjectDetail.
+    videoIds: ["C4CmXFQYv9Y"],
   },
   {
     slug: "ahbab-palace-01",

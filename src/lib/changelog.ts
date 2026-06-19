@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.0",
+    date: "2026-06-19",
+    title: "Fuzala Complex — project documentary video",
+    changes: [
+      { kind: "new", text: "The Fuzala Complex project page now features its documentary video — embedded in a clean, framed player right in the middle of the project description, so visitors can watch the full story of the project as they read about it." },
+    ],
+  },
+  {
     version: "1.4.10",
     date: "2026-06-18",
     title: "Unified app icon (final.webp) everywhere · lighter /public",
