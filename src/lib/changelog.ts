@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.2",
+    date: "2026-06-25",
+    title: "Marketing leaderboard: top-3 podium · officer history · cleaner rows",
+    changes: [
+      { kind: "new", text: "A top-3 champions podium now sits above the marketing leaderboard — 1st in the centre, 2nd and 3rd flanking — each showing the officer's name, points and income. It follows the date filter, so the podium changes with the period." },
+      { kind: "new", text: "Each officer row has a new 👁 view button: open it to see that officer's full referral history with dates — who they brought in, when, the fund raised (investment), income and points for each — plus lifetime totals." },
+      { kind: "improved", text: "The Type column is cleaner — it now shows just the role and district (e.g. “Active Marketing Officer · Dhaka”), dropping the extra MD/AMO/MO code badge." },
+    ],
+  },
+  {
     version: "1.5.1",
     date: "2026-06-25",
     title: "Password reset · all signups visible · PWA chrome · share buttons",

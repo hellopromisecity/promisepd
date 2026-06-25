@@ -44,6 +44,42 @@ function bothPaths() {
   revalidatePath("/dashboard/marketing/followup");
 }
 
+export type OfficerHistoryEntry = {
+  client_name: string | null;
+  client_id: string | null;
+  points: number;
+  afr: number;
+  income: number;
+  date: string; // ISO — sale_date when set, else created_at
+};
+
+/** One officer's full referral / sale history (who they brought in, when, and
+ *  how much fund + income + points each sale carried).  Read — returns [] if
+ *  the caller isn't a manager or data is unavailable. */
+export async function getOfficerHistory(officerId: string): Promise<OfficerHistoryEntry[]> {
+  try {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin || !officerId) return [];
+    const { data } = await admin
+      .from("marketing_point_entries")
+      .select("client_name, client_id, points, afr, income, sale_date, created_at")
+      .eq("officer_id", officerId)
+      .order("sale_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+    return (data ?? []).map((e) => ({
+      client_name: (e.client_name as string) ?? null,
+      client_id: (e.client_id as string) ?? null,
+      points: Number(e.points) || 0,
+      afr: Number(e.afr) || 0,
+      income: Number(e.income) || 0,
+      date: e.sale_date ? new Date(e.sale_date as string).toISOString() : (e.created_at as string),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** Create a follow-up.  Any staff may add; created_by = caller. */
 export async function addFollowup(input: {
   client_name: string;

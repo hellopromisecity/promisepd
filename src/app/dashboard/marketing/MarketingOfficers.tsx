@@ -14,13 +14,14 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Award, Crown, Medal, Trophy, Trash2, Pencil, X, Loader2, AlertCircle,
   Users, SlidersHorizontal, Check, Search, ChevronDown, ArrowUp, ArrowDown,
-  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet, Save,
+  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet, Save, Eye,
 } from "lucide-react";
-import { Badge, Card } from "@/components/admin/ui";
+import { Card } from "@/components/admin/ui";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
 import {
   addOfficer, updateOfficer, deleteOfficer, awardPoints,
   addPointItem, deletePointItem, savePointItems,
+  getOfficerHistory, type OfficerHistoryEntry,
 } from "@/app/actions/admin-marketing";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
@@ -36,9 +37,6 @@ export type Entry = { officer_id: string; points: number; afr: number; income: n
 type Range = "30d" | "thisyear" | "lastyear" | "lifetime" | "custom";
 type SortKey = "points" | "afr" | "income" | "name";
 
-const TYPE_TONE: Record<string, "info" | "success" | "warning" | "neutral"> = {
-  MD: "success", HM: "warning", AMO: "info", MO: "neutral",
-};
 const RANK_ICON = [Crown, Medal, Trophy];
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
 const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
@@ -80,6 +78,7 @@ export default function MarketingOfficers({
   const router = useRouter();
   const [dialog, setDialog] = useState<null | "officer" | "points" | "values">(null);
   const [editing, setEditing] = useState<Officer | null>(null);
+  const [history, setHistory] = useState<Officer | null>(null);
 
   const [search, setSearch] = useState("");
   const [range, setRange] = useState<Range>("lifetime");
@@ -128,6 +127,12 @@ export default function MarketingOfficers({
     return m;
   }, [computed]);
 
+  // Top 3 by points (range-aware) for the leaderboard podium.
+  const top3 = useMemo(
+    () => [...computed].sort((a, b) => b.rPoints - a.rPoints).slice(0, 3),
+    [computed],
+  );
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     let list = computed.filter((o) => {
@@ -160,7 +165,9 @@ export default function MarketingOfficers({
   const refresh = () => router.refresh();
 
   return (
-    <Card pad={false}>
+    <div className="space-y-5">
+      {officers.length > 0 && <Podium top={top3} />}
+      <Card pad={false}>
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-brand-blue" />
@@ -237,8 +244,7 @@ export default function MarketingOfficers({
                         {o.officer_code && <div className="text-xs text-fg-faint">{o.officer_code}</div>}
                       </td>
                       <td className="px-4 py-3">
-                        <Badge tone={TYPE_TONE[o.officer_type] ?? "neutral"}>{o.officer_type}</Badge>
-                        {o.position && <div className="mt-1 text-xs text-fg-muted">{o.position}</div>}
+                        <div className="text-sm font-medium text-fg">{o.position || o.officer_type}</div>
                         {o.district && <div className="text-[11px] text-fg-faint">{o.district}</div>}
                       </td>
                       <td className="px-4 py-3 text-right text-fg">{fmtBDT(o.rAfr)}</td>
@@ -253,6 +259,7 @@ export default function MarketingOfficers({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1 text-fg-faint">
+                          <button onClick={() => setHistory(o)} title="View history" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue"><Eye className="h-4 w-4" /></button>
                           <button onClick={() => { setEditing(o); setDialog("officer"); }} title="Edit" className="rounded-md p-1.5 hover:bg-bg-soft hover:text-brand-blue"><Pencil className="h-4 w-4" /></button>
                           <DeleteBtn id={o.id} name={o.name} onDone={refresh} />
                         </div>
@@ -281,7 +288,9 @@ export default function MarketingOfficers({
       {dialog === "officer" && <OfficerDialog officer={editing} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
       {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
       {dialog === "values" && <ManagePointsDialog items={items} onClose={() => { setDialog(null); refresh(); }} />}
-    </Card>
+      </Card>
+      {history && <HistoryDialog officer={history} onClose={() => setHistory(null)} />}
+    </div>
   );
 }
 
@@ -404,10 +413,10 @@ function DeleteBtn({ id, name, onDone }: { id: string; name: string; onDone: () 
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-bg p-5 shadow-xl">
+      <div className={`w-full ${wide ? "max-w-lg" : "max-w-md"} rounded-2xl border border-border bg-bg p-5 shadow-xl`}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-bold text-fg">{title}</h3>
           <button onClick={onClose} className="rounded-lg p-1 text-fg-muted hover:bg-bg-soft" aria-label="Close"><X className="h-5 w-5" /></button>
@@ -729,6 +738,117 @@ function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: (
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 text-brand-blue" />} Add item
         </button>
       </div>
+    </Modal>
+  );
+}
+
+/** Top-3 leaderboard podium — 1st elevated in the centre, 2nd left, 3rd
+ *  right.  Range-aware (points/income follow the date filter). */
+function Podium({ top }: { top: (Officer & { rPoints: number; rIncome: number })[] }) {
+  if (top.length === 0) return null;
+  const order = [top[1], top[0], top[2]]; // 2nd · 1st · 3rd
+  const STYLE: Record<number, { grad: string; Icon: typeof Crown; label: string; ring: string }> = {
+    1: { grad: "from-brand-blue to-brand-blue-dark", Icon: Crown, label: "1st", ring: "ring-brand-blue/30" },
+    2: { grad: "from-slate-400 to-slate-600", Icon: Medal, label: "2nd", ring: "ring-slate-300" },
+    3: { grad: "from-brand-red to-brand-red-dark", Icon: Trophy, label: "3rd", ring: "ring-brand-red/30" },
+  };
+  return (
+    <div className="grid grid-cols-3 items-end gap-2 sm:gap-4">
+      {order.map((o, i) => {
+        if (!o) return <div key={i} />;
+        const rank = i === 1 ? 1 : i === 0 ? 2 : 3;
+        const s = STYLE[rank];
+        const champ = rank === 1;
+        const Icon = s.Icon;
+        return (
+          <div
+            key={o.id}
+            className={`relative overflow-hidden rounded-2xl text-center shadow-sm ring-1 ${s.ring} ${
+              champ
+                ? "border border-brand-blue/30 bg-gradient-to-b from-brand-blue-tint/70 to-bg p-4 sm:p-5"
+                : "border border-border bg-bg p-3 sm:mt-4 sm:p-4"
+            }`}
+          >
+            <div className={`absolute right-2 top-2 rounded-full bg-gradient-to-r ${s.grad} px-2 py-0.5 text-[9px] font-bold text-white`}>{s.label}</div>
+            <div className={`mx-auto grid place-items-center rounded-full bg-gradient-to-br ${s.grad} text-white shadow-md ${champ ? "h-12 w-12" : "h-10 w-10"}`}>
+              <Icon className={champ ? "h-6 w-6" : "h-5 w-5"} />
+            </div>
+            <div className={`mt-2 truncate font-bold text-fg ${champ ? "text-sm sm:text-base" : "text-xs sm:text-sm"}`}>{o.name}</div>
+            <div className="truncate text-[10px] uppercase tracking-wide text-fg-faint">{o.position || o.officer_type}</div>
+            <div className={`mt-1.5 font-extrabold tabular-nums text-brand-blue ${champ ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"}`}>
+              {fmtPts(o.rPoints)}<span className="ml-0.5 text-[10px] font-semibold text-fg-faint">pts</span>
+            </div>
+            <div className="text-[11px] font-semibold text-emerald-700">{fmtBDT(o.rIncome)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "blue" | "green" }) {
+  const box = tone === "blue" ? "bg-brand-blue-tint" : tone === "green" ? "bg-emerald-50" : "bg-bg-soft";
+  const txt = tone === "blue" ? "text-brand-blue-dark" : tone === "green" ? "text-emerald-700" : "text-fg";
+  return (
+    <div className={`rounded-xl px-3 py-2 ${box}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-fg-faint">{label}</div>
+      <div className={`text-sm font-extrabold ${txt}`}>{value}</div>
+    </div>
+  );
+}
+
+/** Eye-icon detail: an officer's full referral / sale history with dates,
+ *  fund raised, income and points per entry + totals. */
+function HistoryDialog({ officer, onClose }: { officer: Officer; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<OfficerHistoryEntry[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getOfficerHistory(officer.id).then((e) => { if (alive) { setEntries(e); setLoading(false); } });
+    return () => { alive = false; };
+  }, [officer.id]);
+
+  const totals = useMemo(
+    () => entries.reduce((a, e) => ({ afr: a.afr + e.afr, income: a.income + e.income, points: a.points + e.points }), { afr: 0, income: 0, points: 0 }),
+    [entries],
+  );
+  const fmtDate = (iso: string) => {
+    try { return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); } catch { return iso; }
+  };
+
+  return (
+    <Modal title={`History — ${officer.name}`} onClose={onClose} wide>
+      <p className="-mt-2 mb-3 text-xs text-fg-muted">
+        {officer.position || officer.officer_type}{officer.district ? ` · ${officer.district}` : ""}{officer.officer_code ? ` · ${officer.officer_code}` : ""}
+      </p>
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="Referrals" value={String(entries.length)} />
+        <Stat label="মোট বিনিয়োগ" value={fmtBDT(totals.afr)} tone="blue" />
+        <Stat label="Income" value={fmtBDT(totals.income)} tone="green" />
+        <Stat label="Points" value={fmtPts(totals.points)} />
+      </div>
+      {loading ? (
+        <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-blue" /></div>
+      ) : entries.length === 0 ? (
+        <p className="py-8 text-center text-sm text-fg-muted">এখনো কোনো রেফার / সেল রেকর্ড নেই।</p>
+      ) : (
+        <div className="max-h-[48vh] space-y-2 overflow-y-auto pr-1">
+          {entries.map((e, i) => (
+            <div key={i} className="rounded-xl border border-border bg-bg-soft px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-sm font-semibold text-fg">{e.client_name || "—"}</span>
+                <span className="shrink-0 text-[11px] font-medium text-fg-faint">{fmtDate(e.date)}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                <span className="text-fg-muted">বিনিয়োগ <b className="text-fg">{fmtBDT(e.afr)}</b></span>
+                <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
+                <span className="text-fg-muted">points <b className="text-brand-blue">+{fmtPts(e.points)}</b></span>
+                {e.client_id && <span className="text-fg-faint">· ID {e.client_id}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }
