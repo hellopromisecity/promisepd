@@ -44,17 +44,41 @@ function bothPaths() {
   revalidatePath("/dashboard/marketing/followup");
 }
 
+type MktAdmin = NonNullable<ReturnType<typeof getAdmin>>;
+
 export type OfficerHistoryEntry = {
+  id: string;
   client_name: string | null;
   client_id: string | null;
+  item_label: string | null;
+  quantity: number;
   points: number;
   afr: number;
   income: number;
   date: string; // ISO — sale_date when set, else created_at
+  clientInvested: number | null; // the client's total deposit in the company, if resolvable
 };
 
-/** One officer's full referral / sale history (who they brought in, when, and
- *  how much fund + income + points each sale carried).  Read — returns [] if
+/** Map a key (uid / fid / phone digits / lowercased name) → that investor's
+ *  total deposit, so a marketing entry's free-text client_id or name can show
+ *  how much the client has actually put in. */
+async function investorTotalsMap(admin: MktAdmin): Promise<Map<string, number>> {
+  const m = new Map<string, number>();
+  for (let fromN = 0; ; fromN += 1000) {
+    const { data } = await admin.from("investor_accounts").select("uid, fid, phone_number, full_name, balance").range(fromN, fromN + 999);
+    const rows = data ?? [];
+    for (const a of rows) {
+      const inv = Number((a.balance as { total_investment?: number } | null)?.total_investment) || 0;
+      const keys = [a.uid as string | null, a.fid as string | null, ((a.phone_number as string) ?? "").replace(/\D/g, ""), ((a.full_name as string) ?? "").trim().toLowerCase()];
+      for (const k of keys) if (k && !m.has(k)) m.set(k, inv);
+    }
+    if (rows.length < 1000) break;
+  }
+  return m;
+}
+
+/** One officer's full referral / sale history — what each award was for, when,
+ *  the fund + income + points, and the client's total deposit.  Read — [] if
  *  the caller isn't a manager or data is unavailable. */
 export async function getOfficerHistory(officerId: string): Promise<OfficerHistoryEntry[]> {
   try {
@@ -63,21 +87,95 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
     if (!admin || !officerId) return [];
     const { data } = await admin
       .from("marketing_point_entries")
-      .select("client_name, client_id, points, afr, income, sale_date, created_at")
+      .select("id, client_name, client_id, item_label, quantity, points, afr, income, sale_date, created_at")
       .eq("officer_id", officerId)
       .order("sale_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
-    return (data ?? []).map((e) => ({
+    const entries = data ?? [];
+    const invMap = await investorTotalsMap(admin);
+    const lookup = (cid: string | null, cname: string | null): number | null => {
+      for (const k of [cid?.trim(), cid?.replace(/\D/g, ""), cname?.trim().toLowerCase()]) {
+        if (k && invMap.has(k)) return invMap.get(k)!;
+      }
+      return null;
+    };
+    return entries.map((e) => ({
+      id: e.id as string,
       client_name: (e.client_name as string) ?? null,
       client_id: (e.client_id as string) ?? null,
+      item_label: (e.item_label as string) ?? null,
+      quantity: Number(e.quantity) || 1,
       points: Number(e.points) || 0,
       afr: Number(e.afr) || 0,
       income: Number(e.income) || 0,
       date: e.sale_date ? new Date(e.sale_date as string).toISOString() : (e.created_at as string),
+      clientInvested: lookup((e.client_id as string) ?? null, (e.client_name as string) ?? null),
     }));
   } catch {
     return [];
   }
+}
+
+/** Recompute an officer's running totals from ALL their entries (paged past the
+ *  1000-row cap) — called after editing/deleting an entry so totals never drift. */
+async function recomputeOfficerTotals(admin: MktAdmin, officerId: string) {
+  let points = 0, afr = 0, income = 0;
+  for (let fromN = 0; ; fromN += 1000) {
+    const { data } = await admin.from("marketing_point_entries").select("points, afr, income").eq("officer_id", officerId).range(fromN, fromN + 999);
+    const rows = data ?? [];
+    for (const r of rows) { points += Number(r.points) || 0; afr += Number(r.afr) || 0; income += Number(r.income) || 0; }
+    if (rows.length < 1000) break;
+  }
+  await admin.from("marketing_officers").update({ points: round2(points), afr_total: round2(afr), income_total: round2(income) }).eq("id", officerId);
+}
+
+/** Delete one point entry, then recompute the officer's totals. */
+export async function deletePointEntry(entryId: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin || !entryId) throw new Error("Database is not configured.");
+    const { data: entry } = await admin.from("marketing_point_entries").select("officer_id, item_label").eq("id", entryId).maybeSingle();
+    if (!entry) throw new AuthzError("Entry not found.");
+    const { error } = await admin.from("marketing_point_entries").delete().eq("id", entryId);
+    if (error) throw new Error(error.message);
+    await recomputeOfficerTotals(admin, entry.officer_id as string);
+    await logAudit({ action: "delete", entity: "marketing_points", entityId: entry.officer_id as string, detail: `Removed entry “${entry.item_label ?? ""}”` });
+    revalidateLeaderboard();
+    return { message: "Entry removed." };
+  });
+}
+
+/** Edit one point entry (re-pick item × quantity + client + date), then
+ *  recompute the officer's totals. */
+export async function updatePointEntry(
+  entryId: string,
+  input: { itemId: string; quantity: number; clientName?: string; clientId?: string; saleDate?: string },
+): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireManager();
+    const admin = getAdmin();
+    if (!admin || !entryId) throw new Error("Database is not configured.");
+    const { data: entry } = await admin.from("marketing_point_entries").select("officer_id").eq("id", entryId).maybeSingle();
+    if (!entry) throw new AuthzError("Entry not found.");
+    const qty = Math.max(1, Math.floor(Number(input.quantity) || 1));
+    const { data: item } = await admin.from("marketing_point_items").select("label, points, afr, income").eq("id", input.itemId).maybeSingle();
+    if (!item) throw new AuthzError("Pick a point item.");
+    const { error } = await admin.from("marketing_point_entries").update({
+      item_label: item.label,
+      quantity: qty,
+      points: round2(Number(item.points || 0) * qty),
+      afr: round2(Number(item.afr || 0) * qty),
+      income: round2(Number(item.income || 0) * qty),
+      sale_date: cleanDate(input.saleDate),
+      client_name: clean(input.clientName),
+      client_id: clean(input.clientId),
+    }).eq("id", entryId);
+    if (error) throw new Error(error.message);
+    await recomputeOfficerTotals(admin, entry.officer_id as string);
+    revalidateLeaderboard();
+    return { message: "Entry updated." };
+  });
 }
 
 /** Create a follow-up.  Any staff may add; created_by = caller. */

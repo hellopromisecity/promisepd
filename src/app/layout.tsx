@@ -165,7 +165,7 @@ export default function RootLayout({
               "@media all and (display-mode:standalone){.pwa-hide{display:none!important}}",
               // Mobile performance: freeze the always-running decorative
               // animations on phones (blobs, gradient shimmer, button shine).
-              "@media (max-width:768px){.animate-blob,.text-grad,.btn-shine::after,.grad-border::before{animation:none!important}}",
+              "@media (max-width:768px){.animate-blob,.text-grad,.btn-shine::after,.grad-border::before,.podium-glow::before{animation:none!important}}",
               // Clip horizontal overflow with `clip` (not `hidden`) so html/body
               // never become a scroll container — otherwise `overflow-y` computes
               // to `auto` and `position: sticky` descendants (the investor
@@ -177,6 +177,14 @@ export default function RootLayout({
               // just below it.
               ".acct-shell{padding-top:5.25rem}@media(min-width:640px){.acct-shell{padding-top:6rem}}",
               ".acct-sticky{top:76px}@media(min-width:640px){.acct-sticky{top:84px}}",
+              // Marketing leaderboard — a soft brand-blue light gliding around
+              // the #1 champion podium card. A pre-soft radial gradient behind
+              // the opaque card, rotated via transform only (cached bitmap →
+              // GPU-cheap; NO blur filter, which pegged the compositor). Raw
+              // <style>: Lightning CSS would drop it.
+              ".podium-glow{position:relative;z-index:0}",
+              ".podium-glow::before{content:'';position:absolute;inset:-9px;z-index:-1;border-radius:1.3rem;background:radial-gradient(60% 60% at 50% 0%,rgba(36,99,209,.6),rgba(36,99,209,.18) 45%,transparent 70%);animation:podium-spin 5s linear infinite;will-change:transform;pointer-events:none}",
+              "@keyframes podium-spin{to{transform:rotate(360deg)}}",
             ].join(""),
           }}
         />

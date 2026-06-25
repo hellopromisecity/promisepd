@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.3",
+    date: "2026-06-25",
+    title: "Marketing: editable history with reasons & client deposits · glowing podium",
+    changes: [
+      { kind: "new", text: "Each history entry now shows what the point was for (e.g. “FB activity ×5”), so it's always clear why points were awarded — no more guessing." },
+      { kind: "new", text: "History entries can be edited or deleted individually; the officer's points, fund and income totals recalculate automatically afterwards." },
+      { kind: "improved", text: "Instead of a raw client ID, each entry shows that client's total deposit in the company so far (resolved from their investor account when available)." },
+      { kind: "improved", text: "The top-3 podium cards lift on hover like the dashboard cards, and the #1 champion card has a soft brand-blue light gently circling it." },
+    ],
+  },
+  {
     version: "1.5.2",
     date: "2026-06-25",
     title: "Marketing leaderboard: top-3 podium · officer history · cleaner rows",

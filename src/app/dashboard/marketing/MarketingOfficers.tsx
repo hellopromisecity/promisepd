@@ -21,7 +21,7 @@ import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
 import {
   addOfficer, updateOfficer, deleteOfficer, awardPoints,
   addPointItem, deletePointItem, savePointItems,
-  getOfficerHistory, type OfficerHistoryEntry,
+  getOfficerHistory, deletePointEntry, updatePointEntry, type OfficerHistoryEntry,
 } from "@/app/actions/admin-marketing";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
@@ -289,7 +289,7 @@ export default function MarketingOfficers({
       {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
       {dialog === "values" && <ManagePointsDialog items={items} onClose={() => { setDialog(null); refresh(); }} />}
       </Card>
-      {history && <HistoryDialog officer={history} onClose={() => setHistory(null)} />}
+      {history && <HistoryDialog officer={history} items={items} onClose={() => setHistory(null)} onChanged={refresh} />}
     </div>
   );
 }
@@ -763,14 +763,14 @@ function Podium({ top }: { top: (Officer & { rPoints: number; rIncome: number })
         return (
           <div
             key={o.id}
-            className={`relative overflow-hidden rounded-2xl text-center shadow-sm ring-1 ${s.ring} ${
+            className={`group relative cursor-default rounded-2xl text-center shadow-sm ring-1 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${s.ring} ${
               champ
-                ? "border border-brand-blue/30 bg-gradient-to-b from-brand-blue-tint/70 to-bg p-4 sm:p-5"
-                : "border border-border bg-bg p-3 sm:mt-4 sm:p-4"
+                ? "podium-glow border border-brand-blue/40 bg-gradient-to-b from-brand-blue-tint to-bg p-4 sm:p-5"
+                : "overflow-hidden border border-border bg-bg p-3 sm:mt-4 sm:p-4"
             }`}
           >
             <div className={`absolute right-2 top-2 rounded-full bg-gradient-to-r ${s.grad} px-2 py-0.5 text-[9px] font-bold text-white`}>{s.label}</div>
-            <div className={`mx-auto grid place-items-center rounded-full bg-gradient-to-br ${s.grad} text-white shadow-md ${champ ? "h-12 w-12" : "h-10 w-10"}`}>
+            <div className={`mx-auto grid place-items-center rounded-full bg-gradient-to-br ${s.grad} text-white shadow-md transition-transform duration-300 group-hover:scale-110 ${champ ? "h-12 w-12" : "h-10 w-10"}`}>
               <Icon className={champ ? "h-6 w-6" : "h-5 w-5"} />
             </div>
             <div className={`mt-2 truncate font-bold text-fg ${champ ? "text-sm sm:text-base" : "text-xs sm:text-sm"}`}>{o.name}</div>
@@ -797,11 +797,19 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "bl
   );
 }
 
-/** Eye-icon detail: an officer's full referral / sale history with dates,
- *  fund raised, income and points per entry + totals. */
-function HistoryDialog({ officer, onClose }: { officer: Officer; onClose: () => void }) {
+/** Eye-icon detail: an officer's full referral / sale history — what each
+ *  award was for (item label), when, the client's total deposit, income +
+ *  points — with per-entry edit & delete. */
+function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Officer; items: PointItem[]; onClose: () => void; onChanged: () => void }) {
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<OfficerHistoryEntry[]>([]);
+  const [edit, setEdit] = useState<OfficerHistoryEntry | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const reload = () => {
+    setLoading(true);
+    return getOfficerHistory(officer.id).then((e) => { setEntries(e); setLoading(false); });
+  };
   useEffect(() => {
     let alive = true;
     getOfficerHistory(officer.id).then((e) => { if (alive) { setEntries(e); setLoading(false); } });
@@ -816,37 +824,136 @@ function HistoryDialog({ officer, onClose }: { officer: Officer; onClose: () => 
     try { return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); } catch { return iso; }
   };
 
+  async function remove(e: OfficerHistoryEntry) {
+    const ok = await confirmDialog({
+      title: "Delete this entry?",
+      message: `“${e.item_label || "Entry"}”${e.client_name ? ` · ${e.client_name}` : ""} (${fmtPts(e.points)} pts) will be removed and the officer's totals recalculated.`,
+      confirmText: "Delete", danger: true,
+    });
+    if (!ok) return;
+    setBusy(e.id);
+    const res = await deletePointEntry(e.id);
+    setBusy(null);
+    if (res.ok) { toast(res.message || "Removed.", "success"); await reload(); onChanged(); }
+    else toast(res.error, "error");
+  }
+
   return (
-    <Modal title={`History — ${officer.name}`} onClose={onClose} wide>
-      <p className="-mt-2 mb-3 text-xs text-fg-muted">
-        {officer.position || officer.officer_type}{officer.district ? ` · ${officer.district}` : ""}{officer.officer_code ? ` · ${officer.officer_code}` : ""}
-      </p>
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label="Referrals" value={String(entries.length)} />
-        <Stat label="মোট বিনিয়োগ" value={fmtBDT(totals.afr)} tone="blue" />
-        <Stat label="Income" value={fmtBDT(totals.income)} tone="green" />
-        <Stat label="Points" value={fmtPts(totals.points)} />
-      </div>
-      {loading ? (
-        <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-blue" /></div>
-      ) : entries.length === 0 ? (
-        <p className="py-8 text-center text-sm text-fg-muted">এখনো কোনো রেফার / সেল রেকর্ড নেই।</p>
+    <>
+      <Modal title={`History — ${officer.name}`} onClose={onClose} wide>
+        <p className="-mt-2 mb-3 text-xs text-fg-muted">
+          {officer.position || officer.officer_type}{officer.district ? ` · ${officer.district}` : ""}{officer.officer_code ? ` · ${officer.officer_code}` : ""}
+        </p>
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat label="Referrals" value={String(entries.length)} />
+          <Stat label="মোট বিনিয়োগ" value={fmtBDT(totals.afr)} tone="blue" />
+          <Stat label="Income" value={fmtBDT(totals.income)} tone="green" />
+          <Stat label="Points" value={fmtPts(totals.points)} />
+        </div>
+        {loading ? (
+          <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-blue" /></div>
+        ) : entries.length === 0 ? (
+          <p className="py-8 text-center text-sm text-fg-muted">এখনো কোনো রেফার / সেল রেকর্ড নেই।</p>
+        ) : (
+          <div className="max-h-[48vh] space-y-2 overflow-y-auto pr-1">
+            {entries.map((e) => (
+              <div key={e.id} className="rounded-xl border border-border bg-bg-soft px-3 py-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-fg">{e.client_name || "—"}</div>
+                    {e.item_label && (
+                      <span className="mt-0.5 inline-block rounded-md bg-brand-blue-tint px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark">
+                        {e.item_label}{e.quantity > 1 ? ` ×${e.quantity}` : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="mr-1 text-[11px] font-medium text-fg-faint">{fmtDate(e.date)}</span>
+                    <button onClick={() => setEdit(e)} title="Edit entry" className="rounded-md p-1 text-fg-faint hover:bg-bg hover:text-brand-blue"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => remove(e)} disabled={busy === e.id} title="Delete entry" className="rounded-md p-1 text-fg-faint hover:bg-bg hover:text-brand-red disabled:opacity-50">
+                      {busy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                  <span className="text-fg-muted">এই সেলে <b className="text-fg">{fmtBDT(e.afr)}</b></span>
+                  <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
+                  <span className="text-fg-muted">points <b className="text-brand-blue">+{fmtPts(e.points)}</b></span>
+                  {e.clientInvested != null && (
+                    <span className="ml-auto rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">মোট জমা {fmtBDT(e.clientInvested)}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+      {edit && (
+        <EditEntryDialog
+          entry={edit}
+          items={items}
+          onClose={() => setEdit(null)}
+          onDone={async () => { setEdit(null); await reload(); onChanged(); }}
+        />
+      )}
+    </>
+  );
+}
+
+/** Edit a single history entry — re-pick item × quantity + client + date.
+ *  Mirrors the award form; saving recomputes the officer's totals. */
+function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHistoryEntry; items: PointItem[]; onClose: () => void; onDone: () => void }) {
+  const [itemId, setItemId] = useState(items.find((p) => p.label === entry.item_label)?.id ?? items[0]?.id ?? "");
+  const [qty, setQty] = useState(entry.quantity || 1);
+  const [saleDate, setSaleDate] = useState(entry.date ? entry.date.slice(0, 10) : "");
+  const [clientName, setClientName] = useState(entry.client_name ?? "");
+  const [clientId, setClientId] = useState(entry.client_id ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  const item = useMemo(() => items.find((p) => p.id === itemId), [items, itemId]);
+  const q = Math.max(1, qty || 1);
+  const totalPts = Math.round((item?.points ?? 0) * q * 100) / 100;
+  const totalAfr = (item?.afr ?? 0) * q;
+  const totalIncome = (item?.income ?? 0) * q;
+
+  function submit() {
+    setErr(null);
+    start(async () => {
+      const res = await updatePointEntry(entry.id, { itemId, quantity: q, clientName, clientId, saleDate });
+      if (res.ok) { toast(res.message || "Updated.", "success"); onDone(); } else setErr(res.error);
+    });
+  }
+
+  return (
+    <Modal title="Edit entry" onClose={onClose}>
+      {err && <ErrorBanner msg={err} />}
+      {items.length === 0 ? (
+        <p className="text-sm text-fg-muted">No point items yet — add some under “Point values” first.</p>
       ) : (
-        <div className="max-h-[48vh] space-y-2 overflow-y-auto pr-1">
-          {entries.map((e, i) => (
-            <div key={i} className="rounded-xl border border-border bg-bg-soft px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-semibold text-fg">{e.client_name || "—"}</span>
-                <span className="shrink-0 text-[11px] font-medium text-fg-faint">{fmtDate(e.date)}</span>
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-                <span className="text-fg-muted">বিনিয়োগ <b className="text-fg">{fmtBDT(e.afr)}</b></span>
-                <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
-                <span className="text-fg-muted">points <b className="text-brand-blue">+{fmtPts(e.points)}</b></span>
-                {e.client_id && <span className="text-fg-faint">· ID {e.client_id}</span>}
-              </div>
-            </div>
-          ))}
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Point item *</label>
+            <select className={inputCls} value={itemId} onChange={(e) => setItemId(e.target.value)}>
+              {items.map((p) => <option key={p.id} value={p.id}>{p.label} — {fmtPts(p.points)} pts</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={labelCls}>Quantity (units)</label><input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} /></div>
+            <div><label className={labelCls}>Sale date</label><input type="date" className={inputCls} value={saleDate} onChange={(e) => setSaleDate(e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={labelCls}>Client name</label><input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Buyer's name" /></div>
+            <div><label className={labelCls}>Client ID</label><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Optional" /></div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-brand-blue-tint px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-brand-blue-dark/70">Points</div><div className="text-lg font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div></div>
+            <div className="rounded-xl bg-bg-soft px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-fg-muted">AFR</div><div className="text-sm font-extrabold text-fg">{fmtBDT(totalAfr)}</div></div>
+            <div className="rounded-xl bg-emerald-50 px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-emerald-700/80">Income</div><div className="text-sm font-extrabold text-emerald-700">{fmtBDT(totalIncome)}</div></div>
+          </div>
+          <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save changes
+          </button>
         </div>
       )}
     </Modal>
