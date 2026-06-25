@@ -655,23 +655,28 @@ function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: (
   const [newPoints, setNewPoints] = useState("1");
   const [newAfr, setNewAfr] = useState("0");
   const [newIncome, setNewIncome] = useState("0");
+  const [editLabel, setEditLabel] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
 
   const dirty = draft.some((d) => {
     const o = items.find((i) => i.id === d.id);
-    return !o || parseFloat(d.points) !== o.points || parseFloat(d.afr) !== o.afr || parseFloat(d.income) !== o.income;
+    return !o || d.label.trim() !== o.label || parseFloat(d.points) !== o.points || parseFloat(d.afr) !== o.afr || parseFloat(d.income) !== o.income;
   });
 
   const setField = (id: string, k: "points" | "afr" | "income", v: string) =>
     setDraft((l) => l.map((d) => (d.id === id ? { ...d, [k]: v } : d)));
+  const setLabel = (id: string, v: string) =>
+    setDraft((l) => l.map((d) => (d.id === id ? { ...d, label: v } : d)));
+  const toggleEdit = (id: string) =>
+    setEditLabel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   function saveAll() {
     setErr(null); setSaved(false);
     start(async () => {
       const res = await savePointItems(
-        draft.map((d) => ({ id: d.id, points: parseFloat(d.points) || 0, afr: parseFloat(d.afr) || 0, income: parseFloat(d.income) || 0 })),
+        draft.map((d) => ({ id: d.id, label: d.label.trim(), points: parseFloat(d.points) || 0, afr: parseFloat(d.afr) || 0, income: parseFloat(d.income) || 0 })),
       );
       if (res.ok) setSaved(true); else setErr(res.error);
     });
@@ -714,8 +719,24 @@ function ManagePointsDialog({ items, onClose }: { items: PointItem[]; onClose: (
         {draft.map((d) => (
           <div key={d.id} className="rounded-xl bg-bg-soft px-3 py-2.5">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-sm text-fg">{d.label}</span>
-              <button onClick={async () => { if (await confirmDialog({ title: "Delete item", message: `Delete “${d.label}”?`, confirmText: "Delete", danger: true })) remove(d.id); }} disabled={pending} className="shrink-0 rounded-md p-1 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
+              {editLabel.has(d.id) ? (
+                <input
+                  autoFocus
+                  className={`${num} min-w-0 flex-1 font-medium`}
+                  value={d.label}
+                  onChange={(e) => setLabel(d.id, e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") toggleEdit(d.id); }}
+                  placeholder="Item name"
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{d.label}</span>
+              )}
+              <div className="flex shrink-0 items-center gap-1">
+                <button onClick={() => toggleEdit(d.id)} disabled={pending} title={editLabel.has(d.id) ? "Done editing name" : "Edit name"} className="rounded-md p-1 text-fg-faint hover:bg-bg hover:text-brand-blue disabled:opacity-40" aria-label="Edit name">
+                  {editLabel.has(d.id) ? <Check className="h-4 w-4 text-brand-blue" /> : <Pencil className="h-4 w-4" />}
+                </button>
+                <button onClick={async () => { if (await confirmDialog({ title: "Delete item", message: `Delete “${d.label}”?`, confirmText: "Delete", danger: true })) remove(d.id); }} disabled={pending} className="rounded-md p-1 text-fg-faint hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-40" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <label className="block"><span className="text-[10px] text-fg-faint">Points</span><input type="number" step="0.01" min={0} className={num} value={d.points} onChange={(e) => setField(d.id, "points", e.target.value)} /></label>

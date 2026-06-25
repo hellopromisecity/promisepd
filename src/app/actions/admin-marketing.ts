@@ -612,7 +612,7 @@ export async function updatePointItem(
 
 /** Save every point item's values at once (one Save button for all). */
 export async function savePointItems(
-  items: { id: string; points: number; afr: number; income: number }[],
+  items: { id: string; label?: string; points: number; afr: number; income: number }[],
 ): Promise<ActionResult> {
   return runAction(async () => {
     await requireManager();
@@ -621,13 +621,16 @@ export async function savePointItems(
 
     for (const it of items) {
       if (!it.id) continue;
+      const patch: { label?: string; points: number; afr: number; income: number } = {
+        points: Math.max(0, round2(it.points)),
+        afr: Math.max(0, round2(it.afr)),
+        income: Math.max(0, round2(it.income)),
+      };
+      // Only overwrite the name when a non-empty one is sent (never blank it).
+      if (typeof it.label === "string" && it.label.trim()) patch.label = it.label.trim();
       const { error } = await admin
         .from("marketing_point_items")
-        .update({
-          points: Math.max(0, round2(it.points)),
-          afr: Math.max(0, round2(it.afr)),
-          income: Math.max(0, round2(it.income)),
-        })
+        .update(patch)
         .eq("id", it.id);
       if (error) throw new Error(error.message);
     }

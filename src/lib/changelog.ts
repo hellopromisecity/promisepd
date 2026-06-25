@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.4",
+    date: "2026-06-25",
+    title: "Marketing: rename point items from the Point values panel",
+    changes: [
+      { kind: "improved", text: "In “Point values per sale”, each item now has an ✏️ edit button next to delete — tap it to rename the item (e.g. fix a typo or reword it), then “Save all”. Renaming doesn't touch past history entries." },
+    ],
+  },
+  {
     version: "1.5.3",
     date: "2026-06-25",
     title: "Marketing: editable history with reasons & client deposits · glowing podium",
