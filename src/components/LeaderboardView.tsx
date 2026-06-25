@@ -64,7 +64,10 @@ export default function LeaderboardView({
 
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
-  const [period, setPeriod] = useState<Period>("year");
+  // Default to lifetime totals so the public ranking matches the internal
+  // Marketing Overview exactly (same stored points, same order). The period
+  // selector still lets visitors narrow to a single year if they want.
+  const [period, setPeriod] = useState<Period>("lifetime");
 
   // Period totals per officer (lifetime uses the running totals).
   const computed = useMemo(() => {
@@ -109,6 +112,10 @@ export default function LeaderboardView({
       .sort((a, b) => b.rPoints - a.rPoints);
   }, [computed, role, query]);
 
+  // Overall top-3 for the podium (ignores the search/role filter so the
+  // champions strip is stable) — ranked by the selected period.
+  const top3 = useMemo(() => [...computed].sort((a, b) => b.rPoints - a.rPoints).slice(0, 3), [computed]);
+
   const hasData = officers.length > 0;
 
   return (
@@ -152,6 +159,55 @@ export default function LeaderboardView({
           </div>
         </div>
       </section>
+
+      {hasData && top3.length > 0 && (
+        <section className="relative pb-10">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-3 items-end gap-2 sm:gap-4">
+              {[top3[1], top3[0], top3[2]].map((o, i) => {
+                if (!o) return <div key={i} />;
+                const rank = i === 1 ? 1 : i === 0 ? 2 : 3;
+                const decor = RANK_DECOR[rank];
+                const champ = rank === 1;
+                const Icon = decor.icon;
+                return (
+                  <div
+                    key={o.id}
+                    className={`card text-center transition-transform duration-300 hover:-translate-y-1 ${champ ? "p-4 sm:p-6 ring-2 ring-brand-blue/30" : "p-3 sm:mt-6 sm:p-5"}`}
+                  >
+                    <div className="relative">
+                      <span className={`absolute right-0 top-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${decor.bg} ${decor.text}`}>{isEn ? `${rank}${["st", "nd", "rd"][rank - 1]}` : num(rank)}</span>
+                      <div className={`mx-auto inline-flex items-center justify-center rounded-full ${decor.bg} ${decor.text} shadow-md ${champ ? "h-12 w-12 sm:h-14 sm:w-14" : "h-10 w-10 sm:h-12 sm:w-12"}`}>
+                        <Icon className={champ ? "h-6 w-6 sm:h-7 sm:w-7" : "h-5 w-5 sm:h-6 sm:w-6"} />
+                      </div>
+                    </div>
+                    <div className={`mt-2 line-clamp-2 font-bold leading-tight text-fg ${champ ? "text-sm sm:text-base" : "text-xs sm:text-sm"}`}>{o.name}</div>
+                    <div className="line-clamp-1 text-[10px] text-fg-muted">{o.sub}</div>
+                    <div className={`mt-1 font-extrabold text-brand-blue ${champ ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"}`}>
+                      {num(o.rPoints)}<span className="ml-0.5 text-[10px] font-semibold text-fg-faint">{isEn ? "pts" : "পয়েন্ট"}</span>
+                    </div>
+                    <div className="text-[11px] font-semibold text-emerald-700">{fmtBDT(o.rIncome)}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-7 text-center">
+              <p className="mx-auto max-w-2xl text-lg sm:text-xl font-bold leading-relaxed text-fg">
+                {isEn
+                  ? "We've joined this effort on the path to Baitullah — have you joined yet?"
+                  : "বাইতুল্লাহ’র পথে এই মেহনতে আমরা যুক্ত হয়েছি — আপনি যুক্ত হয়েছেন তো?"}
+              </p>
+              <Link
+                href={lp("/partner")}
+                className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-brand-blue px-7 py-3.5 text-base font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:scale-[1.02] hover:bg-brand-blue-dark"
+              >
+                {isEn ? "Become a partner" : "পার্টনার হোন"}<ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="relative pb-6">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">

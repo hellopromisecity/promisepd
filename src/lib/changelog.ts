@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.6",
+    date: "2026-06-25",
+    title: "Public leaderboard now mirrors the internal board · champions podium · calmer #1 card",
+    changes: [
+      { kind: "fixed", text: "The public leaderboard now ranks by lifetime points by default — exactly matching the internal Marketing Overview, so the names and order are always the same on both. (Visitors can still narrow it to a single year.)" },
+      { kind: "new", text: "Added a top-3 champions podium to the public leaderboard with a heartfelt line — “বাইতুল্লাহ’র পথে এই মেহনতে আমরা যুক্ত হয়েছি — আপনি যুক্ত হয়েছেন তো?” — and a “পার্টনার হোন” button that goes straight to the partner page." },
+      { kind: "improved", text: "Removed the rotating light on the #1 podium card in the dashboard — it now sits calm and clean." },
+    ],
+  },
+  {
     version: "1.5.5",
     date: "2026-06-25",
     title: "Award points: fractional quantity + the box stays open for bulk entry",

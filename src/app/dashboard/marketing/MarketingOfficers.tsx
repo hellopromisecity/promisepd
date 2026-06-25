@@ -799,7 +799,7 @@ function Podium({ top }: { top: (Officer & { rPoints: number; rIncome: number })
             key={o.id}
             className={`group relative cursor-default rounded-2xl text-center shadow-sm ring-1 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${s.ring} ${
               champ
-                ? "podium-glow border border-brand-blue/40 bg-gradient-to-b from-brand-blue-tint to-bg p-4 sm:p-5"
+                ? "border border-brand-blue/40 bg-gradient-to-b from-brand-blue-tint to-bg p-4 sm:p-5"
                 : "overflow-hidden border border-border bg-bg p-3 sm:mt-4 sm:p-4"
             }`}
           >
