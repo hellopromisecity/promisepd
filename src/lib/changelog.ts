@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.7",
+    date: "2026-06-25",
+    title: "Leaderboards default to “This year”",
+    changes: [
+      { kind: "changed", text: "Both the internal Marketing Overview and the public leaderboard now open on “This year” by default (instead of lifetime) — matching each other. Anyone can still switch to Lifetime / Last year / 30 days with the period filter." },
+    ],
+  },
+  {
     version: "1.5.6",
     date: "2026-06-25",
     title: "Public leaderboard now mirrors the internal board · champions podium · calmer #1 card",

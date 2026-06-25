@@ -64,10 +64,10 @@ export default function LeaderboardView({
 
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
-  // Default to lifetime totals so the public ranking matches the internal
-  // Marketing Overview exactly (same stored points, same order). The period
-  // selector still lets visitors narrow to a single year if they want.
-  const [period, setPeriod] = useState<Period>("lifetime");
+  // Default to the current year — the same default as the internal Marketing
+  // Overview, so both boards show the same ranking out of the box. Visitors
+  // can switch to lifetime / 30 days / last year with the period selector.
+  const [period, setPeriod] = useState<Period>("year");
 
   // Period totals per officer (lifetime uses the running totals).
   const computed = useMemo(() => {
