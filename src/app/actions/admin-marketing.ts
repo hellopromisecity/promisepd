@@ -158,7 +158,8 @@ export async function updatePointEntry(
     if (!admin || !entryId) throw new Error("Database is not configured.");
     const { data: entry } = await admin.from("marketing_point_entries").select("officer_id").eq("id", entryId).maybeSingle();
     if (!entry) throw new AuthzError("Entry not found.");
-    const qty = Math.max(1, Math.floor(Number(input.quantity) || 1));
+    const qty = round2(Number(input.quantity) || 0); // fractional allowed (e.g. 0.5 শতাংশ)
+    if (qty <= 0) throw new Error("Quantity must be greater than 0.");
     const { data: item } = await admin.from("marketing_point_items").select("label, points, afr, income").eq("id", input.itemId).maybeSingle();
     if (!item) throw new AuthzError("Pick a point item.");
     const { error } = await admin.from("marketing_point_entries").update({
@@ -501,7 +502,8 @@ export async function awardPoints(input: {
 
     if (!input.officerId) throw new Error("Pick an officer.");
     if (!input.itemId) throw new Error("Pick a point item.");
-    const qty = Math.max(1, Math.floor(Number(input.quantity) || 1));
+    const qty = round2(Number(input.quantity) || 0); // fractional allowed (e.g. 0.5 শতাংশ)
+    if (qty <= 0) throw new Error("Quantity must be greater than 0.");
 
     const { data: item, error: itemErr } = await admin
       .from("marketing_point_items")

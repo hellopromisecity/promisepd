@@ -286,7 +286,7 @@ export default function MarketingOfficers({
       )}
 
       {dialog === "officer" && <OfficerDialog officer={editing} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
-      {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onDone={() => { setDialog(null); refresh(); }} />}
+      {dialog === "points" && <AwardPointsDialog officers={officers} items={items} onClose={() => setDialog(null)} onSaved={refresh} />}
       {dialog === "values" && <ManagePointsDialog items={items} onClose={() => { setDialog(null); refresh(); }} />}
       </Card>
       {history && <HistoryDialog officer={history} items={items} onClose={() => setHistory(null)} onChanged={refresh} />}
@@ -574,18 +574,19 @@ function OfficerPicker({ officers, value, onChange }: { officers: Officer[]; val
   );
 }
 
-function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Officer[]; items: PointItem[]; onClose: () => void; onDone: () => void }) {
+function AwardPointsDialog({ officers, items, onClose, onSaved }: { officers: Officer[]; items: PointItem[]; onClose: () => void; onSaved: () => void }) {
   const [officerId, setOfficerId] = useState(officers[0]?.id ?? "");
   const [itemId, setItemId] = useState(items[0]?.id ?? "");
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState("1");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [clientName, setClientName] = useState("");
   const [clientId, setClientId] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [addedCount, setAddedCount] = useState(0);
   const [pending, start] = useTransition();
 
   const item = useMemo(() => items.find((p) => p.id === itemId), [items, itemId]);
-  const q = Math.max(1, qty || 1);
+  const q = Math.max(0, parseFloat(qty) || 0); // fractional allowed (e.g. 0.5 শতাংশ)
   const totalPts = Math.round((item?.points ?? 0) * q * 100) / 100;
   const totalAfr = (item?.afr ?? 0) * q;
   const totalIncome = (item?.income ?? 0) * q;
@@ -593,8 +594,15 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
   function submit() {
     setErr(null);
     start(async () => {
-      const res = await awardPoints({ officerId, itemId, quantity: qty, saleDate, clientName, clientId });
-      if (res.ok) onDone(); else setErr(res.error);
+      const res = await awardPoints({ officerId, itemId, quantity: q, saleDate, clientName, clientId });
+      if (res.ok) {
+        toast(res.message || "Points added.", "success");
+        setAddedCount((n) => n + 1);
+        // Keep the dialog open for rapid multi-entry — reset only the per-sale
+        // fields; officer + item + date stay so the next entry is quick.
+        setQty("1"); setClientName(""); setClientId("");
+        onSaved();
+      } else setErr(res.error);
     });
   }
 
@@ -620,7 +628,7 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Quantity (units sold)</label>
-              <input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} />
+              <input type="number" step="any" min={0} className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 1 or 0.5" />
             </div>
             <div>
               <label className={labelCls}>Sale date</label>
@@ -636,9 +644,14 @@ function AwardPointsDialog({ officers, items, onClose, onDone }: { officers: Off
             <div className="rounded-xl bg-bg-soft px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-fg-muted">AFR</div><div className="text-sm font-extrabold text-fg">{fmtBDT(totalAfr)}</div></div>
             <div className="rounded-xl bg-emerald-50 px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-emerald-700/80">Income</div><div className="text-sm font-extrabold text-emerald-700">{fmtBDT(totalIncome)}</div></div>
           </div>
-          <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+          <button onClick={submit} disabled={pending || q <= 0} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Add points
           </button>
+          <p className="text-center text-[11px] text-fg-faint">
+            {addedCount > 0
+              ? `✓ ${addedCount} added — the box stays open, keep adding or press ✕ to close.`
+              : "Box stays open after adding, so you can enter many in a row."}
+          </p>
         </div>
       )}
     </Modal>
@@ -884,7 +897,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                     <div className="truncate text-sm font-semibold text-fg">{e.client_name || "—"}</div>
                     {e.item_label && (
                       <span className="mt-0.5 inline-block rounded-md bg-brand-blue-tint px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark">
-                        {e.item_label}{e.quantity > 1 ? ` ×${e.quantity}` : ""}
+                        {e.item_label}{e.quantity !== 1 ? ` ×${e.quantity}` : ""}
                       </span>
                     )}
                   </div>
@@ -925,7 +938,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
  *  Mirrors the award form; saving recomputes the officer's totals. */
 function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHistoryEntry; items: PointItem[]; onClose: () => void; onDone: () => void }) {
   const [itemId, setItemId] = useState(items.find((p) => p.label === entry.item_label)?.id ?? items[0]?.id ?? "");
-  const [qty, setQty] = useState(entry.quantity || 1);
+  const [qty, setQty] = useState(String(entry.quantity || 1));
   const [saleDate, setSaleDate] = useState(entry.date ? entry.date.slice(0, 10) : "");
   const [clientName, setClientName] = useState(entry.client_name ?? "");
   const [clientId, setClientId] = useState(entry.client_id ?? "");
@@ -933,7 +946,7 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
   const [pending, start] = useTransition();
 
   const item = useMemo(() => items.find((p) => p.id === itemId), [items, itemId]);
-  const q = Math.max(1, qty || 1);
+  const q = Math.max(0, parseFloat(qty) || 0); // fractional allowed (e.g. 0.5 শতাংশ)
   const totalPts = Math.round((item?.points ?? 0) * q * 100) / 100;
   const totalAfr = (item?.afr ?? 0) * q;
   const totalIncome = (item?.income ?? 0) * q;
@@ -960,7 +973,7 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={labelCls}>Quantity (units)</label><input type="number" min={1} className={inputCls} value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))} /></div>
+            <div><label className={labelCls}>Quantity (units)</label><input type="number" step="any" min={0} className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 1 or 0.5" /></div>
             <div><label className={labelCls}>Sale date</label><input type="date" className={inputCls} value={saleDate} onChange={(e) => setSaleDate(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -972,7 +985,7 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
             <div className="rounded-xl bg-bg-soft px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-fg-muted">AFR</div><div className="text-sm font-extrabold text-fg">{fmtBDT(totalAfr)}</div></div>
             <div className="rounded-xl bg-emerald-50 px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-emerald-700/80">Income</div><div className="text-sm font-extrabold text-emerald-700">{fmtBDT(totalIncome)}</div></div>
           </div>
-          <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+          <button onClick={submit} disabled={pending || q <= 0} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save changes
           </button>
         </div>

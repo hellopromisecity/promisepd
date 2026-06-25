@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.5",
+    date: "2026-06-25",
+    title: "Award points: fractional quantity + the box stays open for bulk entry",
+    changes: [
+      { kind: "new", text: "Quantity now accepts fractions like 0.5 — e.g. জমি sold প্রতি শতাংশ where 12 buyers share 6 শতাংশ (0.5 each). Points, fund and income scale to the fraction." },
+      { kind: "improved", text: "After “Add points” the dialog now stays open and just clears the quantity + client fields (officer, item and date stay), so one officer's 10–20 sales can be entered back-to-back. Close it with ✕ when done." },
+    ],
+  },
+  {
     version: "1.5.4",
     date: "2026-06-25",
     title: "Marketing: rename point items from the Point values panel",
