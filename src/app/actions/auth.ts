@@ -189,6 +189,67 @@ async function tryLegacyLogin(
   return false;
 }
 
+/** Best-effort: give a brand-new member a zero-balance investor account so
+ *  they appear in the admin "App Users" list (which reads investor_accounts)
+ *  and get the investor dashboard on /account.  NEVER throws — signup must
+ *  succeed even if this hiccups; the backfill script catches any misses.
+ *
+ *  UID is the next sequential "U…" id, paged past Supabase's 1000-row cap
+ *  (an unpaged scan misses the newest ids and collides), with a few retries
+ *  in case two signups race for the same id. */
+async function seedInvestorAccount(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  profileId: string,
+  name: string,
+  mobile: string,
+  email: string | null,
+): Promise<void> {
+  try {
+    const { data: existing } = await admin
+      .from("investor_accounts")
+      .select("uid")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (existing) return; // already linked (e.g. a ported investor)
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let max = 100000;
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("investor_accounts")
+          .select("uid")
+          .range(from, from + 999);
+        if (error) return; // table unreachable — skip silently
+        const rows = (data ?? []) as { uid?: string }[];
+        for (const r of rows) {
+          const n = parseInt(String(r.uid ?? "").replace(/\D/g, ""), 10);
+          if (Number.isFinite(n) && n > max) max = n;
+        }
+        if (rows.length < 1000) break;
+      }
+      const { error } = await admin.from("investor_accounts").insert({
+        uid: `U${max + 1}`,
+        profile_id: profileId,
+        full_name: name,
+        phone_number: "+" + mobile,
+        email,
+        language: "bn",
+        is_verified: false,
+        is_active: true,
+        balance: { total_investment: 0, total_profit: 0, total_withdrawn: 0, total_balance: 0 },
+      });
+      if (!error) return;
+      // A uid race → recompute + retry.  Any other duplicate (e.g. phone
+      // already used by a ported investor) isn't ours to resolve — stop.
+      if (!/duplicate|unique/i.test(error.message)) return;
+      const phoneClash = /phone/i.test(error.message);
+      if (phoneClash) return;
+    }
+  } catch {
+    /* best-effort — never block signup */
+  }
+}
+
 // ── Actions ───────────────────────────────────────────────────────
 
 export async function login(payload: LoginPayload): Promise<AuthResult> {
@@ -278,7 +339,7 @@ export async function signup(payload: SignupPayload): Promise<AuthResult> {
 
   // Create the auth user (email pre-confirmed; synthetic address never
   // mailed).  The on_auth_user_created trigger fills public.profiles.
-  const { error: createErr } = await admin.auth.admin.createUser({
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email: syntheticEmail(mobile),
     password: payload.password,
     email_confirm: true,
@@ -292,6 +353,12 @@ export async function signup(payload: SignupPayload): Promise<AuthResult> {
     }
     console.error("[auth/signup]", createErr.message);
     return { ok: false, error: "অ্যাকাউন্ট তৈরি করা যায়নি — আবার চেষ্টা করুন।" };
+  }
+
+  // Seed a zero-balance investor account so the new member shows up in the
+  // admin "App Users" list and gets the investor dashboard.  Best-effort.
+  if (created?.user?.id) {
+    await seedInvestorAccount(admin, created.user.id, name, mobile, email ?? null);
   }
 
   // Sign the new member straight in so they land logged-in.

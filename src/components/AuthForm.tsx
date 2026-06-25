@@ -187,7 +187,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
             {a.remember}
           </label>
           <Link
-            href={lp("/contact")}
+            href={lp("/forgot-password")}
             className="font-semibold text-brand-blue hover:underline"
           >
             {a.forgot}

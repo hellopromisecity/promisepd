@@ -7,6 +7,8 @@ import Footer from "@/components/Footer";
 import ScrollToTop from "@/components/ScrollToTop";
 import WhatsAppFAB from "@/components/WhatsAppFAB";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import PwaInstallButton from "@/components/PwaInstallButton";
+import ShareSidebar from "@/components/ShareSidebar";
 import RegisterSW from "@/components/RegisterSW";
 import SkipLink from "@/components/SkipLink";
 import SiteChrome from "@/components/SiteChrome";
@@ -170,13 +172,11 @@ export default function RootLayout({
               // portal's pinned header) silently stop sticking.  Raw <style> on
               // purpose: Lightning CSS drops this when written in globals.css.
               "@supports (overflow:clip){html,body{overflow-x:clip!important}}",
-              // /account (investor portal): in the BROWSER the page must clear
-              // the fixed navbar and the sticky header docks just below it.
-              // Inside the installed PWA the navbar is hidden (.pwa-hide), so
-              // both collapse to the top edge.
+              // /account (investor portal): clear the fixed navbar (now shown
+              // in both the browser AND the PWA) and dock the sticky header
+              // just below it.
               ".acct-shell{padding-top:5.25rem}@media(min-width:640px){.acct-shell{padding-top:6rem}}",
               ".acct-sticky{top:76px}@media(min-width:640px){.acct-sticky{top:84px}}",
-              "@media all and (display-mode:standalone){.acct-shell{padding-top:1.25rem!important}.acct-sticky{top:0!important}}",
             ].join(""),
           }}
         />
@@ -198,25 +198,27 @@ export default function RootLayout({
           zIndex={2000}
         />
         <SkipLink />
-        {/* Navbar shows on the website (including /account, so investors can
-            navigate the site), but `.pwa-hide` removes it inside the installed
-            PWA so the app feels native — matching the already-hidden footer. */}
-        <div className="pwa-hide">
-          <SiteChrome>
-            <Navbar />
-          </SiteChrome>
-        </div>
+        {/* Site chrome shows on every page in BOTH the browser and the
+            installed PWA — only /login, /signup, and /dashboard (its own
+            shell) drop it, via SiteChrome.  Route-gated, not display-mode
+            gated, so the PWA looks just like the website. */}
+        <SiteChrome>
+          <Navbar />
+        </SiteChrome>
         <main id="main" className="relative">
           {children}
         </main>
-        <div className="pwa-hide">
-          <SiteChrome>
-            <Footer />
-            <ScrollToTop />
-            <WhatsAppFAB />
-            <PWAInstallPrompt />
-          </SiteChrome>
-        </div>
+        {/* Footer + FABs — shown in the PWA too.  The install button + popup
+            self-hide once the app is installed/standalone; the share rail is
+            desktop-only. */}
+        <SiteChrome>
+          <Footer />
+          <ScrollToTop />
+          <WhatsAppFAB />
+          <PwaInstallButton />
+          <ShareSidebar />
+          <PWAInstallPrompt />
+        </SiteChrome>
         <RegisterSW />
         {/* Site-wide branded dialog + toast (replace native confirm/alert). */}
         <DialogHost />

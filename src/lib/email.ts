@@ -35,9 +35,43 @@ const FROM = process.env.CONTACT_FROM_EMAIL || "PromisePD <onboarding@resend.dev
  *  domain (promisepd.com) is verified + CONTACT_FROM_EMAIL points at
  *  it.  Until then we still save the subscriber to the DB and skip
  *  the welcome silently — no broken UX. */
-const canEmailArbitraryRecipients = () =>
+export const canEmailArbitraryRecipients = () =>
   !!process.env.CONTACT_FROM_EMAIL &&
   !process.env.CONTACT_FROM_EMAIL.includes("resend.dev");
+
+/** Email a password-reset code.  Sends only when a verified domain is
+ *  configured (Resend's shared sender can't reach arbitrary inboxes);
+ *  otherwise a silent no-op (the caller steers the user to phone reset).
+ *  Returns whether it actually sent. */
+export async function sendResetCodeEmail(
+  email: string,
+  code: string,
+): Promise<{ sent: boolean }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || !canEmailArbitraryRecipients()) return { sent: false };
+  try {
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
+      from: FROM,
+      to: email,
+      subject: "PromisePD — পাসওয়ার্ড রিসেট কোড",
+      html: `<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#1847A1;margin:0 0 8px">PromisePD পাসওয়ার্ড রিসেট</h2>
+        <p style="color:#475569;font-size:14px;margin:0 0 16px">আপনার পাসওয়ার্ড রিসেট কোড:</p>
+        <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#0b1220;background:#f1f5f9;border-radius:12px;padding:16px;text-align:center">${code}</div>
+        <p style="color:#64748b;font-size:13px;margin:16px 0 0">কোডটি ১০ মিনিট পর্যন্ত বৈধ। আপনি যদি রিসেট না চান, এই ইমেইল উপেক্ষা করুন।</p>
+      </div>`,
+    });
+    if (error) {
+      console.error("[email] reset code send failed:", error);
+      return { sent: false };
+    }
+    return { sent: true };
+  } catch (err) {
+    console.error("[email] reset code unexpected error:", err);
+    return { sent: false };
+  }
+}
 
 export async function sendContactNotification(
   payload: ContactEmailPayload,

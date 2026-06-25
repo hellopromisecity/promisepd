@@ -24,6 +24,18 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.1",
+    date: "2026-06-25",
+    title: "Password reset · all signups visible · PWA chrome · share buttons",
+    changes: [
+      { kind: "new", text: "Forgot your password? There's now a proper reset page — get a 6-digit code on your phone (SMS) and set a new password. (Email-based reset turns on automatically once a sending domain is verified.)" },
+      { kind: "fixed", text: "Every new signup now appears in the dashboard App Users list automatically — a zero-balance app account is created at signup, so members can no longer go missing (and the earlier signups were backfilled)." },
+      { kind: "improved", text: "The installed mobile app (PWA) now shows the site header and footer on every page — just like the website — except the clean login and signup screens." },
+      { kind: "new", text: "A floating social-share bar (Facebook, WhatsApp, Telegram, X + copy-link) shares whatever page you're on, and a mobile “Install” button lets visitors add the app even if the auto-prompt doesn't appear." },
+      { kind: "fixed", text: "Members without a real email no longer see an internal “…@users.promisepd.app” address on their account — it now correctly shows none." },
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-06-19",
     title: "Fuzala Complex — project documentary video",

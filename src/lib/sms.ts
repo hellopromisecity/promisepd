@@ -42,6 +42,16 @@ async function sendSms(phone: string, message: string): Promise<void> {
   }
 }
 
+/** Text a password-reset code.  BD numbers only (gateway limit); anything
+ *  else is silently skipped.  Never throws. */
+export async function sendResetCodeSms(phone: string, code: string): Promise<void> {
+  if (!isBdNumber(phone)) return;
+  await sendSms(
+    phone,
+    `Your PromisePD password reset code is ${code}. It expires in 10 minutes. Do not share it with anyone.`,
+  );
+}
+
 /** Text an investor about a transaction (credit/debit). BD numbers only;
  *  anything else is silently skipped.  Never throws. */
 export async function sendTransactionSms(opts: {

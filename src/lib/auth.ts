@@ -87,7 +87,12 @@ export const getCurrentUser = cache(async (): Promise<Member | null> => {
     // accounts (a mobile/username login whose auth email is synthetic, and
     // a real-email login); the super-admin override must recognise the
     // owner no matter which one they signed in with.
-    const email = profile?.email ?? meta.email ?? claimEmail ?? null;
+    // The synthetic auth email (<mobile>@users.promisepd.app) is an internal
+    // login key, never a real address — never surface it as the member's
+    // email (it must not show on /account, nor satisfy the super-admin check).
+    const realClaimEmail =
+      claimEmail && !claimEmail.toLowerCase().endsWith("@users.promisepd.app") ? claimEmail : null;
+    const email = profile?.email ?? meta.email ?? realClaimEmail ?? null;
     const mobile = profile?.mobile || meta.mobile || claimPhone || "";
 
     // Env-designated owner is always admin; otherwise use the DB role.
