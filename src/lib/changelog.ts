@@ -24,6 +24,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.9",
+    date: "2026-06-26",
+    title: "All marketing officers' historical points imported",
+    changes: [
+      { kind: "new", text: "Imported the full point ledger for 40 more officers straight from the master sheet — each sale entered with its real date, client, project and commission (FB & attendance as points only, no income). 60 officers now appear on the leaderboard." },
+      { kind: "improved", text: "Total commission paid to partners jumped accordingly, and every imported officer's history (👁) shows the dated, itemised breakdown." },
+    ],
+  },
+  {
     version: "1.5.8",
     date: "2026-06-25",
     title: "Leaderboard: live “commission paid to partners” counter",
