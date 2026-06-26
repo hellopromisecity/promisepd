@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.8",
+    date: "2026-06-25",
+    title: "Leaderboard: live “commission paid to partners” counter",
+    changes: [
+      { kind: "new", text: "The public leaderboard now shows a live, animated counter of the total commission paid to all partners so far (summed straight from the backend) with a motivating line — “আমাদের পার্টনাররা ইতিমধ্যে লক্ষ টাকা আয় করছেন — আপনার পরিশোধও পথেই।” It grows automatically as more is paid out." },
+    ],
+  },
+  {
     version: "1.5.7",
     date: "2026-06-25",
     title: "Leaderboards default to “This year”",

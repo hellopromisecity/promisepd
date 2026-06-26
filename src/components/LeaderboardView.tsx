@@ -4,9 +4,9 @@
  *  with a working role filter, time-period filter and an income (আয়)
  *  column.  Rendered by /leaderboard (bn) and /en/leaderboard (en). */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { Trophy, Crown, Medal, Award, Sparkles, ArrowRight, Plane } from "lucide-react";
+import { Trophy, Crown, Medal, Award, Sparkles, ArrowRight, Plane, Wallet } from "lucide-react";
 import LeaderboardControls, { type Period, type RoleOption } from "./LeaderboardControls";
 import PropertyBackdrop from "./PropertyBackdrop";
 import { PARTNER_AWARDS, PARTNER_PERIOD } from "@/lib/partner";
@@ -47,6 +47,32 @@ function fmtBDT(n: number) {
   if (n >= 1e7) return "৳ " + (n / 1e7).toFixed(2).replace(/\.?0+$/, "") + " Cr";
   if (n >= 1e5) return "৳ " + (n / 1e5).toFixed(2).replace(/\.?0+$/, "") + " L";
   return "৳ " + Math.round(n).toLocaleString("en-IN");
+}
+
+/** Animate a number from 0 → target once on mount (easeOutCubic). Used for
+ *  the "commission paid so far" hero counter. */
+function useCountUp(target: number, durationMs = 1700) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!(target > 0)) { setVal(0); return; }
+    let raf = 0;
+    let startTs = 0;
+    let done = false;
+    const finish = () => { if (!done) { done = true; setVal(target); } };
+    const tick = (t: number) => {
+      if (!startTs) startTs = t;
+      const p = Math.min(1, (t - startTs) / durationMs);
+      setVal(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else finish();
+    };
+    raf = requestAnimationFrame(tick);
+    // Guarantee the real total shows even where rAF is throttled/paused
+    // (background tab, reduced-motion, very slow device) — never stuck at ৳0.
+    const fallback = setTimeout(finish, durationMs + 400);
+    return () => { cancelAnimationFrame(raf); clearTimeout(fallback); };
+  }, [target, durationMs]);
+  return val;
 }
 
 export default function LeaderboardView({
@@ -116,6 +142,11 @@ export default function LeaderboardView({
   // champions strip is stable) — ranked by the selected period.
   const top3 = useMemo(() => [...computed].sort((a, b) => b.rPoints - a.rPoints).slice(0, 3), [computed]);
 
+  // Total commission paid out to all partners (lifetime, period-independent) —
+  // animated count-up to make the achievement feel alive.
+  const totalPaid = useMemo(() => officers.reduce((s, o) => s + (Number(o.income) || 0), 0), [officers]);
+  const paidNow = useCountUp(totalPaid);
+
   const hasData = officers.length > 0;
 
   return (
@@ -136,6 +167,27 @@ export default function LeaderboardView({
           </p>
         </div>
       </section>
+
+      {totalPaid > 0 && (
+        <section className="relative -mt-2 pb-10 sm:pb-12">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+            <div className="grad-border relative overflow-hidden p-6 text-center sm:p-8">
+              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-fg-muted sm:text-xs">
+                <Wallet className="h-4 w-4 text-brand-blue" />
+                {isEn ? "Commission paid to our partners so far" : "এ পর্যন্ত পার্টনারদের পরিশোধিত কমিশন"}
+              </div>
+              <div className="mt-3 whitespace-nowrap text-4xl font-extrabold leading-none tabular-nums text-grad sm:text-5xl lg:text-6xl">
+                {paidNow > 0 ? fmtBDT(paidNow) : isEn ? "৳ 0" : "৳ ০"}
+              </div>
+              <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-fg-muted sm:text-base">
+                {isEn
+                  ? "Our partners are already earning lakhs — and your payment is on its way too. Still on the sidelines?"
+                  : "আমাদের পার্টনাররা ইতিমধ্যে লক্ষ টাকা আয় করছেন — আপনার পরিশোধও পথেই। আপনি কি এখনো অপেক্ষায়?"}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="relative pb-12">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
