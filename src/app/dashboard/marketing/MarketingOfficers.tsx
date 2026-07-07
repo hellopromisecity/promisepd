@@ -894,7 +894,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
               <div key={e.id} className="rounded-xl border border-border bg-bg-soft px-3 py-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-fg">{e.client_name || "—"}</div>
+                    <div className="truncate text-sm font-semibold text-fg">{e.client_name || (/FB|Facebook/i.test(e.item_label || "") ? "Like / Comment / Share" : "—")}</div>
                     {e.item_label && (
                       <span className="mt-0.5 inline-block rounded-md bg-brand-blue-tint px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark">
                         {e.item_label}{e.quantity !== 1 ? ` ×${e.quantity}` : ""}
@@ -914,7 +914,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                   <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
                   <span className="text-fg-muted">points <b className="text-brand-blue">+{fmtPts(e.points)}</b></span>
                   {e.clientInvested != null && (
-                    <span className="ml-auto rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">মোট জমা {fmtBDT(e.clientInvested)}</span>
+                    <span className="ml-auto rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">মোট জমা {fmtBDT(e.clientInvested)}{e.clientPct != null ? ` · ${e.clientPct}%` : ""}</span>
                   )}
                 </div>
               </div>

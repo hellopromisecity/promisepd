@@ -56,30 +56,32 @@ export type OfficerHistoryEntry = {
   afr: number;
   income: number;
   date: string; // ISO — sale_date when set, else created_at
-  clientInvested: number | null; // the client's total deposit in the company, if resolvable
+  clientInvested: number | null; // client's deposit into THIS sale's project (txn-summed)
+  clientGoal: number | null;     // that project's per-investor target (share price)
+  clientPct: number | null;      // clientInvested / clientGoal, 0–100
 };
 
-/** Map a key (uid / fid / phone digits / lowercased name) → that investor's
- *  total deposit, so a marketing entry's free-text client_id or name can show
- *  how much the client has actually put in. */
-async function investorTotalsMap(admin: MktAdmin): Promise<Map<string, number>> {
-  const m = new Map<string, number>();
-  for (let fromN = 0; ; fromN += 1000) {
-    const { data } = await admin.from("investor_accounts").select("uid, fid, phone_number, full_name, balance").range(fromN, fromN + 999);
-    const rows = data ?? [];
-    for (const a of rows) {
-      const inv = Number((a.balance as { total_investment?: number } | null)?.total_investment) || 0;
-      const keys = [a.uid as string | null, a.fid as string | null, ((a.phone_number as string) ?? "").replace(/\D/g, ""), ((a.full_name as string) ?? "").trim().toLowerCase()];
-      for (const k of keys) if (k && !m.has(k)) m.set(k, inv);
-    }
-    if (rows.length < 1000) break;
-  }
-  return m;
+const PROFIT_TYPES = new Set(["profit", "profit_share"]);
+
+/** Marketing point-item → a lowercased fragment of the matching investment
+ *  project's name. We match against the CLIENT's actual investments (so we
+ *  never guess which Ahbab/Fuzala they bought). null = no linked project
+ *  (জমি / FB / attendance / recruitment) → no deposit figure shown. */
+function itemProjectKeyword(label: string | null): string | null {
+  if (!label) return null;
+  if (/ফুজালা কমপ্লেক্স|fuzala complex/i.test(label)) return "fuzala complex";
+  if (/ফুজালা টাওয়ার|fuzala tower/i.test(label)) return "fuzala tower";
+  if (/আহবাব|ahbab|প্যালেস|palace/i.test(label)) return "ahbab";
+  if (/প্রমিস সিটি|promise city/i.test(label)) return "promise city";
+  return null;
 }
 
 /** One officer's full referral / sale history — what each award was for, when,
- *  the fund + income + points, and the client's total deposit.  Read — [] if
- *  the caller isn't a manager or data is unavailable. */
+ *  the fund + income + points, and (per sale) how much the client has deposited
+ *  into THAT specific project + what % of their share that is. The deposit is
+ *  summed from the client's own "+" transactions for the project — the exact
+ *  figure the investor sees in their portal — never the company-wide total.
+ *  Read — [] if the caller isn't a manager or data is unavailable. */
 export async function getOfficerHistory(officerId: string): Promise<OfficerHistoryEntry[]> {
   try {
     await requireManager();
@@ -92,25 +94,101 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
       .order("sale_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
     const entries = data ?? [];
-    const invMap = await investorTotalsMap(admin);
-    const lookup = (cid: string | null, cname: string | null): number | null => {
-      for (const k of [cid?.trim(), cid?.replace(/\D/g, ""), cname?.trim().toLowerCase()]) {
-        if (k && invMap.has(k)) return invMap.get(k)!;
+
+    // Resolve each entry's free-text client (id / name) → an investor uid.
+    const keyToUid = new Map<string, string>();
+    for (let fromN = 0; ; fromN += 1000) {
+      const { data: accs } = await admin.from("investor_accounts").select("uid, fid, phone_number, full_name").range(fromN, fromN + 999);
+      const rows = accs ?? [];
+      for (const a of rows) {
+        const uid = a.uid as string;
+        for (const k of [a.uid as string, a.fid as string, ((a.phone_number as string) ?? "").replace(/\D/g, ""), ((a.full_name as string) ?? "").trim().toLowerCase()]) {
+          if (k && !keyToUid.has(k)) keyToUid.set(k, uid);
+        }
       }
+      if (rows.length < 1000) break;
+    }
+    const resolveUid = (cid: string | null, cname: string | null): string | null => {
+      for (const k of [cid?.trim(), cid?.replace(/\D/g, ""), cname?.trim().toLowerCase()]) if (k && keyToUid.has(k)) return keyToUid.get(k)!;
       return null;
     };
-    return entries.map((e) => ({
-      id: e.id as string,
-      client_name: (e.client_name as string) ?? null,
-      client_id: (e.client_id as string) ?? null,
-      item_label: (e.item_label as string) ?? null,
-      quantity: Number(e.quantity) || 1,
-      points: Number(e.points) || 0,
-      afr: Number(e.afr) || 0,
-      income: Number(e.income) || 0,
-      date: e.sale_date ? new Date(e.sale_date as string).toISOString() : (e.created_at as string),
-      clientInvested: lookup((e.client_id as string) ?? null, (e.client_name as string) ?? null),
-    }));
+
+    // Only the clients we can resolve + that map to a project need portal figures.
+    const needUids = new Set<string>();
+    for (const e of entries) {
+      if (!itemProjectKeyword((e.item_label as string) ?? null)) continue;
+      const uid = resolveUid((e.client_id as string) ?? null, (e.client_name as string) ?? null);
+      if (uid) needUids.add(uid);
+    }
+
+    // Per (uid, project): invested (txn-summed) + goal — same rules as the portal.
+    const investedByUidProj = new Map<string, number>();
+    const goalByUidProj = new Map<string, number>();
+    const projById = new Map<string, { name: string; share: number }>();
+    if (needUids.size) {
+      const uids = [...needUids];
+      const [projRes, typeRes] = await Promise.all([
+        admin.from("investment_projects").select("project_id, project_name, per_user_share_amount"),
+        admin.from("investment_types").select("name, operator"),
+      ]);
+      for (const p of projRes.data ?? []) projById.set(p.project_id as string, { name: ((p.project_name as string) ?? "").toLowerCase(), share: Number(p.per_user_share_amount) || 0 });
+      const op = new Map((typeRes.data ?? []).map((t) => [t.name as string, t.operator as string]));
+      for (let fromN = 0; ; fromN += 1000) {
+        const { data: inv } = await admin.from("investments").select("uid, project_id, custom_share_price").in("uid", uids).range(fromN, fromN + 999);
+        const rows = inv ?? [];
+        for (const r of rows) goalByUidProj.set(`${r.uid}|${r.project_id}`, Number(r.custom_share_price) || (projById.get(r.project_id as string)?.share ?? 0));
+        if (rows.length < 1000) break;
+      }
+      for (let fromN = 0; ; fromN += 1000) {
+        const { data: tx } = await admin.from("investor_transactions").select("uid, project_id, type, amount").in("uid", uids).range(fromN, fromN + 999);
+        const rows = tx ?? [];
+        for (const t of rows) {
+          if (!t.project_id) continue;
+          const ty = String(t.type);
+          if (PROFIT_TYPES.has(ty) || (op.get(ty) ?? "+") !== "+") continue;
+          const key = `${t.uid}|${t.project_id}`;
+          investedByUidProj.set(key, (investedByUidProj.get(key) ?? 0) + (Number(t.amount) || 0));
+        }
+        if (rows.length < 1000) break;
+      }
+    }
+
+    const perProject = (cid: string | null, cname: string | null, label: string | null) => {
+      const kw = itemProjectKeyword(label);
+      if (!kw) return { invested: null, goal: null, pct: null };
+      const uid = resolveUid(cid, cname);
+      if (!uid) return { invested: null, goal: null, pct: null };
+      // pick the client's investment whose project name matches the item type
+      let pid: string | null = null;
+      for (const key of goalByUidProj.keys()) {
+        if (!key.startsWith(uid + "|")) continue;
+        const p = key.slice(uid.length + 1);
+        if ((projById.get(p)?.name ?? "").includes(kw)) { pid = p; break; }
+      }
+      if (!pid) return { invested: null, goal: null, pct: null };
+      const key = `${uid}|${pid}`;
+      const invested = investedByUidProj.get(key) ?? 0;
+      const goal = goalByUidProj.get(key) ?? 0;
+      return { invested, goal, pct: goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : null };
+    };
+
+    return entries.map((e) => {
+      const pp = perProject((e.client_id as string) ?? null, (e.client_name as string) ?? null, (e.item_label as string) ?? null);
+      return {
+        id: e.id as string,
+        client_name: (e.client_name as string) ?? null,
+        client_id: (e.client_id as string) ?? null,
+        item_label: (e.item_label as string) ?? null,
+        quantity: Number(e.quantity) || 1,
+        points: Number(e.points) || 0,
+        afr: Number(e.afr) || 0,
+        income: Number(e.income) || 0,
+        date: e.sale_date ? new Date(e.sale_date as string).toISOString() : (e.created_at as string),
+        clientInvested: pp.invested,
+        clientGoal: pp.goal,
+        clientPct: pp.pct,
+      };
+    });
   } catch {
     return [];
   }

@@ -24,6 +24,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.10",
+    date: "2026-07-07",
+    title: "Officer history: per-project client deposit + % paid",
+    changes: [
+      { kind: "fixed", text: "In an officer's history (👁), “মোট জমা” now shows the client's deposit into THAT specific project — the exact figure the investor sees in their own app — instead of their company-wide total across every project. So a self-referral like Ahbab shows only the Ahbab deposit, not other projects referred by other partners." },
+      { kind: "new", text: "Beside each deposit it now shows the percentage of that client's share paid so far (e.g. ৳50,000 of a ৳5L share = 10%)." },
+      { kind: "improved", text: "Facebook activity entries now read “Like / Comment / Share” instead of a bare dash." },
+    ],
+  },
+  {
     version: "1.5.9",
     date: "2026-06-26",
     title: "All marketing officers' historical points imported",
