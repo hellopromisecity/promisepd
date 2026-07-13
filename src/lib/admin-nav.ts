@@ -73,7 +73,7 @@ export const ADMIN_NAV: NavEntry[] = [
     ],
   },
   { label: "Blog", href: "/dashboard/blog", icon: Newspaper, min: "manager" },
-  { label: "Projects", href: "/dashboard/projects", icon: Building, min: "manager" },
+  { label: "Projectify", href: "/dashboard/projects", icon: Building, min: "manager" },
   { label: "Income", href: "/dashboard/income", icon: TrendingUp, min: "manager" },
   { label: "Expenses", href: "/dashboard/expenses", icon: TrendingDown, min: "manager" },
   {

@@ -1,215 +1,150 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, Building2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Users, Wallet, TrendingUp, PiggyBank } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PROJECTS } from "@/lib/site";
-import { PageHeader, Card, Badge, type Tone } from "@/components/admin/ui";
+import { PageHeader, StatCard, Card, Badge, type Tone } from "@/components/admin/ui";
+import { hubProjectMeta, hubProjectCustomers } from "@/lib/hub";
+import { getProfitConfig, accruedProfitByCustomer, dailyPerLakh } from "@/lib/deposit-profit";
+import HubCustomerList from "../HubCustomerList";
+import DepositProfitPanel from "../DepositProfitPanel";
 import {
-  projectModel,
-  effectiveStatus,
-  effectiveShareMap,
-  effectiveBuildings,
-  shareMapFromOverride,
-  buildingsFromOverride,
-  sellThrough,
-  type OverrideRow,
+  projectModel, effectiveStatus,
+  shareMapFromOverride, buildingsFromOverride, sellThrough, type OverrideRow,
 } from "../availability";
 import OverrideForm from "../OverrideForm";
 
-export const metadata: Metadata = {
-  title: "Edit project",
-  robots: { index: false, follow: false },
-};
+export const metadata: Metadata = { title: "Project", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
-function pctTone(pct: number): Tone {
-  if (pct >= 90) return "danger";
-  if (pct >= 60) return "warning";
-  if (pct > 0) return "info";
-  return "neutral";
-}
+const fmt = (n: number) => {
+  n = Number(n) || 0;
+  if (n >= 1e7) return "৳" + (n / 1e7).toFixed(2).replace(/\.?0+$/, "") + " Cr";
+  if (n >= 1e5) return "৳" + (n / 1e5).toFixed(2).replace(/\.?0+$/, "") + " L";
+  return "৳" + Math.round(n).toLocaleString("en-IN");
+};
+const pctTone = (p: number): Tone => (p >= 90 ? "danger" : p >= 60 ? "warning" : p > 0 ? "info" : "neutral");
 
-export default async function EditProjectPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function ProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
 
   const { slug } = await params;
-  const project = PROJECTS.find((p) => p.slug === slug);
-  if (!project) notFound();
+  const meta = await hubProjectMeta(slug);
+  if (!meta) notFound();
 
-  const admin = getAdmin();
-  let override: OverrideRow | null = null;
-  let dbDown = false;
-  if (admin) {
-    const { data, error } = await admin
-      .from("project_overrides")
-      .select("slug, status, share_map, buildings")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (error) dbDown = true;
-    else override = (data as OverrideRow | null) ?? null;
-  } else {
-    dbDown = true;
+  const customers = await hubProjectCustomers(slug);
+  const payers = customers.filter((c) => c.total_paid > 0).length;
+  const raised = customers.reduce((s, c) => s + c.total_paid, 0);
+  const payments = customers.reduce((s, c) => s + c.payments_count, 0);
+
+  // Deposit schemes: accrue each member's dividend per day from every deposit's
+  // date until the payout date (rate is editable in the panel below).
+  const isDeposit = meta.type === "deposit";
+  let profits: Record<string, number> | undefined;
+  let profitPanel: React.ReactNode = null;
+  if (isDeposit) {
+    const cfg = await getProfitConfig(slug);
+    const accrued = await accruedProfitByCustomer(customers.map((c) => c.id), cfg);
+    profits = {};
+    for (const c of customers) { const a = accrued.get(c.id) || 0; if (a) profits[c.id] = a; }
+    profitPanel = (
+      <DepositProfitPanel
+        projectKey={slug}
+        cfg={{ enabled: cfg.enabled, per_lakh: cfg.per_lakh, cycle_days: cfg.cycle_days, cycle_start: cfg.cycle_start, payout_date: cfg.payout_date, next_payout: cfg.next_payout }}
+        dailyPerLakh={dailyPerLakh(cfg)}
+      />
+    );
   }
 
-  const model = projectModel(project);
-  const hasOverride = !!override;
-
-  // Effective (override-on-top-of-code) values, for the summary + form seed.
-  const st = sellThrough(project, override);
-  const effStatus = effectiveStatus(project, override);
-  const effShare = effectiveShareMap(project, override);
-  const effBuildings = effectiveBuildings(project, override);
-
-  // Code defaults — shown as placeholders so the editor sees what they override.
-  const defaults = {
-    status: project.status,
-    share: project.shareMap?.total
-      ? { total: project.shareMap.total, sold: project.shareMap.sold, note: project.shareMap.note ?? "" }
-      : null,
-    buildings: project.buildings?.total
-      ? {
-          total: project.buildings.total,
-          soldOut: project.buildings.soldOut,
-          nowBooking: project.buildings.nowBooking,
-        }
-      : null,
-  };
-
-  // Currently-saved override values (seed the controlled inputs).
+  // Real-estate projects also expose the public-site availability editor.
+  const staticProject = PROJECTS.find((p) => p.slug === slug);
+  let override: OverrideRow | null = null;
+  if (staticProject) {
+    const admin = getAdmin();
+    if (admin) {
+      const { data } = await admin.from("project_overrides").select("slug, status, share_map, buildings").eq("slug", slug).maybeSingle();
+      override = (data as OverrideRow | null) ?? null;
+    }
+  }
+  const model = staticProject ? projectModel(staticProject) : "none";
+  const st = staticProject ? sellThrough(staticProject, override) : null;
   const ovShare = shareMapFromOverride(override);
   const ovBuildings = buildingsFromOverride(override);
-  const current = {
-    status: override?.status ?? "",
-    share: ovShare ? { total: ovShare.total, sold: ovShare.sold, note: ovShare.note ?? "" } : null,
-    buildings: ovBuildings ?? null,
-  };
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/dashboard/projects"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted transition-colors hover:text-brand-blue"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to projects
+      <Link href="/dashboard/projects" className="inline-flex items-center gap-1.5 text-sm font-semibold text-fg-muted transition-colors hover:text-brand-blue">
+        <ArrowLeft className="h-4 w-4" /> All projects
       </Link>
 
       <PageHeader
-        title={project.name}
-        subtitle={`${project.location} · slug: ${project.slug}`}
-        action={
-          <Link
-            href={`/projects/${project.slug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40 hover:text-brand-blue"
-          >
+        title={meta.name}
+        subtitle={`${customers.length} customers · ${meta.type === "deposit" ? "deposit scheme" : "real estate"}`}
+        action={staticProject && (
+          <Link href={`/projects/${slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40 hover:text-brand-blue">
             <ExternalLink className="h-4 w-4" /> View on site
           </Link>
-        }
+        )}
       />
 
-      {dbDown && (
-        <Card className="border-amber-200 bg-amber-50/60">
-          <p className="text-sm text-amber-800">
-            Supabase isn’t configured. You can review the code values below, but saving an override
-            won’t work until the database is connected.
-          </p>
-        </Card>
-      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Collected" value={fmt(raised)} icon={Wallet} tone="success" />
+        <StatCard label="Customers" value={customers.length.toLocaleString("en-IN")} sub={`${payers} have paid`} icon={Users} tone="info" />
+        <StatCard label="Payments" value={payments.toLocaleString("en-IN")} icon={TrendingUp} tone="warning" />
+        <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={PiggyBank} tone="neutral" />
+      </div>
 
-      {/* Current effective availability */}
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-fg">Current availability (live on the site)</h2>
-          <div className="flex items-center gap-2">
-            <Badge tone="info">{effStatus}</Badge>
-            {hasOverride && <Badge tone="warning">override active</Badge>}
-          </div>
-        </div>
+      {profitPanel}
 
-        {st ? (
-          <div className="mt-4">
-            <div className="mb-1.5 flex items-center justify-between text-sm">
-              <span className="text-fg-muted">
-                {st.sold}/{st.total} {st.unit} sold
-              </span>
-              <Badge tone={pctTone(st.pct)}>{st.pct}% sold</Badge>
+      <HubCustomerList customers={customers} project={{ key: slug, name: meta.name, type: meta.type, sort: meta.sort }} profits={profits} />
+
+      {staticProject && (
+        <>
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-bold text-fg">Public availability (live on the website)</h2>
+              <div className="flex items-center gap-2">
+                <Badge tone="info">{effectiveStatus(staticProject, override)}</Badge>
+                {override && <Badge tone="warning">override active</Badge>}
+              </div>
             </div>
-            <div className="h-2 rounded-full bg-bg-soft">
-              <div className="h-2 rounded-full bg-brand-blue" style={{ width: `${st.pct}%` }} />
-            </div>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-              {effShare && (
-                <>
-                  <Fact label="Total shares" value={effShare.total} />
-                  <Fact label="Sold shares" value={effShare.sold} />
-                  <Fact label="Remaining" value={Math.max(0, effShare.total - effShare.sold)} />
-                </>
-              )}
-              {effBuildings && (
-                <>
-                  <Fact label="Total buildings" value={effBuildings.total} />
-                  <Fact label="Sold out" value={effBuildings.soldOut} />
-                  <Fact label="Now booking" value={`#${effBuildings.nowBooking}`} />
-                </>
-              )}
-              {model === "units" && (
-                <Fact label="Source" value="Unit grid (code only)" wide />
-              )}
-            </dl>
-            {effShare?.note && (
-              <p className="mt-3 rounded-xl bg-bg-soft px-3.5 py-2.5 text-xs leading-relaxed text-fg-muted">
-                {effShare.note}
-              </p>
+            {st ? (
+              <div className="mt-4">
+                <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <span className="text-fg-muted">{st.sold}/{st.total} {st.unit} sold</span>
+                  <Badge tone={pctTone(st.pct)}>{st.pct}% sold</Badge>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-bg-soft"><div className="h-2 rounded-full bg-brand-blue" style={{ width: `${st.pct}%` }} /></div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-fg-muted">This project only carries a status on the public site.</p>
             )}
-          </div>
-        ) : (
-          <div className="mt-4 flex items-center gap-2 text-sm text-fg-muted">
-            <Building2 className="h-4 w-4" />
-            This project doesn’t carry numeric availability data — only its status can be overridden.
-          </div>
-        )}
-      </Card>
+          </Card>
 
-      {/* Edit form */}
-      <Card>
-        <h2 className="text-sm font-bold text-fg">Override availability</h2>
-        <p className="mt-0.5 mb-5 text-xs text-fg-muted">
-          Saving writes a row that takes precedence over the code values everywhere on the site.
-          Placeholders show the current code defaults.
-        </p>
-        <OverrideForm
-          slug={project.slug}
-          model={model}
-          hasOverride={hasOverride}
-          defaults={defaults}
-          current={current}
-        />
-      </Card>
-    </div>
-  );
-}
-
-function Fact({
-  label,
-  value,
-  wide = false,
-}: {
-  label: string;
-  value: React.ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <div className={`rounded-xl border border-border bg-bg-soft px-3.5 py-2.5 ${wide ? "col-span-2 sm:col-span-3" : ""}`}>
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">{label}</dt>
-      <dd className="mt-0.5 text-base font-bold text-fg">{value}</dd>
+          <Card>
+            <h2 className="text-sm font-bold text-fg">Edit public availability</h2>
+            <p className="mb-5 mt-0.5 text-xs text-fg-muted">Writes an override that takes precedence over the code values everywhere on the site. Placeholders show the current defaults.</p>
+            <OverrideForm
+              slug={slug}
+              model={model}
+              hasOverride={!!override}
+              defaults={{
+                status: staticProject.status,
+                share: staticProject.shareMap?.total ? { total: staticProject.shareMap.total, sold: staticProject.shareMap.sold, note: staticProject.shareMap.note ?? "" } : null,
+                buildings: staticProject.buildings?.total ? { total: staticProject.buildings.total, soldOut: staticProject.buildings.soldOut, nowBooking: staticProject.buildings.nowBooking } : null,
+              }}
+              current={{
+                status: override?.status ?? "",
+                share: ovShare ? { total: ovShare.total, sold: ovShare.sold, note: ovShare.note ?? "" } : null,
+                buildings: ovBuildings ?? null,
+              }}
+            />
+          </Card>
+        </>
+      )}
     </div>
   );
 }

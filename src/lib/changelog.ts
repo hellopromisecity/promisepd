@@ -24,6 +24,27 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.1",
+    date: "2026-07-13",
+    title: "Deposit schemes: automatic dividend (লভ্যাংশ) calculation",
+    changes: [
+      { kind: "new", text: "General Deposit A and Special Deposit now calculate every member's yearly Shariah Mudaraba dividend automatically — day-weighted on the running balance (deposits add, withdrawals subtract), paid 16 July. Each member earns for exactly how much money was in the company and for how many days, so someone who paid in and later withdrew still earns for the days it was held." },
+      { kind: "new", text: "Each scheme shows its editable rate, plus a sortable Profit column listing every member's dividend (in the CSV export too). Sub-lakh balances use the per-thousand rate and lakh+ balances the per-lakh rate — same rate, exact for every amount." },
+      { kind: "new", text: "The rate is one editable number per scheme (Special ৳13,000/lakh/year, General A ৳15,000/lakh/year) plus the cycle dates — change it once a year and every member's profit recalculates instantly." },
+    ],
+  },
+  {
+    version: "1.6.0",
+    date: "2026-07-13",
+    title: "Projectify — a full customer hub for every project",
+    changes: [
+      { kind: "new", text: "A brand-new “Projectify” section: all 9 projects as cards showing total collected, customers and progress — grouped Real Estate + Deposit Schemes. Imported the complete master-book ledger: 779 customers, ৳20.11 crore collected, with every customer's full profile and dated payment history." },
+      { kind: "new", text: "Inside each project you can now add / edit / delete customers and manage each one's transactions — just like App Users. Every row has 👁 history, ✏️ edit, 🗑 delete and 💳 transactions; the list is searchable, sortable and CSV-exportable." },
+      { kind: "new", text: "New Reference field: pick the marketing officer who brought a customer (autocomplete by name / mobile / ID). On selecting the officer for a real-estate sale, their points + commission are added and kept in sync automatically in the Marketing section." },
+      { kind: "new", text: "An “All Customers” card gathers every project's customers into one App-Users-style screen (filter by project, add anywhere → shows everywhere). Transaction types now match App Users, and adding a deposit / withdrawal texts the customer — same SMS gateway." },
+    ],
+  },
+  {
     version: "1.5.10",
     date: "2026-07-07",
     title: "Officer history: per-project client deposit + % paid",
