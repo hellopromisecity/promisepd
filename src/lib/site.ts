@@ -11,6 +11,12 @@ export const SITE = {
   phoneDisplay: "+৮৮০ ১৯১০-০৬৫১৩৬",
   phoneDisplayEn: "+880 1910-065136",
   whatsapp: "8801910065136",
+  // Visit booking: the nav button links to our OWN /booking page (branded),
+  // which embeds the TidyCal widget — so visitors only ever see promisepd.com.
+  // `tidycalUrl` is the embed source; rename the TidyCal username to
+  // `promisecity` so that URL carries no "growthency" either.
+  bookingUrl: "/booking",
+  tidycalUrl: "https://tidycal.com/promisecity",
   email: "promisegroup2023@gmail.com",
   address:
     "১২৩/১/২ কাজী টাওয়ার, দক্ষিণ যাত্রাবাড়ী, ঢাকা-১২০৪, বাংলাদেশ",

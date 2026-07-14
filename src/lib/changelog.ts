@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.2",
+    date: "2026-07-14",
+    title: "Book a project visit — right from the site",
+    changes: [
+      { kind: "new", text: "A bold “Book a Visit” button now sits in the header, just left of Login (and always visible on mobile, where most visitors are). It opens a new, fully-branded /booking page on promisepd.com — a striking hero plus the live scheduler embedded right in — so anyone can pick a time between 11 AM – 12 PM and confirm their project visit without leaving the site. Bengali + English." },
+    ],
+  },
+  {
     version: "1.6.1",
     date: "2026-07-13",
     title: "Deposit schemes: automatic dividend (লভ্যাংশ) calculation",

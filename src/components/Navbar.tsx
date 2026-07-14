@@ -8,6 +8,7 @@ import {
   Menu,
   X,
   Phone,
+  CalendarCheck,
   ChevronDown,
   Building2,
   Hammer,
@@ -467,6 +468,19 @@ export default function Navbar() {
                   Call CTA).  Shows "Account" once signed in.  Hidden on
                   the smallest screens; mobile users get the row inside
                   the slide-out menu instead. */}
+              {/* Book a project visit — high-intent CTA sitting just left of
+                  Login. Kept visible on mobile too (Login is hidden there),
+                  since most visitors arrive on their phone. */}
+              <Link
+                href={lp(SITE.bookingUrl)}
+                aria-label={isEn ? "Book a project visit" : "প্রজেক্ট ভিজিট বুক করুন"}
+                className="group inline-flex items-center gap-1.5 rounded-xl bg-brand-red px-3 py-2.5 text-sm font-bold text-white shadow-[var(--shadow-brand)] btn-shine transition-transform hover:scale-[1.03]"
+              >
+                <CalendarCheck className="h-4 w-4 shrink-0 transition-transform group-hover:rotate-6" />
+                <span className="whitespace-nowrap sm:hidden">{isEn ? "Book" : "বুকিং"}</span>
+                <span className="hidden whitespace-nowrap sm:inline">{isEn ? "Book a Visit" : "ভিজিট বুকিং"}</span>
+              </Link>
+
               <AuthNavButton
                 variant="desktop"
                 loginHref={lp("/login")}
@@ -698,6 +712,15 @@ export default function Navbar() {
                   {t.signup}
                 </Link>
               </div>
+
+              <Link
+                href={lp(SITE.bookingUrl)}
+                onClick={() => setOpen(false)}
+                className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-brand-red px-6 py-3.5 text-base font-bold text-white shadow-[var(--shadow-brand)] btn-shine"
+              >
+                <CalendarCheck className="h-5 w-5" />
+                {isEn ? "Book a Project Visit" : "প্রজেক্ট ভিজিট বুক করুন"}
+              </Link>
 
               <a
                 href={`tel:${SITE.phone}`}
