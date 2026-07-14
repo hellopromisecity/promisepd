@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Award, Crown, Medal, Trophy, Trash2, Pencil, X, Loader2, AlertCircle,
   Users, SlidersHorizontal, Check, Search, ChevronDown, ArrowUp, ArrowDown,
-  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet, Save, Eye,
+  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet, Save, Eye, StickyNote,
 } from "lucide-react";
 import { Card } from "@/components/admin/ui";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
@@ -581,6 +581,7 @@ function AwardPointsDialog({ officers, items, onClose, onSaved }: { officers: Of
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [clientName, setClientName] = useState("");
   const [clientId, setClientId] = useState("");
+  const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [addedCount, setAddedCount] = useState(0);
   const [pending, start] = useTransition();
@@ -594,13 +595,13 @@ function AwardPointsDialog({ officers, items, onClose, onSaved }: { officers: Of
   function submit() {
     setErr(null);
     start(async () => {
-      const res = await awardPoints({ officerId, itemId, quantity: q, saleDate, clientName, clientId });
+      const res = await awardPoints({ officerId, itemId, quantity: q, saleDate, clientName, clientId, note });
       if (res.ok) {
         toast(res.message || "Points added.", "success");
         setAddedCount((n) => n + 1);
         // Keep the dialog open for rapid multi-entry — reset only the per-sale
         // fields; officer + item + date stay so the next entry is quick.
-        setQty("1"); setClientName(""); setClientId("");
+        setQty("1"); setClientName(""); setClientId(""); setNote("");
         onSaved();
       } else setErr(res.error);
     });
@@ -638,6 +639,10 @@ function AwardPointsDialog({ officers, items, onClose, onSaved }: { officers: Of
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Client name</label><input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Buyer's name" /></div>
             <div><label className={labelCls}>Client ID</label><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Optional" /></div>
+          </div>
+          <div>
+            <label className={labelCls}>Description / Note <span className="font-normal normal-case text-fg-faint">— optional</span></label>
+            <textarea rows={2} className={`${inputCls} resize-none`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why these points? e.g. Attended Magrib namaz on the tour — helps you remember later." />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-brand-blue-tint px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-brand-blue-dark/70">Points</div><div className="text-lg font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div></div>
@@ -902,13 +907,18 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <span className="mr-1 text-[11px] font-medium text-fg-faint">{fmtDate(e.date)}</span>
+                    <span className="mr-1 text-[11px] font-medium text-fg-faint">{/FB|Facebook/i.test(e.item_label || "") ? `Updated ${fmtDate(e.date)}` : fmtDate(e.date)}</span>
                     <button onClick={() => setEdit(e)} title="Edit entry" className="rounded-md p-1 text-fg-faint hover:bg-bg hover:text-brand-blue"><Pencil className="h-3.5 w-3.5" /></button>
                     <button onClick={() => remove(e)} disabled={busy === e.id} title="Delete entry" className="rounded-md p-1 text-fg-faint hover:bg-bg hover:text-brand-red disabled:opacity-50">
                       {busy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     </button>
                   </div>
                 </div>
+                {e.note && (
+                  <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-brand-blue-tint/40 px-2 py-1 text-[11px] italic leading-snug text-fg-muted">
+                    <StickyNote className="mt-0.5 h-3 w-3 shrink-0 text-brand-blue" /> {e.note}
+                  </p>
+                )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
                   <span className="text-fg-muted">এই সেলে <b className="text-fg">{fmtBDT(e.afr)}</b></span>
                   <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
@@ -942,6 +952,7 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
   const [saleDate, setSaleDate] = useState(entry.date ? entry.date.slice(0, 10) : "");
   const [clientName, setClientName] = useState(entry.client_name ?? "");
   const [clientId, setClientId] = useState(entry.client_id ?? "");
+  const [note, setNote] = useState(entry.note ?? "");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -954,7 +965,7 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
   function submit() {
     setErr(null);
     start(async () => {
-      const res = await updatePointEntry(entry.id, { itemId, quantity: q, clientName, clientId, saleDate });
+      const res = await updatePointEntry(entry.id, { itemId, quantity: q, clientName, clientId, saleDate, note });
       if (res.ok) { toast(res.message || "Updated.", "success"); onDone(); } else setErr(res.error);
     });
   }
@@ -979,6 +990,10 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Client name</label><input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Buyer's name" /></div>
             <div><label className={labelCls}>Client ID</label><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Optional" /></div>
+          </div>
+          <div>
+            <label className={labelCls}>Description / Note <span className="font-normal normal-case text-fg-faint">— optional</span></label>
+            <textarea rows={2} className={`${inputCls} resize-none`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why these points? e.g. Attended Magrib namaz on the tour — helps you remember later." />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-brand-blue-tint px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-brand-blue-dark/70">Points</div><div className="text-lg font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div></div>

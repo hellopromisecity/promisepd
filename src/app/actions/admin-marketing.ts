@@ -51,6 +51,7 @@ export type OfficerHistoryEntry = {
   client_name: string | null;
   client_id: string | null;
   item_label: string | null;
+  note: string | null; // free-text reason/description for this award
   quantity: number;
   points: number;
   afr: number;
@@ -89,7 +90,7 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
     if (!admin || !officerId) return [];
     const { data } = await admin
       .from("marketing_point_entries")
-      .select("id, client_name, client_id, item_label, quantity, points, afr, income, sale_date, created_at")
+      .select("id, client_name, client_id, item_label, note, quantity, points, afr, income, sale_date, created_at")
       .eq("officer_id", officerId)
       .order("sale_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
@@ -179,6 +180,7 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
         client_name: (e.client_name as string) ?? null,
         client_id: (e.client_id as string) ?? null,
         item_label: (e.item_label as string) ?? null,
+        note: (e.note as string) ?? null,
         quantity: Number(e.quantity) || 1,
         points: Number(e.points) || 0,
         afr: Number(e.afr) || 0,
@@ -228,7 +230,7 @@ export async function deletePointEntry(entryId: string): Promise<ActionResult> {
  *  recompute the officer's totals. */
 export async function updatePointEntry(
   entryId: string,
-  input: { itemId: string; quantity: number; clientName?: string; clientId?: string; saleDate?: string },
+  input: { itemId: string; quantity: number; clientName?: string; clientId?: string; saleDate?: string; note?: string },
 ): Promise<ActionResult> {
   return runAction(async () => {
     await requireManager();
@@ -249,6 +251,7 @@ export async function updatePointEntry(
       sale_date: cleanDate(input.saleDate),
       client_name: clean(input.clientName),
       client_id: clean(input.clientId),
+      note: clean(input.note),
     }).eq("id", entryId);
     if (error) throw new Error(error.message);
     await recomputeOfficerTotals(admin, entry.officer_id as string);
