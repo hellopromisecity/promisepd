@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.3",
+    date: "2026-07-14",
+    title: "Payment Method page — send us money, the easy way",
+    changes: [
+      { kind: "new", text: "A new “Payment Method” page (linked from the footer, under Contact) lays out all six company bank accounts — Dutch-Bangla, Al-Arafah Islami, Sonali, Islami and Bank Asia — as clean, colour-coded cards. Each account and routing number has a one-tap Copy button, so customers can pay in seconds without mistyping. Bengali + English, with a reminder to send the receipt after paying." },
+    ],
+  },
+  {
     version: "1.6.2",
     date: "2026-07-14",
     title: "Book a project visit — right from the site",
