@@ -81,7 +81,7 @@ export default function MarketingOfficers({
   const [history, setHistory] = useState<Officer | null>(null);
 
   const [search, setSearch] = useState("");
-  const [range, setRange] = useState<Range>("thisyear"); // default to the current year (matches the public board)
+  const [range, setRange] = useState<Range>("lifetime"); // default to lifetime/all-time (matches the public board)
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");

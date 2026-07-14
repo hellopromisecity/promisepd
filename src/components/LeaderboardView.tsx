@@ -90,10 +90,10 @@ export default function LeaderboardView({
 
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
-  // Default to the current year — the same default as the internal Marketing
-  // Overview, so both boards show the same ranking out of the box. Visitors
-  // can switch to lifetime / 30 days / last year with the period selector.
-  const [period, setPeriod] = useState<Period>("year");
+  // Default to lifetime (all-time) — the same default as the internal
+  // Marketing Overview, so both boards show the same all-time ranking out of
+  // the box. Visitors can switch to this year / 30 days / last year below.
+  const [period, setPeriod] = useState<Period>("lifetime");
 
   // Period totals per officer (lifetime uses the running totals).
   const computed = useMemo(() => {
@@ -273,20 +273,20 @@ export default function LeaderboardView({
             {/* Internal scroll so the long roster scrolls inside the box,
                 with the column header pinned at the top. */}
             <div className="max-h-[65vh] overflow-y-auto [scrollbar-gutter:stable]">
-            <div className="sticky top-0 z-10 bg-bg-soft px-5 sm:px-6 py-3 grid grid-cols-[3rem_1fr_5rem_6rem] sm:grid-cols-[3rem_1fr_8rem_8rem] gap-3 text-[10px] uppercase tracking-[0.18em] font-bold text-fg-muted">
-              <div>{isEn ? L.thRank : "র‍্যাঙ্ক"}</div>
-              <div>{isEn ? L.thPartner : "পার্টনার"}</div>
-              <div className="text-right">{isEn ? L.thPoints : "পয়েন্ট"}</div>
-              <div className="text-right">{isEn ? L.thEarnings : "আয়"}</div>
+            <div className="sticky top-0 z-10 bg-bg-soft px-4 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 text-[10px] uppercase tracking-[0.18em] font-bold text-fg-muted">
+              <div className="w-11 shrink-0">{isEn ? L.thRank : "র‍্যাঙ্ক"}</div>
+              <div className="flex-1 min-w-0">{isEn ? L.thPartner : "পার্টনার"}</div>
+              <div className="w-12 sm:w-28 shrink-0 text-right">{isEn ? L.thPoints : "পয়েন্ট"}</div>
+              <div className="w-20 sm:w-28 shrink-0 text-right">{isEn ? L.thEarnings : "আয়"}</div>
             </div>
 
             {!hasData ? (
               [...Array(6)].map((_, i) => (
-                <div key={i} className="px-5 sm:px-6 py-4 grid grid-cols-[3rem_1fr_5rem_6rem] sm:grid-cols-[3rem_1fr_8rem_8rem] gap-3 items-center border-t border-border">
-                  <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-bg-soft text-fg-muted font-bold text-sm">{num(i + 1)}</div>
-                  <div className="space-y-1.5"><div className="h-3 w-32 rounded-full bg-bg-soft-2" /><div className="h-2.5 w-20 rounded-full bg-bg-soft" /></div>
-                  <div className="ml-auto h-4 w-12 rounded-full bg-bg-soft-2" />
-                  <div className="ml-auto h-4 w-16 rounded-full bg-bg-soft-2" />
+                <div key={i} className="px-4 sm:px-6 py-4 flex items-center gap-2 sm:gap-3 border-t border-border">
+                  <div className="w-11 shrink-0"><div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-bg-soft text-fg-muted font-bold text-sm">{num(i + 1)}</div></div>
+                  <div className="flex-1 min-w-0 space-y-1.5"><div className="h-3 w-24 max-w-full rounded-full bg-bg-soft-2" /><div className="h-2.5 w-16 max-w-full rounded-full bg-bg-soft" /></div>
+                  <div className="w-12 sm:w-28 shrink-0 flex justify-end"><div className="h-4 w-9 rounded-full bg-bg-soft-2" /></div>
+                  <div className="w-20 sm:w-28 shrink-0 flex justify-end"><div className="h-4 w-14 rounded-full bg-bg-soft-2" /></div>
                 </div>
               ))
             ) : rows.length === 0 ? (
@@ -298,20 +298,20 @@ export default function LeaderboardView({
                 const rank = idx + 1;
                 const decor = RANK_DECOR[rank];
                 return (
-                  <div key={o.id} className="px-5 sm:px-6 py-4 grid grid-cols-[3rem_1fr_5rem_6rem] sm:grid-cols-[3rem_1fr_8rem_8rem] gap-3 items-center border-t border-border">
-                    <div>
+                  <div key={o.id} className="px-4 sm:px-6 py-4 flex items-center gap-2 sm:gap-3 border-t border-border">
+                    <div className="w-11 shrink-0">
                       {decor ? (
                         <div className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${decor.bg} ${decor.text} ring-4 ${decor.ring} shadow-sm`}><decor.icon className="h-4 w-4" /></div>
                       ) : (
                         <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-bg-soft text-fg-muted font-bold text-sm">{num(rank)}</div>
                       )}
                     </div>
-                    <div className="min-w-0">
+                    <div className="flex-1 min-w-0">
                       <div className="truncate font-semibold text-fg">{o.name}</div>
                       <div className="truncate text-xs text-fg-muted">{o.sub}</div>
                     </div>
-                    <div className="ml-auto text-right font-bold text-fg">{num(o.rPoints)}</div>
-                    <div className="ml-auto text-right text-sm font-semibold text-emerald-700">{fmtBDT(o.rIncome)}</div>
+                    <div className="w-12 sm:w-28 shrink-0 text-right font-bold text-fg tabular-nums">{num(o.rPoints)}</div>
+                    <div className="w-20 sm:w-28 shrink-0 text-right text-sm font-semibold text-emerald-700 tabular-nums">{fmtBDT(o.rIncome)}</div>
                   </div>
                 );
               })
