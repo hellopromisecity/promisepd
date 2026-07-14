@@ -24,6 +24,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.4",
+    date: "2026-07-14",
+    title: "Deposit dividend now exact — plus deposit-hub polish",
+    changes: [
+      { kind: "fixed", text: "Deposit dividend (লভ্যাংশ) is now day-counted on a 365-day year instead of 360. So one full year pays exactly the stated rate (e.g. ৳15,000/lakh) and a clean 2-year hold is exactly double — no more ~1.4% overpay (a ৳2,00,000 two-year balance now shows ৳60,000, not ৳60,833). Every member's Profit recalculates automatically; applies to General Deposit A and Special Deposit." },
+      { kind: "new", text: "A customer's detail popup (👁) now shows a “Remaining” figure — how much they currently have in the company (total deposits − withdrawals), whether or not a final withdrawal was taken." },
+      { kind: "new", text: "Add-transaction always offers a Dividend (লভ্যাংশ) type now, so a member's dividend can be recorded directly from the transactions box." },
+      { kind: "improved", text: "“Shares / units” on the Add-customer form is now clearly optional — deposit schemes don't need it, while real-estate projects still use it." },
+    ],
+  },
+  {
     version: "1.6.3",
     date: "2026-07-14",
     title: "Payment Method page — send us money, the easy way",

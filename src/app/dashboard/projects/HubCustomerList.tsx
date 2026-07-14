@@ -261,7 +261,7 @@ function CustomerFormModal({ project, customer, projects, onClose }: { project: 
           <div><label className={labelCls}>Joining date</label><input type="date" className={inputCls} value={joining} onChange={(e) => setJoining(e.target.value)} /></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={labelCls}>Shares / units</label><input type="number" min={1} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="1" /></div>
+          <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
           <div><label className={labelCls}>Total price ৳</label><input type="number" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         </div>
         <div>
@@ -291,6 +291,13 @@ function TransactionModal({ customer, project, onClose }: { customer: HubCustome
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  // Transaction types from the catalogue, but always offer a Dividend (লভ্যাংশ)
+  // option so admins can record a member's dividend even if the DB list lacks it.
+  const txnOptions = useMemo(() => {
+    const base = types.length ? types : [{ name: "deposit", operator: "+", classification: "" }];
+    return base.some((t) => /^(dividend|লভ্যাংশ)$/i.test(t.name)) ? base : [...base, { name: "dividend", operator: "+", classification: "" }];
+  }, [types]);
+
   const reload = () => getHubCustomerDetail(customer.id).then((d) => setPayments(d?.payments ?? []));
   useEffect(() => { let a = true; getHubCustomerDetail(customer.id).then((d) => { if (a) setPayments(d?.payments ?? []); }); listTxnTypes().then((t) => { if (a && t.length) setTypes(t); }); return () => { a = false; }; }, [customer.id]);
 
@@ -318,7 +325,7 @@ function TransactionModal({ customer, project, onClose }: { customer: HubCustome
           <div className="space-y-2.5">
             <div><label className={labelCls}>Type</label>
               <select className={inputCls} value={type} onChange={(e) => setType(e.target.value)}>
-                {(types.length ? types : [{ name: "deposit", operator: "+", classification: "" }]).map((t) => <option key={t.name} value={t.name}>{t.name} ({t.operator})</option>)}
+                {txnOptions.map((t) => <option key={t.name} value={t.name}>{t.name} ({t.operator})</option>)}
               </select>
             </div>
             <div><label className={labelCls}>Amount ৳</label><input type="number" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" /></div>
@@ -374,10 +381,22 @@ function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCustomer;
   ];
   return (
     <Modal title={customer.name || "—"} subtitle={`${customer.project_name} · File ${customer.file_no ?? "—"}${customer.mobile ? ` · ${customer.mobile}` : ""}${customer.reference ? ` · ref ${customer.reference}` : ""}`} onClose={onClose} wide>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-2 ${isDeposit ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
         <Stat label="Paid" value={fmt(customer.total_paid)} tone="blue" />
-        {isDeposit ? <Stat label="Dividend" value={fmt(customer.dividend)} tone="green" /> : <Stat label="Price" value={fmt(customer.total_price)} />}
-        {isDeposit ? <Stat label="Withdrawn" value={fmt(customer.withdrawn)} /> : <Stat label="Remaining" value={fmt(customer.total_remaining)} />}
+        {isDeposit ? (
+          <>
+            <Stat label="Withdrawn" value={fmt(customer.withdrawn)} />
+            {/* Remaining = money currently in the company (deposits − withdrawals),
+                regardless of whether the final withdrawal has been taken. */}
+            <Stat label="Remaining" value={fmt(Math.max(0, customer.total_paid - customer.withdrawn))} tone="green" />
+            <Stat label="Dividend" value={fmt(customer.dividend)} />
+          </>
+        ) : (
+          <>
+            <Stat label="Price" value={fmt(customer.total_price)} />
+            <Stat label="Remaining" value={fmt(customer.total_remaining)} />
+          </>
+        )}
         <Stat label="Payments" value={String(customer.payments_count)} />
       </div>
       <div className="mt-4 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">

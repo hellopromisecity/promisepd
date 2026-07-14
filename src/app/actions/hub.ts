@@ -208,7 +208,7 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     // resolve the investment type → operator (+/-), then the hub kind for totals.
     const { data: td } = await admin.from("investment_types").select("operator").eq("name", type).maybeSingle();
     const operator = (rec(td)?.operator as string) ?? "+";
-    const kind = operator === "-" ? "withdrawal" : /profit/i.test(type) ? "dividend" : "deposit";
+    const kind = operator === "-" ? "withdrawal" : /profit|dividend|লভ্যাংশ/i.test(type) ? "dividend" : "deposit";
     const { data: cd } = await HC(admin).select("mobile").eq("id", customerId).maybeSingle();
     const mobile = rec(cd)?.mobile as string | null;
     const desc = input.description ? `${type} — ${input.description}` : type;
