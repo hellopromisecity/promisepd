@@ -24,6 +24,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.5",
+    date: "2026-07-14",
+    title: "Deposit dividend now compounds — earns like principal",
+    changes: [
+      { kind: "fixed", text: "A credited/reinvested dividend now counts as part of a member's running balance, so money left in keeps earning next cycle — exactly like the passbook (before, dividends were skipped, understating the balance). Anyone who withdraws still stops earning from their withdrawal date. Example: Muddassir's profit corrects from ৳1,55,692 to ৳1,95,118, matching his sheet's ৳10,00,000 remaining. Special Deposit total profit rose ৳1,13,331 across 62 members; General Deposit A is unaffected (no dividends there)." },
+    ],
+  },
+  {
     version: "1.6.4",
     date: "2026-07-14",
     title: "Deposit dividend now exact — plus deposit-hub polish",

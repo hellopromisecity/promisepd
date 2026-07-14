@@ -36,10 +36,12 @@ export function dailyPerLakh(cfg: Pick<ProfitConfig, "per_lakh" | "cycle_days">)
 export type Txn = { date: string | null; amount: number; kind: string };
 
 /** Current-cycle profit on a member's fluctuating balance.
- *  Walks deposits (+) and withdrawals (−) in date order, accruing
- *  daily-rate × balance for the days between each event, from the cycle
- *  start to the payout date. Money already in before the cycle starts (or
- *  undated) forms the opening balance and earns from the start date. */
+ *  Walks deposits (+), credited dividends (+) and withdrawals (−) in date
+ *  order, accruing daily-rate × balance for the days between each event, from
+ *  the cycle start to the payout date. Money already in before the cycle
+ *  starts (or undated) forms the opening balance and earns from the start
+ *  date. A reinvested dividend earns like principal; a later withdrawal drops
+ *  the balance from its own date, so withdrawn money stops earning. */
 export function cycleProfit(txns: Txn[], cfg: ProfitConfig): number {
   if (!cfg.enabled || cfg.cycle_days <= 0) return 0;
   const start = parseDay(cfg.cycle_start);
@@ -123,7 +125,10 @@ export async function accruedProfitByCustomer(customerIds: string[], cfg: Profit
       .from("hub_customer_payments")
       .select("customer_id, amount, date, kind")
       .in("customer_id", chunk)
-      .in("kind", ["deposit", "withdrawal"]);
+      // Dividend counts too: a credited/reinvested dividend stays in the company
+      // as part of the running balance and earns — until the member withdraws
+      // it, at which point the withdrawal drops the balance from that date.
+      .in("kind", ["deposit", "withdrawal", "dividend"]);
     for (const p of (data ?? []) as Record<string, unknown>[]) {
       const id = p.customer_id as string;
       (byCust.get(id) ?? byCust.set(id, []).get(id)!).push({ date: (p.date as string) ?? null, amount: Number(p.amount) || 0, kind: (p.kind as string) ?? "deposit" });
