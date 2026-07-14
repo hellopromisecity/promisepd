@@ -142,6 +142,20 @@ export default function LeaderboardView({
   // champions strip is stable) — ranked by the selected period.
   const top3 = useMemo(() => [...computed].sort((a, b) => b.rPoints - a.rPoints).slice(0, 3), [computed]);
 
+  // The current #1 (by the selected period's points) is shown as
+  // "Head of Marketing" — a live honour that follows whoever tops the board.
+  // The moment someone is overtaken they drop back to their real designation.
+  // Tied to the single top scorer (not the top of a filtered view) so there's
+  // never more than one HM, and only crowned when they actually have points.
+  const championId = top3[0] && top3[0].rPoints > 0 ? top3[0].id : null;
+  const hmLabel = isEn ? "Head of Marketing" : "হেড অফ মার্কেটিং";
+  const displaySub = (o: { id: string; sub: string }) => {
+    if (o.id !== championId) return o.sub;
+    const [, ...rest] = (o.sub || "").split(" · ");
+    const location = rest.join(" · ");
+    return location ? `${hmLabel} · ${location}` : hmLabel;
+  };
+
   // Total commission paid out to all partners (lifetime, period-independent) —
   // animated count-up to make the achievement feel alive.
   const totalPaid = useMemo(() => officers.reduce((s, o) => s + (Number(o.income) || 0), 0), [officers]);
@@ -234,7 +248,7 @@ export default function LeaderboardView({
                       </div>
                     </div>
                     <div className={`mt-2 line-clamp-2 font-bold leading-tight text-fg ${champ ? "text-sm sm:text-base" : "text-xs sm:text-sm"}`}>{o.name}</div>
-                    <div className="line-clamp-1 text-[10px] text-fg-muted">{o.sub}</div>
+                    <div className="line-clamp-1 text-[10px] text-fg-muted">{displaySub(o)}</div>
                     <div className={`mt-1 font-extrabold text-brand-blue ${champ ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"}`}>
                       {num(o.rPoints)}<span className="ml-0.5 text-[10px] font-semibold text-fg-faint">{isEn ? "pts" : "পয়েন্ট"}</span>
                     </div>
@@ -308,7 +322,7 @@ export default function LeaderboardView({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="truncate font-semibold text-fg">{o.name}</div>
-                      <div className="truncate text-xs text-fg-muted">{o.sub}</div>
+                      <div className="truncate text-xs text-fg-muted">{displaySub(o)}</div>
                     </div>
                     <div className="w-12 sm:w-28 shrink-0 text-right font-bold text-fg tabular-nums">{num(o.rPoints)}</div>
                     <div className="w-20 sm:w-28 shrink-0 text-right text-sm font-semibold text-emerald-700 tabular-nums">{fmtBDT(o.rIncome)}</div>
