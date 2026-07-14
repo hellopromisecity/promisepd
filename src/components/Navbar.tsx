@@ -477,8 +477,7 @@ export default function Navbar() {
                 className="group inline-flex items-center gap-1.5 rounded-xl bg-brand-red px-3 py-2.5 text-sm font-bold text-white shadow-[var(--shadow-brand)] btn-shine transition-transform hover:scale-[1.03]"
               >
                 <CalendarCheck className="h-4 w-4 shrink-0 transition-transform group-hover:rotate-6" />
-                <span className="whitespace-nowrap sm:hidden">{isEn ? "Book" : "বুকিং"}</span>
-                <span className="hidden whitespace-nowrap sm:inline">{isEn ? "Book a Visit" : "ভিজিট বুকিং"}</span>
+                <span className="whitespace-nowrap">{isEn ? "Visit" : "ভিজিট"}</span>
               </Link>
 
               <AuthNavButton

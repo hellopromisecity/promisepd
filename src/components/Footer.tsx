@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Mail, Phone, MapPin, Clock } from "lucide-react";
+import { Mail, Phone, MapPin, Clock, CreditCard } from "lucide-react";
 import { FOOTER_QUICK_LINKS, SITE } from "@/lib/site";
 import { toBn } from "@/lib/bn";
 import { DICT, stripLocale, localizedPath } from "@/lib/i18n";
@@ -187,6 +187,17 @@ export default function Footer() {
                     {isEn ? SITE.weeklyOffEn : SITE.weeklyOff}
                   </div>
                 </div>
+              </li>
+              {/* Payment Method — sits under the contact block so anyone
+                  ready to pay finds our bank details right here. */}
+              <li className="flex items-center gap-2.5 pt-1">
+                <CreditCard className="h-4 w-4 text-brand-red shrink-0" />
+                <Link
+                  href={lp("/payment")}
+                  className="font-semibold text-brand-blue hover:text-brand-blue-dark transition-colors"
+                >
+                  {isEn ? "Payment Method" : "পেমেন্ট মেথড"}
+                </Link>
               </li>
             </ul>
           </div>

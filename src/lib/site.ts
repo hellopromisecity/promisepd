@@ -425,7 +425,6 @@ export const FOOTER_QUICK_LINKS: {
   { label: "পার্টনার হোন", labelEn: "Become a Partner", href: "/partner" },
   { label: "মার্কেটিং পলিসি", labelEn: "Marketing Policy", href: "/marketing-policy" },
   { label: "যোগাযোগ", labelEn: "Contact", href: "/contact" },
-  { label: "পেমেন্ট মেথড", labelEn: "Payment Method", href: "/payment" },
 ];
 
 /** When on the home section, navbar cycles through these brand identities */
