@@ -1,24 +1,20 @@
 "use client";
 
-/** All Customers — one unified, per-project customer view for Projectify.
- *
- *  Rows are project-book customers OR live app/investment holdings, shown one
- *  row PER person-PER project (deduped against the book in safe mode). It keeps
- *  every book feature and layers on the app feature set (health, status filters,
- *  invested/profit/balance, PDF, paging, per-account actions), plus unique-people
- *  stats and a Top-investors ranking by current holding across all projects. */
+/** All Customers — a UNIQUE-PERSON directory for Projectify (one row per person,
+ *  like Investments → App Users). Each row aggregates that person's holdings
+ *  across every project (book + app, deduped); the per-project detail lives on
+ *  the individual project pages. Click a row to see their project breakdown. */
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone,
-  ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy,
-  Phone, MapPin, UserCheck, Eye, Pencil, CreditCard, UserPlus, Info,
+  Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
+  ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
-import type { AppUser, TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
-import type { UnifiedCustomer, AppHealth } from "@/lib/all-customers";
-import { HistoryModal, CustomerFormModal, TransactionModal, DeleteBtn, type HubProject } from "./HubCustomerList";
+import type { TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
+import type { PersonRow, AppHealth } from "@/lib/all-customers";
+import { CustomerFormModal, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import UserActive from "@/app/dashboard/investments/users/UserActive";
@@ -32,74 +28,59 @@ const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
 type StatusFilter = "all" | "verified" | "unverified" | "active" | "inactive" | "paying" | "nonpaying";
 
-/** Per-row money semantics: app → invested/profit/balance; deposit → paid/dividend/held (paid+div−wd); real-estate → paid/—/due. */
-function money(c: UnifiedCustomer) {
-  const paid = c.total_paid;
-  if (c.source === "app") return { paid, profit: c.profit ?? 0, hasProfit: true, balance: c.balance, balLabel: "balance" as const };
-  if (c.project_type === "deposit") return { paid, profit: c.dividend, hasProfit: true, balance: c.total_paid + c.dividend - c.withdrawn, balLabel: "held" as const };
-  return { paid, profit: 0, hasProfit: false, balance: c.total_remaining, balLabel: "due" as const };
-}
-const rowPaying = (c: UnifiedCustomer) =>
-  c.source === "app" ? (c.invested! > 0 || c.profit! > 0 || c.withdrawn > 0 || c.balance !== 0) : c.total_paid > 0;
-
 export default function AllCustomersExplorer({
-  rows, projects, health, top, totals, mergedNames, investorTypes, investorProjects,
+  people, projects, health, top, totals, investorTypes, investorProjects,
 }: {
-  rows: UnifiedCustomer[];
+  people: PersonRow[];
   projects: HubProject[];
   health: AppHealth;
   top: { name: string; balance: number }[];
-  totals: { collected: number; memberships: number; payers: number; uniqueCount: number; appAccounts: number };
-  mergedNames: string[];
+  totals: { collected: number; uniqueCount: number; appAccounts: number; payers: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
 }) {
   const [q, setQ] = useState("");
   const [projFilter, setProjFilter] = useState("all");
   const [status, setStatus] = useState<StatusFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("paid");
+  const [sortKey, setSortKey] = useState<SortKey>("balance");
   const [asc, setAsc] = useState(false);
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
   const [mounted, setMounted] = useState(false);
-
-  const [view, setView] = useState<UnifiedCustomer | null>(null);
-  const [edit, setEdit] = useState<UnifiedCustomer | null>(null);
-  const [txn, setTxn] = useState<UnifiedCustomer | null>(null);
+  const [detail, setDetail] = useState<PersonRow | null>(null);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setMounted(true), 40); return () => clearTimeout(t); }, []);
   useEffect(() => { setPage(1); }, [q, status, projFilter, perPage]);
 
   const hubProjects = useMemo(() => projects.filter((p) => p.type !== "investment"), [projects]);
-  const custProj = (c: UnifiedCustomer): HubProject => ({ key: c.project_key, name: c.project_name, type: c.project_type, sort: 0 });
   const maxBal = Math.max(1, ...top.map((t) => t.balance));
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return rows.filter((c) => {
-      if (projFilter !== "all" && c.project_key !== projFilter) return false;
-      const app = c.source === "app";
-      if (status === "verified" && !(app && c.is_verified)) return false;
-      if (status === "unverified" && !(app && !c.is_verified)) return false;
-      if (status === "active" && !(app && c.is_active)) return false;
-      if (status === "inactive" && !(app && !c.is_active)) return false;
-      if (status === "paying" && !rowPaying(c)) return false;
-      if (status === "nonpaying" && rowPaying(c)) return false;
+    return people.filter((p) => {
+      if (projFilter !== "all" && !p.projectKeys.includes(projFilter)) return false;
+      const app = !!p.app;
+      if (status === "verified" && !(app && p.is_verified)) return false;
+      if (status === "unverified" && !(app && !p.is_verified)) return false;
+      if (status === "active" && !(app && p.is_active)) return false;
+      if (status === "inactive" && !(app && !p.is_active)) return false;
+      if (status === "paying" && !(p.totalPaid > 0)) return false;
+      if (status === "nonpaying" && p.totalPaid > 0) return false;
       if (!term) return true;
-      return `${c.name} ${c.file_no ?? ""} ${c.uid ?? ""} ${c.mobile ?? ""} ${c.district ?? ""} ${c.reference ?? ""} ${c.email ?? ""} ${c.project_name}`.toLowerCase().includes(term);
+      return `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.email ?? ""} ${p.projectNames.join(" ")}`.toLowerCase().includes(term);
     });
-  }, [rows, q, projFilter, status]);
+  }, [people, q, projFilter, status]);
 
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
     return [...filtered].sort((a, b) => {
       let d = 0;
       if (sortKey === "name") d = a.name.localeCompare(b.name);
-      else if (sortKey === "joined") d = (a.joining_date ?? "").localeCompare(b.joining_date ?? "");
-      else if (sortKey === "paid") d = a.total_paid - b.total_paid;
-      else if (sortKey === "profit") d = money(a).profit - money(b).profit;
-      else d = money(a).balance - money(b).balance;
+      else if (sortKey === "joined") d = (a.joined ?? "").localeCompare(b.joined ?? "");
+      else if (sortKey === "paid") d = a.totalPaid - b.totalPaid;
+      else if (sortKey === "profit") d = a.totalProfit - b.totalProfit;
+      else d = a.totalBalance - b.totalBalance;
       return d * dir;
     });
   }, [filtered, sortKey, asc]);
@@ -112,11 +93,10 @@ export default function AllCustomersExplorer({
   const setSort = (k: SortKey) => { if (sortKey === k) setAsc((v) => !v); else { setSortKey(k); setAsc(false); } };
 
   function exportCsv() {
-    const head = ["#", "Name", "Project", "Source", "File/UID", "Mobile", "District", "Reference", "Paid", "Profit", "Balance/Due", "Joined"];
+    const head = ["#", "Name", "Mobile", "App UID", "Projects", "Paid", "Profit", "Balance", "Joined"];
     const lines = [head.join(",")];
-    sorted.forEach((c, i) => {
-      const m = money(c);
-      const cells = [i + 1, c.name, c.project_name, c.source === "app" ? "App" : "Book", c.file_no ?? c.uid ?? "", localPhone(c.mobile), c.district ?? "", c.reference ?? "", Math.round(m.paid), m.hasProfit ? Math.round(m.profit) : "", Math.round(m.balance), c.joining_date ?? ""];
+    sorted.forEach((p, i) => {
+      const cells = [i + 1, p.name, localPhone(p.mobile), p.uid ?? "", p.projectNames.join(" | "), Math.round(p.totalPaid), Math.round(p.totalProfit), Math.round(p.totalBalance), p.joined ?? ""];
       lines.push(cells.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -130,20 +110,19 @@ export default function AllCustomersExplorer({
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
     const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
     const cols = [
-      { k: "name", t: "Name", x: 40, w: 165 },
-      { k: "proj", t: "Project", x: 205, w: 150 },
-      { k: "phone", t: "Mobile", x: 355, w: 95 },
-      { k: "paid", t: "Paid", x: 450, w: 95, r: true },
-      { k: "profit", t: "Profit", x: 545, w: 85, r: true },
-      { k: "bal", t: "Balance", x: 630, w: 95, r: true },
-      { k: "src", t: "Src", x: 745, w: 55 },
+      { k: "name", t: "Name", x: 40, w: 175 },
+      { k: "phone", t: "Mobile", x: 215, w: 100 },
+      { k: "proj", t: "Projects", x: 315, w: 130 },
+      { k: "paid", t: "Paid", x: 445, w: 95, r: true },
+      { k: "profit", t: "Profit", x: 540, w: 90, r: true },
+      { k: "bal", t: "Balance", x: 630, w: 100, r: true },
     ];
     const drawHeader = () => {
       doc.setFillColor(24, 71, 161); doc.rect(0, 0, W, 50, "F");
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
       doc.text("Promise City — All Customers", 40, 32);
       doc.setFontSize(9); doc.setFont("helvetica", "normal");
-      doc.text(`${total} entries  •  ${totals.uniqueCount} unique  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
+      doc.text(`${total} unique people  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
       doc.setFillColor(238, 241, 246); doc.rect(0, 56, W, 20, "F");
       doc.setTextColor(60, 60, 60); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
       for (const c of cols) doc.text(c.t, c.r ? c.x + c.w - 4 : c.x, 70, { align: c.r ? "right" : "left" });
@@ -151,14 +130,13 @@ export default function AllCustomersExplorer({
     drawHeader();
     let y = 92;
     doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-    sorted.forEach((c, i) => {
+    sorted.forEach((p, i) => {
       if (y > H - 30) { doc.addPage(); drawHeader(); y = 92; }
       if (i % 2 === 0) { doc.setFillColor(249, 250, 252); doc.rect(0, y - 10, W, 16, "F"); }
       doc.setTextColor(30, 30, 30);
-      const m = money(c);
       const cell: Record<string, string> = {
-        name: (c.name || "").slice(0, 32), proj: (c.project_name || "").slice(0, 26), phone: localPhone(c.mobile),
-        paid: pdfMoney(m.paid), profit: m.hasProfit ? pdfMoney(m.profit) : "—", bal: pdfMoney(m.balance), src: c.source === "app" ? "App" : "Book",
+        name: (p.name || "").slice(0, 34), phone: localPhone(p.mobile), proj: p.projectNames.join(", ").slice(0, 24),
+        paid: pdfMoney(p.totalPaid), profit: pdfMoney(p.totalProfit), bal: pdfMoney(p.totalBalance),
       };
       for (const col of cols) doc.text(cell[col.k], col.r ? col.x + col.w - 4 : col.x, y, { align: col.r ? "right" : "left" });
       y += 16;
@@ -173,16 +151,15 @@ export default function AllCustomersExplorer({
       {label}{sortKey !== k ? <ArrowUpDown className="h-3 w-3 opacity-40" /> : asc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
     </button>
   );
-  const iconBtn = "grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors";
 
   return (
     <div className="space-y-5">
       {/* primary stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total collected" value={compact(totals.collected)} sub={`${totals.payers.toLocaleString("en-IN")} paid`} icon={Wallet} tone="success" />
-        <StatCard label="Customers" value={totals.memberships.toLocaleString("en-IN")} sub="one per project entry" icon={Users} tone="info" />
-        <StatCard label="Unique people" value={totals.uniqueCount.toLocaleString("en-IN")} sub={`${compact(totals.collected)} total`} icon={UserRound} tone="warning" />
-        <StatCard label="App accounts" value={totals.appAccounts.toLocaleString("en-IN")} sub={`${health.merged} holdings · ${health.verified} verified`} icon={Smartphone} tone="neutral" />
+        <StatCard label="Unique people" value={totals.uniqueCount.toLocaleString("en-IN")} sub="one row each" icon={UserRound} tone="info" />
+        <StatCard label="App accounts" value={totals.appAccounts.toLocaleString("en-IN")} sub={`${health.verified} verified`} icon={Smartphone} tone="warning" />
+        <StatCard label="Projects" value={hubProjects.length.toLocaleString("en-IN")} sub="real estate + deposit" icon={Building2} tone="neutral" />
       </div>
 
       {/* app-account health + top holders */}
@@ -215,22 +192,14 @@ export default function AllCustomersExplorer({
         </div>
       </div>
 
-      {/* safe-mode merge note */}
-      {mergedNames.length > 0 && (
-        <details className="rounded-xl border border-border bg-bg-soft/60 px-4 py-2.5 text-xs text-fg-muted">
-          <summary className="flex cursor-pointer items-center gap-1.5 font-semibold text-fg"><Info className="h-3.5 w-3.5 text-brand-blue" /> {mergedNames.length} app holding{mergedNames.length > 1 ? "s" : ""} matched to an existing book customer by name + amount — spot-check</summary>
-          <p className="mt-2 leading-relaxed">{mergedNames.join(" · ")}</p>
-        </details>
-      )}
-
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-brand-blue/30 bg-brand-blue-tint px-3 py-2.5 text-sm font-bold text-brand-blue">
-          <Users className="h-4 w-4" /> {total.toLocaleString("en-IN")} <span className="font-medium text-brand-blue/70">of {rows.length}</span>
+          <Users className="h-4 w-4" /> {total.toLocaleString("en-IN")} <span className="font-medium text-brand-blue/70">of {people.length}</span>
         </span>
         <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, file/UID, mobile, district, officer, email…"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, mobile, UID, project…"
             className="w-full rounded-xl border border-border bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-blue/50" />
         </div>
         <select value={projFilter} onChange={(e) => setProjFilter(e.target.value)} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
@@ -258,12 +227,12 @@ export default function AllCustomersExplorer({
       {/* table */}
       <div className="overflow-hidden rounded-2xl border border-border bg-bg">
         <div className="max-h-[560px] overflow-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
+          <table className="w-full min-w-[860px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-bg-soft/95 backdrop-blur">
               <tr className="border-b border-border">
                 <th className="w-10 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">#</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="name" label="Customer" /></th>
-                <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Project</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Projects</th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="paid" label="Paid" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="profit" label="Profit" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="balance" label="Balance" right /></th>
@@ -274,77 +243,52 @@ export default function AllCustomersExplorer({
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-12 text-center text-sm text-fg-muted">No customers match.</td></tr>
-              ) : pageRows.map((c, i) => {
-                const m = money(c);
-                const tint = avatarTint(c.id);
-                const isApp = c.source === "app";
+                <tr><td colSpan={9} className="px-3 py-12 text-center text-sm text-fg-muted">No people match.</td></tr>
+              ) : pageRows.map((p, i) => {
+                const tint = avatarTint(p.id);
+                const isApp = !!p.app;
                 return (
-                  <tr key={c.id} className="border-b border-border/60 align-top transition-colors hover:bg-bg-soft/50">
+                  <tr key={p.id} className="border-b border-border/60 align-top transition-colors hover:bg-bg-soft/50">
                     <td className="px-3 py-3 text-fg-faint">{start + i + 1}</td>
                     <td className="px-3 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold ${tint.bg} ${tint.fg}`}>{initial(c.name)}</span>
+                      <button onClick={() => setDetail(p)} className="flex items-center gap-2.5 text-left">
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold ${tint.bg} ${tint.fg}`}>{initial(p.name)}</span>
                         <div className="min-w-0">
-                          <p className="flex items-center gap-1 truncate font-semibold text-fg">
-                            {c.name || "—"}
-                            {isApp && c.is_verified && <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-brand-blue" />}
+                          <p className="flex items-center gap-1 truncate font-semibold text-fg hover:text-brand-blue">
+                            {p.name || "—"}
+                            {isApp && p.is_verified && <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-brand-blue" />}
                           </p>
-                          <div className="mt-0.5 space-y-0.5 text-[11px] text-fg-muted">
-                            <div className="flex items-center gap-1"><Phone className="h-3 w-3 text-fg-faint" /> {localPhone(c.mobile)}</div>
-                            {isApp ? (
-                              <div className="truncate text-fg-faint">{c.email || `UID ${c.uid}`}</div>
-                            ) : (
-                              <>
-                                <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-fg-faint" /> {c.district ?? "—"}</div>
-                                <div className="flex items-center gap-1"><UserCheck className="h-3 w-3 text-fg-faint" /> {c.reference ?? "—"}</div>
-                              </>
-                            )}
-                          </div>
+                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-fg-muted"><Phone className="h-3 w-3 text-fg-faint" /> {localPhone(p.mobile)}{isApp && p.uid ? <span className="ml-1 text-fg-faint">· {p.uid}</span> : null}</div>
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-fg">{c.project_name}</span>
-                        {isApp && <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600"><Smartphone className="h-2.5 w-2.5" /> app</span>}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-fg-faint">{isApp ? (c.file_no ? `FID ${c.file_no}` : "") : `File ${c.file_no ?? "—"}`}</div>
+                      <button onClick={() => setDetail(p)} className="text-left text-fg-muted hover:text-brand-blue" title={p.projectNames.join(", ")}>
+                        {p.projectNames.length <= 1 ? (p.projectNames[0] ?? "—") : <>{p.projectNames[0]} <span className="rounded-full bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">+{p.projectNames.length - 1}</span></>}
+                      </button>
                     </td>
-                    <td className="px-3 py-3 text-right font-bold tabular-nums text-brand-blue">{fmt(m.paid)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{m.hasProfit ? fmt(m.profit) : "—"}</td>
-                    <td className={`px-3 py-3 text-right tabular-nums font-semibold ${m.balLabel === "due" ? (m.balance > 0 ? "text-brand-red-dark" : "text-fg-faint") : m.balance < 0 ? "text-brand-red-dark" : "text-fg"}`}
-                      title={m.balLabel === "due" ? "Remaining / due" : m.balLabel === "held" ? "Money still in company" : "App balance"}>
-                      {m.balLabel === "due" && m.balance <= 0 ? "—" : fmt(m.balance)}
-                    </td>
+                    <td className="px-3 py-3 text-right font-bold tabular-nums text-brand-blue">{fmt(p.totalPaid)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{p.totalProfit ? fmt(p.totalProfit) : "—"}</td>
+                    <td className={`px-3 py-3 text-right font-semibold tabular-nums ${p.totalBalance < 0 ? "text-brand-red-dark" : "text-fg"}`}>{fmt(p.totalBalance)}</td>
                     <td className="px-3 py-3">
                       {isApp ? (
                         <div className="flex flex-col gap-1">
-                          <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${c.is_active ? "bg-emerald-500/15 text-emerald-600" : "bg-fg-faint/15 text-fg-muted"}`}>{c.is_active ? "Active" : "Inactive"}</span>
-                          <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${c.is_verified ? "bg-brand-blue-tint text-brand-blue" : "bg-amber-500/15 text-amber-600"}`}>{c.is_verified ? "Verified" : "Unverified"}</span>
+                          <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${p.is_active ? "bg-emerald-500/15 text-emerald-600" : "bg-fg-faint/15 text-fg-muted"}`}>{p.is_active ? "Active" : "Inactive"}</span>
+                          <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${p.is_verified ? "bg-brand-blue-tint text-brand-blue" : "bg-amber-500/15 text-amber-600"}`}>{p.is_verified ? "Verified" : "Unverified"}</span>
                         </div>
-                      ) : c.project_type === "deposit" ? (
-                        <span className="w-fit rounded-full bg-brand-blue-tint px-2 py-0.5 text-[10px] font-bold text-brand-blue">Deposit</span>
                       ) : (
-                        <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${c.total_remaining > 0 ? "bg-amber-500/15 text-amber-600" : "bg-emerald-500/15 text-emerald-600"}`}>{c.total_remaining > 0 ? "Due" : "Cleared"}</span>
+                        <span className="w-fit rounded-full bg-bg-soft px-2 py-0.5 text-[10px] font-bold text-fg-muted">Book</span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-right text-xs text-fg-muted">{fmtDate(c.joining_date)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right text-xs text-fg-muted">{fmtDate(p.joined)}</td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-end gap-1.5">
-                        {isApp ? (
+                        <button onClick={() => setDetail(p)} title="View holdings" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors hover:border-brand-blue/40 hover:text-brand-blue"><UserRound className="h-4 w-4" /></button>
+                        {isApp && p.app && (
                           <>
-                            <UserView user={c.app as AppUser} />
-                            <UserTxns user={c.app as AppUser} types={investorTypes} projects={investorProjects} />
-                            <InvestorEdit investor={{ uid: c.uid!, full_name: c.name, fid: c.file_no, phone_number: c.mobile ?? "", email: c.email ?? null, is_active: !!c.is_active, is_verified: !!c.is_verified }} />
-                            <UserActive uid={c.uid!} name={c.name} active={!!c.is_active} />
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => setView(c)} title="View history" className={`${iconBtn} hover:border-brand-blue/40 hover:text-brand-blue`}><Eye className="h-4 w-4" /></button>
-                            <button onClick={() => setEdit(c)} title="Edit" className={`${iconBtn} hover:border-brand-blue/40 hover:text-brand-blue`}><Pencil className="h-4 w-4" /></button>
-                            <DeleteBtn customer={c} project={custProj(c)} className={iconBtn} />
-                            <button onClick={() => setTxn(c)} title="Transactions" className={`${iconBtn} hover:border-emerald-300 hover:text-emerald-600`}><CreditCard className="h-4 w-4" /></button>
+                            <UserTxns user={p.app} types={investorTypes} projects={investorProjects} />
+                            <InvestorEdit investor={{ uid: p.uid!, full_name: p.name, fid: p.fid ?? null, phone_number: p.mobile ?? "", email: p.email ?? null, is_active: !!p.is_active, is_verified: !!p.is_verified }} />
+                            <UserActive uid={p.uid!} name={p.name} active={!!p.is_active} />
                           </>
                         )}
                       </div>
@@ -356,9 +300,8 @@ export default function AllCustomersExplorer({
           </table>
         </div>
 
-        {/* pagination */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2.5 text-sm">
-          <p className="text-fg-muted">Showing <b className="text-fg">{total === 0 ? 0 : start + 1}–{Math.min(start + perPage, total)}</b> of <b className="text-fg">{total}</b>{total !== rows.length && <span className="text-fg-faint"> (filtered from {rows.length})</span>}</p>
+          <p className="text-fg-muted">Showing <b className="text-fg">{total === 0 ? 0 : start + 1}–{Math.min(start + perPage, total)}</b> of <b className="text-fg">{total}</b>{total !== people.length && <span className="text-fg-faint"> (filtered from {people.length})</span>}</p>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
             {Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - curPage) <= 1).map((p, idx, arr) => (
@@ -372,12 +315,59 @@ export default function AllCustomersExplorer({
         </div>
       </div>
 
-      {/* hub-row modals */}
-      {view && <HistoryModal customer={view} isDeposit={view.project_type === "deposit"} onClose={() => setView(null)} />}
-      {txn && <TransactionModal customer={txn} project={custProj(txn)} onClose={() => setTxn(null)} />}
-      {(adding || edit) && <CustomerFormModal project={edit ? custProj(edit) : (hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 })} customer={edit} projects={!edit ? hubProjects : undefined} onClose={() => { setAdding(false); setEdit(null); }} />}
+      {detail && <PersonModal person={detail} onClose={() => setDetail(null)} />}
+      {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
     </div>
   );
+}
+
+function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-14" onClick={onClose}>
+      <div className="w-full max-w-xl rounded-2xl bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+          <div>
+            <h3 className="flex items-center gap-1.5 text-lg font-bold text-fg">{person.name}{person.app && person.is_verified && <BadgeCheck className="h-4 w-4 text-brand-blue" />}</h3>
+            <p className="text-xs text-fg-muted">{localPhone(person.mobile)}{person.uid ? ` · UID ${person.uid}` : ""}{person.fid ? ` · FID ${person.fid}` : ""}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-fg-muted hover:bg-bg-soft"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="px-5 py-4">
+          <div className="grid grid-cols-3 gap-2">
+            <Stat label="Total paid" value={fmt(person.totalPaid)} tone="blue" />
+            <Stat label="Profit" value={fmt(person.totalProfit)} tone="green" />
+            <Stat label="Balance" value={fmt(person.totalBalance)} />
+          </div>
+          <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-fg-muted">Holdings · {person.holdings.length} project{person.holdings.length > 1 ? "s" : ""}</div>
+          <div className="space-y-1.5">
+            {person.holdings.map((h, i) => (
+              <div key={h.project_key + i} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 font-medium text-fg">
+                    {h.project_name}
+                    {h.source === "app" && <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600"><Smartphone className="h-2.5 w-2.5" /> app</span>}
+                  </div>
+                  <div className="text-[11px] text-fg-faint">Paid {fmt(h.paid)}{h.profit ? ` · profit ${fmt(h.profit)}` : ""}</div>
+                </div>
+                <span className="shrink-0 font-bold tabular-nums text-fg">{fmt(h.balance)}</span>
+              </div>
+            ))}
+          </div>
+          {person.app && (
+            <div className="mt-4 flex justify-end">
+              <UserView user={person.app} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "blue" | "green" }) {
+  const box = tone === "blue" ? "bg-brand-blue-tint" : tone === "green" ? "bg-emerald-50" : "bg-bg-soft";
+  const txt = tone === "blue" ? "text-brand-blue-dark" : tone === "green" ? "text-emerald-700" : "text-fg";
+  return <div className={`rounded-xl px-3 py-2 ${box}`}><div className="text-[10px] font-semibold uppercase tracking-wide text-fg-faint">{label}</div><div className={`text-sm font-extrabold tabular-nums ${txt}`}>{value}</div></div>;
 }
 
 function Donut({ mounted, pct, color, label, a, b }: { mounted: boolean; pct: number; color: string; label: string; a: string; b: string }) {
