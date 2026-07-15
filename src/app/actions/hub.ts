@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { getAdmin } from "@/lib/admin-guard";
-import { sendTransactionSms } from "@/lib/sms";
-import { hubCustomer, type HubCustomer, type HubPayment } from "@/lib/hub";
+import { getAdmin, logAudit } from "@/lib/admin-guard";
+import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
+import { hubCustomer, hubProjectCustomers, type HubCustomer, type HubPayment } from "@/lib/hub";
+import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
@@ -258,5 +259,46 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
     await recomputeCustomer(admin, p.customer_id as string);
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction updated." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── deposit profit push (bulk SMS to a scheme's members) ─────────
+type PushResult = { ok: true; message?: string; sent?: number; skipped?: number } | { ok: false; error: string };
+
+/** Fill a template with one member's figures. Placeholders (case-insensitive):
+ *  {name} {profit} {paid} {remain}. Amounts are grouped (BD lakh) integers. */
+function fillTemplate(tpl: string, c: HubCustomer, profit: number): string {
+  const n = (v: number) => Math.round(Number(v) || 0).toLocaleString("en-IN");
+  return tpl
+    .replace(/\{name\}/gi, c.name || "")
+    .replace(/\{profit\}/gi, n(profit))
+    .replace(/\{paid\}/gi, n(c.total_paid))
+    .replace(/\{remain\}/gi, n(c.total_paid + c.dividend - c.withdrawn + profit));
+}
+
+/** Text every member of a deposit scheme their profit message. Each member's
+ *  {profit} is their live accrued dividend. Sends real SMS (costs balance). */
+export async function pushDepositProfit(projectKey: string, template: string): Promise<PushResult> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const tpl = (template || "").trim();
+    if (!tpl) return { ok: false, error: "Write a message first." };
+
+    const customers = await hubProjectCustomers(projectKey);
+    if (!customers.length) return { ok: false, error: "No customers in this scheme." };
+    const cfg = await getProfitConfig(projectKey);
+    const profits = await accruedProfitByCustomer(customers.map((c) => c.id), cfg);
+
+    let sent = 0, skipped = 0;
+    const BATCH = 20; // send in parallel batches so a big scheme finishes in time
+    for (let i = 0; i < customers.length; i += BATCH) {
+      const slice = customers.slice(i, i + BATCH);
+      const results = await Promise.all(slice.map((c) => sendBulkSms(c.mobile, fillTemplate(tpl, c, profits.get(c.id) || 0))));
+      for (const r of results) { if (r) sent++; else skipped++; }
+    }
+
+    await logAudit({ action: "sms", entity: "deposit_profit_push", entityId: projectKey, detail: `Profit push to ${projectKey}: sent ${sent}, skipped ${skipped} (no mobile)` });
+    return { ok: true, sent, skipped, message: `Sent to ${sent} customer${sent !== 1 ? "s" : ""}${skipped ? ` · ${skipped} skipped (no valid mobile)` : ""}.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }

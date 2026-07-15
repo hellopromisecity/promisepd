@@ -18,6 +18,8 @@ import OverrideForm from "../OverrideForm";
 
 export const metadata: Metadata = { title: "Project", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
+// Profit Push texts every member — give the bulk send room to finish.
+export const maxDuration = 60;
 
 const fmt = (n: number) => {
   n = Number(n) || 0;

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Receipt, Eye, Pencil, Trash2, CreditCard, Plus, UserPlus, Check } from "lucide-react";
+import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Receipt, Eye, Pencil, Trash2, CreditCard, Plus, UserPlus, Check, Send } from "lucide-react";
 import { Card, TableShell, thCls, tdCls } from "@/components/admin/ui";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 import {
   getHubCustomerDetail, listReferenceOfficers, listTxnTypes, createHubCustomer, updateHubCustomer,
-  deleteHubCustomer, addHubPayment, updateHubPayment, deleteHubPayment, type RefOfficer, type CustomerInput, type TxnType,
+  deleteHubCustomer, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit, type RefOfficer, type CustomerInput, type TxnType,
 } from "@/app/actions/hub";
 import type { HubCustomer, HubPayment } from "@/lib/hub";
 
@@ -33,6 +33,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
   const [edit, setEdit] = useState<HubCustomer | null>(null);
   const [txn, setTxn] = useState<HubCustomer | null>(null);
   const [adding, setAdding] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const isDeposit = project.type === "deposit";
   const custProj = (c: HubCustomer): HubProject => ({ key: c.project_key, name: c.project_name, type: c.project_type, sort: 0 });
 
@@ -92,6 +93,9 @@ export default function HubCustomerList({ customers, project, projects, profits 
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <span className="tabular-nums">{rows.length} of {customers.length}</span>
           <button onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40"><Download className="h-4 w-4" /> Export</button>
+          {isDeposit && (
+            <button onClick={() => setPushing(true)} title="Text every member their profit" className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"><Send className="h-4 w-4" /> Profit Push</button>
+          )}
           <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3 py-2 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark"><UserPlus className="h-4 w-4" /> Add customer</button>
         </div>
       </div>
@@ -165,6 +169,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
       {view && <HistoryModal customer={view} isDeposit={view.project_type === "deposit"} onClose={() => setView(null)} />}
       {txn && <TransactionModal customer={txn} project={custProj(txn)} onClose={() => setTxn(null)} />}
       {(adding || edit) && <CustomerFormModal project={edit ? custProj(edit) : project} customer={edit} projects={isAll && !edit ? projects : undefined} onClose={() => { setAdding(false); setEdit(null); }} />}
+      {pushing && <ProfitPushModal project={project} customers={customers} profits={profits ?? {}} onClose={() => setPushing(false)} />}
     </Card>
   );
 }
@@ -422,6 +427,62 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ProfitPushModal({ project, customers, profits, onClose }: { project: HubProject; customers: HubCustomer[]; profits: Record<string, number>; onClose: () => void }) {
+  const [tpl, setTpl] = useState(`Assalamu Alaikum {name}, ${project.name} e apnar munafa (profit) {profit} taka. Dhonnobad - Promise City.`);
+  const [pending, start] = useTransition();
+  const withMobile = useMemo(() => customers.filter((c) => (c.mobile ?? "").replace(/\D/g, "").length >= 10), [customers]);
+  const sample = withMobile[0] ?? customers[0];
+  const n = (v: number) => Math.round(Number(v) || 0).toLocaleString("en-IN");
+  const preview = sample
+    ? tpl.replace(/\{name\}/gi, sample.name || "").replace(/\{profit\}/gi, n(profits[sample.id] || 0)).replace(/\{paid\}/gi, n(sample.total_paid)).replace(/\{remain\}/gi, n(depRemain(sample) + (profits[sample.id] || 0)))
+    : tpl;
+  const unicode = [...preview].some((ch) => ch.charCodeAt(0) > 127);
+  const segs = Math.max(1, Math.ceil(preview.length / (unicode ? 70 : 160)));
+
+  function send() {
+    if (!tpl.trim()) { toast("Write a message first.", "error"); return; }
+    (async () => {
+      const ok = await confirmDialog({ title: "Send profit SMS", message: `Text this to ${withMobile.length} customer${withMobile.length !== 1 ? "s" : ""} of ${project.name}? ~${segs} SMS each — this uses your SMS balance and can't be undone.`, confirmText: `Send to ${withMobile.length}` });
+      if (!ok) return;
+      start(async () => {
+        const r = await pushDepositProfit(project.key, tpl);
+        if (r.ok) { toast(r.message || "Sent.", "success"); onClose(); } else toast(r.error, "error");
+      });
+    })();
+  }
+
+  return (
+    <Modal title="Profit Push" subtitle={`Text every member of ${project.name} their profit`} onClose={onClose} wide>
+      <div className="space-y-3">
+        <div className="rounded-xl border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+          Sends a real SMS to each member and uses your SMS balance. Each person&apos;s <b>{"{profit}"}</b> is filled with their own live accrued profit.
+        </div>
+        <div>
+          <label className={labelCls}>Message</label>
+          <textarea value={tpl} onChange={(e) => setTpl(e.target.value)} rows={4} className={`${inputCls} resize-y`} placeholder="Write the profit message…" />
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-fg-faint">Insert:</span>
+            {["{name}", "{profit}", "{paid}", "{remain}"].map((t) => (
+              <button key={t} type="button" onClick={() => setTpl((s) => s + t)} className="rounded-md border border-border bg-bg-soft px-2 py-0.5 text-[11px] font-medium text-fg-muted hover:border-brand-blue/40 hover:text-brand-blue">{t}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Preview <span className="font-normal normal-case text-fg-faint">({sample?.name || "sample"})</span></label>
+          <div className="whitespace-pre-wrap rounded-xl border border-border bg-bg-soft px-3 py-2 text-sm text-fg">{preview || <span className="text-fg-faint">Empty</span>}</div>
+          <p className="mt-1 text-[11px] text-fg-faint">{preview.length} chars · {unicode ? "Bangla/Unicode (70/SMS)" : "English (160/SMS)"} · ~{segs} SMS each · ~{segs * withMobile.length} total</p>
+        </div>
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-bg-soft px-3 py-2.5">
+          <span className="text-sm text-fg-muted"><b className="text-fg">{withMobile.length}</b> of {customers.length} have a mobile</span>
+          <button onClick={send} disabled={pending || !withMobile.length} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send to {withMobile.length}
+          </button>
         </div>
       </div>
     </Modal>

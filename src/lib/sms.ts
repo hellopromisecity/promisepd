@@ -66,6 +66,15 @@ export async function sendResetCodeSms(phone: string, code: string): Promise<voi
   );
 }
 
+/** Send a free-form message to one recipient (bulk / profit push). Returns true
+ *  when a valid BD number was found and the send attempted, false when skipped
+ *  (no usable mobile). Never throws. */
+export async function sendBulkSms(phone: string | null | undefined, message: string): Promise<boolean> {
+  if (!isBdNumber(String(phone ?? ""))) return false;
+  await sendSms(String(phone), message);
+  return true;
+}
+
 /** Text an investor about a transaction (credit/debit). BD numbers only;
  *  anything else is silently skipped.  Never throws. */
 export async function sendTransactionSms(opts: {
