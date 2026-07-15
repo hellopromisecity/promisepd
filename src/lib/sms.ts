@@ -6,6 +6,8 @@
  *  SECRETS and come from the environment only (never committed); the gateway
  *  URL + sender id have safe defaults but can be overridden via env too. */
 
+import { getAdmin } from "@/lib/admin-guard";
+
 const API_URL = process.env.KHUDEBARTA_API_URL || "http://118.67.213.114:3775/sendtext";
 const CALLER_ID = process.env.KHUDEBARTA_CALLER_ID || "PromiseCity";
 const API_KEY = process.env.KHUDEBARTA_API_KEY;
@@ -30,7 +32,21 @@ function isBdNumber(phone: string): boolean {
   return bdMsisdn(phone) !== "";
 }
 
-async function sendSms(phone: string, message: string): Promise<void> {
+/** Record a sent SMS for the dashboard usage/cost tracker. Logging must never
+ *  break the surrounding send, so every failure is swallowed. */
+async function logSms(recipient: string, message: string, kind: string): Promise<void> {
+  try {
+    const admin = getAdmin();
+    if (!admin) return;
+    const unicode = [...message].some((ch) => ch.charCodeAt(0) > 127);
+    const segments = Math.max(1, Math.ceil(message.length / (unicode ? 70 : 160)));
+    // sms_log isn't in the generated Supabase types — write around them.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin.from("sms_log") as any).insert({ recipient, kind, segments });
+  } catch { /* ignore */ }
+}
+
+async function sendSms(phone: string, message: string, kind = "transaction"): Promise<void> {
   if (!API_KEY || !SECRET_KEY) {
     console.warn("[sms] disabled — KHUDEBARTA_API_KEY / KHUDEBARTA_SECRET_KEY not set");
     return;
@@ -54,6 +70,7 @@ async function sendSms(phone: string, message: string): Promise<void> {
   } finally {
     clearTimeout(timer);
   }
+  await logSms(toUser, message, kind);
 }
 
 /** Text a password-reset code.  BD numbers only (gateway limit); anything
@@ -63,15 +80,16 @@ export async function sendResetCodeSms(phone: string, code: string): Promise<voi
   await sendSms(
     phone,
     `Your PromisePD password reset code is ${code}. It expires in 10 minutes. Do not share it with anyone.`,
+    "reset",
   );
 }
 
 /** Send a free-form message to one recipient (bulk / profit push). Returns true
  *  when a valid BD number was found and the send attempted, false when skipped
  *  (no usable mobile). Never throws. */
-export async function sendBulkSms(phone: string | null | undefined, message: string): Promise<boolean> {
+export async function sendBulkSms(phone: string | null | undefined, message: string, kind = "bulk"): Promise<boolean> {
   if (!isBdNumber(String(phone ?? ""))) return false;
-  await sendSms(String(phone), message);
+  await sendSms(String(phone), message, kind);
   return true;
 }
 
@@ -90,5 +108,5 @@ export async function sendTransactionSms(opts: {
     opts.operator === "-"
       ? `${amountStr} has been debited from your account. Ref: ${opts.txId}`
       : `${amountStr} has been credited to your account. Ref: ${opts.txId}`;
-  await sendSms(phone, message);
+  await sendSms(phone, message, "transaction");
 }

@@ -294,7 +294,7 @@ export async function pushDepositProfit(projectKey: string, template: string): P
     const BATCH = 20; // send in parallel batches so a big scheme finishes in time
     for (let i = 0; i < customers.length; i += BATCH) {
       const slice = customers.slice(i, i + BATCH);
-      const results = await Promise.all(slice.map((c) => sendBulkSms(c.mobile, fillTemplate(tpl, c, profits.get(c.id) || 0))));
+      const results = await Promise.all(slice.map((c) => sendBulkSms(c.mobile, fillTemplate(tpl, c, profits.get(c.id) || 0), "profit")));
       for (const r of results) { if (r) sent++; else skipped++; }
     }
 

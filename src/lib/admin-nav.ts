@@ -19,6 +19,7 @@ import {
   Megaphone,
   UserCheck,
   MessageSquare,
+  Send,
   History,
   Settings,
   Rocket,
@@ -93,6 +94,7 @@ export const ADMIN_NAV: NavEntry[] = [
   // My Projects — injected in AdminShell only when the viewer has a linked
   // investor account (MY_PROJECTS_LEAF below).
   { label: "Vault", href: "/dashboard/vault", icon: KeyRound, min: "admin" },
+  { label: "SMS", href: "/dashboard/sms", icon: Send, min: "manager" },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "manager" },
   { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "manager" },
   { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "manager" },
