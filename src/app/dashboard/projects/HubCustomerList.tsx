@@ -43,7 +43,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
     return [...r].sort((a, b) => {
       let d = 0;
       if (sortKey === "paid") d = a.total_paid - b.total_paid;
-      else if (sortKey === "remaining") d = isDeposit ? depRemain(a) - depRemain(b) : a.total_remaining - b.total_remaining;
+      else if (sortKey === "remaining") d = isDeposit ? (depRemain(a) + (profits?.[a.id] ?? 0)) - (depRemain(b) + (profits?.[b.id] ?? 0)) : a.total_remaining - b.total_remaining;
       else if (sortKey === "withdrawn") d = a.withdrawn - b.withdrawn;
       else if (sortKey === "name") d = a.name.localeCompare(b.name);
       else if (sortKey === "joining") d = (a.joining_date ?? "").localeCompare(b.joining_date ?? "");
@@ -66,7 +66,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
     rows.forEach((c, i) => {
       const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
       const money = isDeposit
-        ? [c.total_paid, c.withdrawn, Math.round(profits?.[c.id] || 0), depRemain(c)]
+        ? [c.total_paid, c.withdrawn, Math.round(profits?.[c.id] || 0), depRemain(c) + Math.round(profits?.[c.id] || 0)]
         : [c.total_paid, c.total_remaining, c.joining_date ?? ""];
       lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
@@ -139,7 +139,8 @@ export default function HubCustomerList({ customers, project, projects, profits 
                   <>
                     <td className={`${tdCls} pt-4 text-right tabular-nums ${c.withdrawn ? "text-brand-red" : "text-fg-faint"}`}>{c.withdrawn ? fmt(c.withdrawn) : "—"}</td>
                     <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-emerald-600`}>{profits?.[c.id] ? fmt(profits[c.id]) : "—"}</td>
-                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c))}</td>
+                    {/* Final balance = paid + dividend − withdrawn + accrued profit (what's actually theirs now). */}
+                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c) + (profits?.[c.id] ?? 0))}</td>
                   </>
                 ) : (
                   <>
