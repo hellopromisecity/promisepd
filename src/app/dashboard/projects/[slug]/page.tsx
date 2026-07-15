@@ -7,7 +7,10 @@ import { getAdmin } from "@/lib/admin-guard";
 import { PROJECTS } from "@/lib/site";
 import { PageHeader, StatCard, Card, Badge, type Tone } from "@/components/admin/ui";
 import { hubProjectMeta, hubProjectCustomers } from "@/lib/hub";
+import { listProjects, matchHubProject } from "@/lib/investments";
 import { getProfitConfig, accruedProfitByCustomer, dailyPerLakh } from "@/lib/deposit-profit";
+import ProjectMetaPanel from "../ProjectMetaPanel";
+import type { EditableProject } from "../../investments/projects/ProjectForm";
 import HubCustomerList from "../HubCustomerList";
 import DepositProfitPanel from "../DepositProfitPanel";
 import {
@@ -37,10 +40,33 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const meta = await hubProjectMeta(slug);
   if (!meta) notFound();
 
+  const admin = getAdmin();
   const customers = await hubProjectCustomers(slug);
   const payers = customers.filter((c) => c.total_paid > 0).length;
   const raised = customers.reduce((s, c) => s + c.total_paid, 0);
   const payments = customers.reduce((s, c) => s + c.payments_count, 0);
+
+  // This book project's matching APP project (same real project, matched by
+  // name) — its rich metadata is what the app/PWA reads. Surfacing it here lets
+  // one edit update the book view, the app, and the investor PWA together.
+  const appProjects = admin ? await listProjects(admin) : [];
+  const linkedProj = matchHubProject(appProjects, meta.name);
+  const editable: EditableProject | null = linkedProj
+    ? {
+        project_id: linkedProj.project_id,
+        project_name: linkedProj.project_name,
+        status: linkedProj.status,
+        project_address: linkedProj.project_address,
+        project_details: linkedProj.project_details,
+        total_amount_required: linkedProj.total_amount_required,
+        per_user_share_amount: linkedProj.per_user_share_amount,
+        project_progress: Number(linkedProj.project_progress) || 0,
+        start_date: linkedProj.start_date,
+        end_date: linkedProj.end_date,
+        hide_total_amount: linkedProj.hide_total_amount,
+        hide_share_price: linkedProj.hide_share_price,
+      }
+    : null;
 
   // Deposit schemes: accrue each member's dividend per day from every deposit's
   // date until the payout date (rate is editable in the panel below).
@@ -65,7 +91,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const staticProject = PROJECTS.find((p) => p.slug === slug);
   let override: OverrideRow | null = null;
   if (staticProject) {
-    const admin = getAdmin();
     if (admin) {
       const { data } = await admin.from("project_overrides").select("slug, status, share_map, buildings").eq("slug", slug).maybeSingle();
       override = (data as OverrideRow | null) ?? null;
@@ -98,6 +123,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <StatCard label="Payments" value={payments.toLocaleString("en-IN")} icon={TrendingUp} tone="warning" />
         <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={PiggyBank} tone="neutral" />
       </div>
+
+      <ProjectMetaPanel linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />
 
       {profitPanel}
 

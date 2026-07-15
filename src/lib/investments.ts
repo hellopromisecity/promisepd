@@ -125,6 +125,29 @@ export async function listProjects(admin: Admin): Promise<InvestmentProject[]> {
   return (data ?? []) as InvestmentProject[];
 }
 
+/** Normalise a project name for cross-system matching (drops "(1200sft)" etc.
+ *  and punctuation) — mirrors the All-Customers merge so the same projects line
+ *  up. `appProjToHubName` folds the app's verbose names ("Investment (Special
+ *  Deposit)", "…Group-A") onto the book's short names. */
+const normProjectName = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
+function appProjToHubName(appName: string): string {
+  const g = appName.match(/investment\s*\(([^)]*)\)\s*group[\s-]*([ab])/i);
+  if (g) return `${g[1].trim()} ${g[2].toUpperCase()}`;
+  const i = appName.match(/investment\s*\(([^)]*)\)/i);
+  if (i) return i[1].trim();
+  return appName;
+}
+/** The normalised key a Projectify (book) project name maps to. */
+export function hubNameKey(name: string): string { return normProjectName(name); }
+/** The normalised hub key an app project folds onto. */
+export function appProjectHubKey(p: InvestmentProject): string { return normProjectName(appProjToHubName(p.project_name)); }
+/** Find the app InvestmentProject that a book (hub) project maps to, by name —
+ *  so Projectify can show & edit the SAME rich metadata the PWA reads. */
+export function matchHubProject(projects: InvestmentProject[], hubName: string): InvestmentProject | null {
+  const want = normProjectName(hubName);
+  return projects.find((p) => appProjectHubKey(p) === want || normProjectName(p.project_name) === want) ?? null;
+}
+
 export async function listTypes(admin: Admin): Promise<InvestmentType[]> {
   const { data } = await admin
     .from("investment_types")

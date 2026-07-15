@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Landmark, Users, Wallet, TrendingUp, PiggyBank, ArrowRight } from "lucide-react";
+import { Building2, Landmark, Users, Wallet, TrendingUp, PiggyBank, ArrowRight, Sparkles } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { PageHeader, StatCard, EmptyState } from "@/components/admin/ui";
+import { getAdmin } from "@/lib/admin-guard";
 import { hubProjectSummaries, type HubProjectSummary } from "@/lib/hub";
+import { listProjects, hubNameKey, appProjectHubKey, type InvestmentProject } from "@/lib/investments";
+import ProjectForm from "../investments/projects/ProjectForm";
 
 export const metadata: Metadata = { title: "Projectify", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -29,9 +32,17 @@ export default async function ProjectsHubPage() {
   const realEstate = projects.filter((p) => p.type === "realestate");
   const deposits = projects.filter((p) => p.type === "deposit");
 
+  // App (investment) projects that don't yet map to a book project — e.g. a
+  // brand-new one added here, before it has any book customers. Surface them so
+  // "Add Project" is immediately visible; they link to the app project page.
+  const admin = getAdmin();
+  const appProjects = admin ? await listProjects(admin) : [];
+  const hubKeys = new Set(projects.map((p) => hubNameKey(p.name)));
+  const appOnly = appProjects.filter((p) => !hubKeys.has(appProjectHubKey(p)));
+
   return (
     <div className="space-y-7">
-      <PageHeader title="Projectify" subtitle="Every project's customers and collections — the whole company at a glance." />
+      <PageHeader title="Projectify" subtitle="Every project's customers and collections — the whole company at a glance." action={<ProjectForm />} />
 
       {projects.length === 0 ? (
         <EmptyState icon={Building2} title="No project data yet" message="Import the customer books to populate the hub." />
@@ -46,6 +57,18 @@ export default async function ProjectsHubPage() {
 
           <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard customers={t.customers} raised={t.raised} />} />
           <ProjectGroup title="Deposit Schemes" icon={Landmark} projects={deposits} />
+          {appOnly.length > 0 && (
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-brand-blue" />
+                <h2 className="text-sm font-bold uppercase tracking-wide text-fg-muted">App projects (no book customers yet)</h2>
+                <span className="text-xs text-fg-faint">({appOnly.length})</span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {appOnly.map((p) => <AppOnlyCard key={p.project_id} p={p} />)}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>
@@ -83,6 +106,39 @@ function AllCustomersCard({ customers, raised }: { customers: number; raised: nu
       <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">customers · {fmt(raised)} collected</p>
       <div className="mt-3 flex items-center justify-end text-xs">
         <span className="inline-flex items-center gap-1 font-semibold text-brand-blue">Open <ArrowRight className="h-3.5 w-3.5" /></span>
+      </div>
+    </Link>
+  );
+}
+
+function AppOnlyCard({ p }: { p: InvestmentProject }) {
+  const isDeposit = /deposit|monthly|মাসিক/i.test(p.project_name);
+  const Icon = isDeposit ? Landmark : Building2;
+  const progress = Math.min(100, Number(p.project_progress) || 0);
+  return (
+    <Link
+      href={`/dashboard/investments/projects/${p.project_id}`}
+      className="group relative overflow-hidden rounded-2xl border border-dashed border-brand-blue/40 bg-brand-blue-tint/20 p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-brand-blue/60 hover:shadow-lg"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold text-fg">{p.project_name}</h3>
+          <p className="mt-0.5 text-xs text-fg-muted">{p.project_id} · {p.status}</p>
+        </div>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-blue-tint text-brand-blue transition-transform duration-300 group-hover:scale-110">
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      <p className="mt-4 text-2xl font-extrabold tabular-nums text-brand-blue">{fmt(Number(p.current_funded_amount) || 0)}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">funded</p>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg-soft">
+        <div className="h-1.5 rounded-full bg-brand-blue" style={{ width: `${progress}%` }} />
+      </div>
+      <div className="mt-3 flex items-center justify-between text-xs text-fg-muted">
+        <span>app project</span>
+        <span className="inline-flex items-center gap-1 font-semibold text-brand-blue opacity-0 transition-opacity group-hover:opacity-100">
+          Manage <ArrowRight className="h-3.5 w-3.5" />
+        </span>
       </div>
     </Link>
   );

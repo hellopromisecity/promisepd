@@ -25,7 +25,7 @@ export type EditableProject = {
   hide_share_price: boolean;
 };
 
-export default function ProjectForm({ project, variant }: { project?: EditableProject; variant?: "button" | "icon" }) {
+export default function ProjectForm({ project, variant, defaultName, label }: { project?: EditableProject; variant?: "button" | "icon"; defaultName?: string; label?: string }) {
   const router = useRouter();
   const editing = !!project;
   const [open, setOpen] = useState(false);
@@ -64,7 +64,7 @@ export default function ProjectForm({ project, variant }: { project?: EditablePr
         </button>
       ) : (
         <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 hover:bg-brand-blue-dark">
-          <Plus className="h-4 w-4" /> {editing ? "Edit project" : "Add Project"}
+          <Plus className="h-4 w-4" /> {label ?? (editing ? "Edit project" : "Add Project")}
         </button>
       )}
 
@@ -81,7 +81,7 @@ export default function ProjectForm({ project, variant }: { project?: EditablePr
             <form action={submit} className="space-y-3">
               <div>
                 <label className={labelCls} htmlFor="pr-name">Project name</label>
-                <input id="pr-name" name="project_name" required defaultValue={project?.project_name ?? ""} className={inputCls} />
+                <input id="pr-name" name="project_name" required defaultValue={project?.project_name ?? defaultName ?? ""} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
