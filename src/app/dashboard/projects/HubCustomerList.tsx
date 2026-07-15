@@ -60,13 +60,13 @@ export default function HubCustomerList({ customers, project, projects, profits 
   function exportCsv() {
     const base = ["#", "Name", "File", "Mobile", "District", "Reference"];
     const head = isDeposit
-      ? [...base, "Total paid", "Total withdrawn", "Remaining balance", "Profit"]
+      ? [...base, "Total paid", "Total withdrawn", "Profit", "Remaining balance"]
       : [...base, "Paid", "Remaining", "Joining"];
     const lines = [head.join(",")];
     rows.forEach((c, i) => {
       const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
       const money = isDeposit
-        ? [c.total_paid, c.withdrawn, depRemain(c), Math.round(profits?.[c.id] || 0)]
+        ? [c.total_paid, c.withdrawn, Math.round(profits?.[c.id] || 0), depRemain(c)]
         : [c.total_paid, c.total_remaining, c.joining_date ?? ""];
       lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
@@ -107,8 +107,8 @@ export default function HubCustomerList({ customers, project, projects, profits 
               {isDeposit ? (
                 <>
                   <th className={`${thCls} text-right`}><SortH k="withdrawn" label="T. Withdrawn" right /></th>
-                  <th className={`${thCls} text-right`}><SortH k="remaining" label="T. Remain" right /></th>
                   <th className={`${thCls} text-right`}><SortH k="profit" label="Profit" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="remaining" label="T. Remain" right /></th>
                 </>
               ) : (
                 <>
@@ -138,8 +138,8 @@ export default function HubCustomerList({ customers, project, projects, profits 
                 {isDeposit ? (
                   <>
                     <td className={`${tdCls} pt-4 text-right tabular-nums ${c.withdrawn ? "text-brand-red" : "text-fg-faint"}`}>{c.withdrawn ? fmt(c.withdrawn) : "—"}</td>
-                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c))}</td>
                     <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-emerald-600`}>{profits?.[c.id] ? fmt(profits[c.id]) : "—"}</td>
+                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c))}</td>
                   </>
                 ) : (
                   <>
