@@ -2,8 +2,9 @@
  *  the team can see, at a glance, what shipped in every release.
  *
  *  Versioning: 1.0.1 → 1.0.10, then the next bump rolls the minor —
- *  1.0.10 → 1.1.0 → 1.1.1 … (patch runs 1–10, then minor +1).  Newest
- *  release goes at the TOP of the list; CURRENT_VERSION reads from it. */
+ *  1.0.10 → 1.1.0 → 1.1.1 … (patch runs 1–10, then minor +1).  A big
+ *  milestone rolls the whole number (1.7.x → 2.0.0).  Newest release goes
+ *  at the TOP of the list; CURRENT_VERSION reads from it. */
 
 export type ChangeKind = "new" | "improved" | "fixed" | "changed";
 
@@ -23,6 +24,77 @@ export const CHANGELOG_FOOTER = {
 
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "2.0.0",
+    date: "2026-07-15",
+    title: "Promise City 2.0 — the whole company, in one place",
+    changes: [
+      { kind: "new", text: "A new “SMS” section: your KhudeBarta balance, how many SMS you can still send, and today / 7-day / 30-day usage + cost — as clean cards, a 14-day bar chart and a balance dial — so you never have to log in to KhudeBarta to check. Every message the app sends (transaction alerts, Profit Push, reset codes) is counted and subtracted automatically; after a top-up you just type the new balance." },
+      { kind: "new", text: "🎉 A milestone. In under two months — 19 May → 15 July 2026 — Promise City grew from a launch website into a full operating platform: the public site + installable app, the investor portal, a 9-project customer hub (780 customers and over ৳20 crore of ledger), automatic Shariah Mudaraba dividend, a marketing leaderboard with 60 partners, staff · attendance · finance, and now bulk SMS — all connected, all live. Thank you for the trust. Here's to v2.0." },
+    ],
+  },
+  {
+    version: "1.7.2",
+    date: "2026-07-15",
+    title: "Profit Push — text every member their dividend, in one click",
+    changes: [
+      { kind: "new", text: "Each deposit scheme (Special · General A & B · Monthly) now has a “Profit Push” button. Write the message once with placeholders — {name}, {profit}, {paid}, {remain} — and it texts every member their OWN figures in one go (“Assalamu Alaikum {name}, this year's profit is {profit} taka”). A live preview, an SMS-length + total-cost estimate, and a confirm showing the recipient count keep you in control before anything sends — made for the yearly dividend announcement." },
+    ],
+  },
+  {
+    version: "1.7.1",
+    date: "2026-07-15",
+    title: "SMS now reaches every customer — not just app users",
+    changes: [
+      { kind: "fixed", text: "Transaction SMS to project-book customers were silently never sent. Their numbers are saved in local “01…” form, which the gateway quietly rejected — so credit/debit texts never went out (app users worked because theirs are stored as “+880…”). Now every format — 01…, +880…, even a field holding two numbers — is normalised, so book customers get their SMS too." },
+    ],
+  },
+  {
+    version: "1.7.0",
+    date: "2026-07-15",
+    title: "All Customers — the app and the books, unified",
+    changes: [
+      { kind: "new", text: "“All Customers” now brings your project-book customers AND your live app / investment accounts into one place — an app investor who isn't already in the books is added, matched by name so nobody is counted twice." },
+      { kind: "changed", text: "It's now a unique-person directory, just like App Users: each person is ONE clean row, however many projects they're in — click to see their full per-project breakdown in a popup. New “Unique people” count and a “Top holders by current balance” chart (real-estate paid + deposit remaining, every project combined)." },
+      { kind: "fixed", text: "The project filter now lists exactly your 9 projects — the app's variant names (e.g. “Investment (General Deposit) Group-A”, “Ahbab Palace-02 (1200sft)”) are mapped onto the real project, so no more duplicates in the dropdown." },
+    ],
+  },
+  {
+    version: "1.6.9",
+    date: "2026-07-15",
+    title: "Deposit schemes: a clear money-flow table",
+    changes: [
+      { kind: "improved", text: "Deposit customer lists now read left-to-right the way the money flows — Total Paid · Total Withdrawn · Profit · Remaining — instead of a bare “Joined” date, so a member's whole position is visible at a glance (all four columns sortable, and in the CSV)." },
+      { kind: "improved", text: "“Remaining” is now the true final balance — deposits + dividend − withdrawals + this year's accrued profit — exactly what's theirs right now. No double-counting: the engine treats credited dividends as principal and adds the fresh earning on top (e.g. Md. Faiz Ullah: ৳24,00,000 paid, ৳12,19,000 withdrawn, ৳1,54,519 profit → ৳13,83,489 remaining)." },
+    ],
+  },
+  {
+    version: "1.6.8",
+    date: "2026-07-15",
+    title: "Investor totals always live from the ledger",
+    changes: [
+      { kind: "fixed", text: "The dashboard's investor “invested” and “balance” figures now sum straight from each member's transactions instead of a cached total that could fall behind — so the numbers always match the ledger." },
+    ],
+  },
+  {
+    version: "1.6.7",
+    date: "2026-07-15",
+    title: "Deposit history: clearer figures + editable transactions",
+    changes: [
+      { kind: "new", text: "A deposit member's detail popup (👁) now shows a “Remaining balance” tile — how much of their money is still in the company after every withdrawal." },
+      { kind: "new", text: "Every recorded transaction can now be EDITED, not just deleted — fix a wrong amount, date, type or receipt in place, and the member's totals re-roll automatically." },
+    ],
+  },
+  {
+    version: "1.6.6",
+    date: "2026-07-15",
+    title: "Report inbox, staff roles & My Projects",
+    changes: [
+      { kind: "new", text: "“Insights” becomes “Report” — a Gmail-style inbox for the team's daily work updates. Managers and admins get one tab per staff member (Rashed · Tarek · Abu Bakr · Rafi …), each showing that person's date-wise reports; filter by this month / last 30 days / this year / last year, and tick one or many to delete. Each staff member sees only their own." },
+      { kind: "changed", text: "Cleaner roles: a plain staff member now sees only Report (+ My Projects) and nothing else; a manager sees everything except the Vault; and only an admin can change anyone's role. The Audit log is now its own item, above Changelog." },
+      { kind: "new", text: "New “My Projects”: any staff or manager who ALSO holds a share (bought a plot or joined a scheme) can see their own investment and transactions right here, like the investor app. Linked by mobile or a new “Investor ID” field on the staff form." },
+    ],
+  },
   {
     version: "1.6.5",
     date: "2026-07-14",
