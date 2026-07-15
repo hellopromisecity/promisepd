@@ -7,6 +7,7 @@ import { PageHeader, StatCard, EmptyState } from "@/components/admin/ui";
 import { getAdmin } from "@/lib/admin-guard";
 import { hubProjectSummaries, type HubProjectSummary } from "@/lib/hub";
 import { listProjects, hubNameKey, appProjectHubKey, type InvestmentProject } from "@/lib/investments";
+import { loadAllCustomers } from "@/lib/all-customers";
 import ProjectForm from "../investments/projects/ProjectForm";
 
 export const metadata: Metadata = { title: "Projectify", robots: { index: false, follow: false } };
@@ -35,8 +36,13 @@ export default async function ProjectsHubPage() {
   // App (investment) projects that don't yet map to a book project — e.g. a
   // brand-new one added here, before it has any book customers. Surface them so
   // "Add Project" is immediately visible; they link to the app project page.
+  // The unified directory totals keep the All-Customers card in lockstep with
+  // the numbers inside (unique people / per-project customers / collected).
   const admin = getAdmin();
-  const appProjects = admin ? await listProjects(admin) : [];
+  const [appProjects, allCust] = await Promise.all([
+    admin ? listProjects(admin) : Promise.resolve([]),
+    loadAllCustomers(),
+  ]);
   const hubKeys = new Set(projects.map((p) => hubNameKey(p.name)));
   const appOnly = appProjects.filter((p) => !hubKeys.has(appProjectHubKey(p)));
 
@@ -55,7 +61,7 @@ export default async function ProjectsHubPage() {
             <StatCard label="Avg / payer" value={fmt(t.payers ? t.raised / t.payers : 0)} sub="all projects" icon={PiggyBank} tone="neutral" />
           </div>
 
-          <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard customers={t.customers} raised={t.raised} />} />
+          <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard unique={allCust.totals.uniqueCount} memberships={allCust.totals.memberships} raised={allCust.totals.collected} />} />
           <ProjectGroup title="Deposit Schemes" icon={Landmark} projects={deposits} />
           {appOnly.length > 0 && (
             <section>
@@ -92,7 +98,7 @@ function ProjectGroup({ title, icon: Icon, projects, lead }: { title: string; ic
   );
 }
 
-function AllCustomersCard({ customers, raised }: { customers: number; raised: number }) {
+function AllCustomersCard({ unique, memberships, raised }: { unique: number; memberships: number; raised: number }) {
   return (
     <Link href="/dashboard/projects/all" className="group relative overflow-hidden rounded-2xl border-2 border-brand-blue/40 bg-brand-blue-tint/40 p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
       <div className="flex items-start justify-between gap-3">
@@ -102,8 +108,8 @@ function AllCustomersCard({ customers, raised }: { customers: number; raised: nu
         </div>
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-blue text-white transition-transform duration-300 group-hover:scale-110"><Users className="h-5 w-5" /></span>
       </div>
-      <p className="mt-4 text-2xl font-extrabold tabular-nums text-brand-blue">{customers.toLocaleString("en-IN")}</p>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">customers · {fmt(raised)} collected</p>
+      <p className="mt-4 text-2xl font-extrabold tabular-nums text-brand-blue">{unique.toLocaleString("en-IN")}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">unique people · {memberships.toLocaleString("en-IN")} customers · {fmt(raised)}</p>
       <div className="mt-3 flex items-center justify-end text-xs">
         <span className="inline-flex items-center gap-1 font-semibold text-brand-blue">Open <ArrowRight className="h-3.5 w-3.5" /></span>
       </div>

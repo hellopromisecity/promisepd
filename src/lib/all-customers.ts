@@ -53,7 +53,9 @@ export type AllCustomersData = {
   projects: { key: string; name: string; type: string; sort: number }[];
   health: AppHealth;
   top: { name: string; balance: number }[];
-  totals: { collected: number; uniqueCount: number; appAccounts: number; payers: number };
+  /** memberships = customer-per-project count (a person in 3 projects counts 3);
+   *  uniqueCount = unique people (one row per account). */
+  totals: { collected: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
 };
@@ -83,7 +85,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   const empty: AllCustomersData = {
     people: [], projects: [], investorTypes: [], investorProjects: [], top: [],
     health: { total: 0, verified: 0, unverified: 0, active: 0, inactive: 0, verifiedPct: 0, activePct: 0 },
-    totals: { collected: 0, uniqueCount: 0, appAccounts: 0, payers: 0 },
+    totals: { collected: 0, memberships: 0, uniqueCount: 0, appAccounts: 0, payers: 0 },
   };
   if (!admin) return empty;
 
@@ -211,6 +213,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     top,
     totals: {
       collected: people.reduce((s, p) => s + p.totalPaid, 0),
+      memberships: people.reduce((s, p) => s + p.projectKeys.length, 0),
       uniqueCount: people.length,
       appAccounts: investors.length,
       payers: people.filter((p) => p.totalPaid > 0).length,

@@ -24,7 +24,7 @@ export default async function AllCustomersPage() {
       </Link>
       <PageHeader
         title="All Customers"
-        subtitle={`${data.totals.uniqueCount.toLocaleString("en-IN")} customers across ${projectCount} projects — one row per app account, exactly like App Users; open anyone to see their project breakdown.`}
+        subtitle={`${data.totals.uniqueCount.toLocaleString("en-IN")} unique people · ${data.totals.memberships.toLocaleString("en-IN")} customers across ${projectCount} projects (one person can be in several) — one row per app account; open anyone to see their breakdown.`}
       />
       <AllCustomersExplorer
         people={data.people}

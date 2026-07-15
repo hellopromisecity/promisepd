@@ -36,7 +36,7 @@ export default function AllCustomersExplorer({
   projects: HubProject[];
   health: AppHealth;
   top: { name: string; balance: number }[];
-  totals: { collected: number; uniqueCount: number; appAccounts: number; payers: number };
+  totals: { collected: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
 }) {
@@ -156,9 +156,10 @@ export default function AllCustomersExplorer({
   return (
     <div className="space-y-5">
       {/* primary stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Total collected" value={compact(totals.collected)} sub={`${totals.payers.toLocaleString("en-IN")} paying · ${(totals.uniqueCount - totals.payers).toLocaleString("en-IN")} non-paying`} icon={Wallet} tone="success" />
-        <StatCard label="Customers" value={totals.uniqueCount.toLocaleString("en-IN")} sub="one row per account" icon={UserRound} tone="info" />
+        <StatCard label="Customers" value={totals.memberships.toLocaleString("en-IN")} sub="per project — one person can be several" icon={Users} tone="info" />
+        <StatCard label="Unique people" value={totals.uniqueCount.toLocaleString("en-IN")} sub="one row per account" icon={UserRound} tone="info" />
         <StatCard label="App accounts" value={totals.appAccounts.toLocaleString("en-IN")} sub={`${health.verified} verified`} icon={Smartphone} tone="warning" />
         <StatCard label="Projects" value={hubProjects.length.toLocaleString("en-IN")} sub="real estate + deposit" icon={Building2} tone="neutral" />
       </div>
