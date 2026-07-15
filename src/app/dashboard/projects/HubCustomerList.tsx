@@ -15,10 +15,13 @@ export type HubProject = { key: string; name: string; type: string; sort: number
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const fmtDate = (iso: string | null) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); } catch { return iso; } };
+/** Deposit "remaining balance" — money still in the company after every
+ *  withdrawal: total paid + dividend − withdrawn. */
+const depRemain = (c: HubCustomer) => c.total_paid + c.dividend - c.withdrawn;
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
 const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
 
-type SortKey = "paid" | "name" | "remaining" | "joining" | "profit";
+type SortKey = "paid" | "name" | "remaining" | "joining" | "profit" | "withdrawn";
 
 export default function HubCustomerList({ customers, project, projects, profits }: { customers: HubCustomer[]; project: HubProject; projects?: HubProject[]; profits?: Record<string, number> }) {
   const isAll = !!projects;
@@ -31,7 +34,6 @@ export default function HubCustomerList({ customers, project, projects, profits 
   const [txn, setTxn] = useState<HubCustomer | null>(null);
   const [adding, setAdding] = useState(false);
   const isDeposit = project.type === "deposit";
-  const hasProfit = isDeposit && !!profits;
   const custProj = (c: HubCustomer): HubProject => ({ key: c.project_key, name: c.project_name, type: c.project_type, sort: 0 });
 
   const rows = useMemo(() => {
@@ -41,7 +43,8 @@ export default function HubCustomerList({ customers, project, projects, profits 
     return [...r].sort((a, b) => {
       let d = 0;
       if (sortKey === "paid") d = a.total_paid - b.total_paid;
-      else if (sortKey === "remaining") d = a.total_remaining - b.total_remaining;
+      else if (sortKey === "remaining") d = isDeposit ? depRemain(a) - depRemain(b) : a.total_remaining - b.total_remaining;
+      else if (sortKey === "withdrawn") d = a.withdrawn - b.withdrawn;
       else if (sortKey === "name") d = a.name.localeCompare(b.name);
       else if (sortKey === "joining") d = (a.joining_date ?? "").localeCompare(b.joining_date ?? "");
       else if (sortKey === "profit") d = (profits?.[a.id] ?? 0) - (profits?.[b.id] ?? 0);
@@ -55,12 +58,17 @@ export default function HubCustomerList({ customers, project, projects, profits 
   );
 
   function exportCsv() {
-    const mid = hasProfit ? ["Profit"] : [isDeposit ? "Dividend" : "Remaining"];
-    const head = ["#", "Name", "File", "Mobile", "District", "Reference", "Paid", ...mid, "Joining"];
+    const base = ["#", "Name", "File", "Mobile", "District", "Reference"];
+    const head = isDeposit
+      ? [...base, "Total paid", "Total withdrawn", "Remaining balance", "Profit"]
+      : [...base, "Paid", "Remaining", "Joining"];
     const lines = [head.join(",")];
     rows.forEach((c, i) => {
-      const midVals = hasProfit ? [Math.round(profits![c.id] || 0)] : [isDeposit ? c.dividend : c.total_remaining];
-      lines.push([i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? "", c.total_paid, ...midVals, c.joining_date ?? ""].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
+      const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
+      const money = isDeposit
+        ? [c.total_paid, c.withdrawn, depRemain(c), Math.round(profits?.[c.id] || 0)]
+        : [c.total_paid, c.total_remaining, c.joining_date ?? ""];
+      lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = `${project.key}-customers.csv`; a.click(); URL.revokeObjectURL(u);
@@ -95,15 +103,25 @@ export default function HubCustomerList({ customers, project, projects, profits 
               <th className={`${thCls} w-10`}>#</th>
               <th className={thCls}><SortH k="name" label="Customer" /></th>
               {isAll && <th className={thCls}>Project</th>}
-              <th className={`${thCls} text-right`}><SortH k="paid" label="Paid" right /></th>
-              <th className={`${thCls} text-right`}>{hasProfit ? <SortH k="profit" label="Profit" right /> : isDeposit ? "Dividend" : <SortH k="remaining" label="Remaining" right />}</th>
-              <th className={`${thCls} text-right`}><SortH k="joining" label="Joined" right /></th>
+              <th className={`${thCls} text-right`}><SortH k="paid" label={isDeposit ? "T. Paid" : "Paid"} right /></th>
+              {isDeposit ? (
+                <>
+                  <th className={`${thCls} text-right`}><SortH k="withdrawn" label="T. Withdrawn" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="remaining" label="T. Remain" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="profit" label="Profit" right /></th>
+                </>
+              ) : (
+                <>
+                  <th className={`${thCls} text-right`}><SortH k="remaining" label="Remaining" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="joining" label="Joined" right /></th>
+                </>
+              )}
               <th className={`${thCls} text-right`}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={isAll ? 7 : 6} className="px-4 py-10 text-center text-fg-muted">No customers match.</td></tr>
+              <tr><td colSpan={(isAll ? 1 : 0) + (isDeposit ? 7 : 6)} className="px-4 py-10 text-center text-fg-muted">No customers match.</td></tr>
             ) : rows.map((c, i) => (
               <tr key={c.id} className="align-top transition-colors hover:bg-bg-soft">
                 <td className={`${tdCls} pt-4 text-fg-faint`}>{i + 1}</td>
@@ -117,10 +135,18 @@ export default function HubCustomerList({ customers, project, projects, profits 
                 </td>
                 {isAll && <td className={`${tdCls} pt-4 text-fg-muted`}>{c.project_name}</td>}
                 <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-brand-blue`}>{fmt(c.total_paid)}</td>
-                <td className={`${tdCls} pt-4 text-right tabular-nums ${hasProfit ? "font-bold text-emerald-600" : isDeposit ? "text-emerald-600" : "text-fg-muted"}`}>
-                  {hasProfit ? fmt(profits![c.id] || 0) : isDeposit ? fmt(c.dividend) : (c.total_remaining ? fmt(c.total_remaining) : "—")}
-                </td>
-                <td className={`${tdCls} pt-4 text-right text-fg-muted`}>{fmtDate(c.joining_date)}</td>
+                {isDeposit ? (
+                  <>
+                    <td className={`${tdCls} pt-4 text-right tabular-nums ${c.withdrawn ? "text-brand-red" : "text-fg-faint"}`}>{c.withdrawn ? fmt(c.withdrawn) : "—"}</td>
+                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c))}</td>
+                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-emerald-600`}>{profits?.[c.id] ? fmt(profits[c.id]) : "—"}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className={`${tdCls} pt-4 text-right tabular-nums text-fg-muted`}>{c.total_remaining ? fmt(c.total_remaining) : "—"}</td>
+                    <td className={`${tdCls} pt-4 text-right text-fg-muted`}>{fmtDate(c.joining_date)}</td>
+                  </>
+                )}
                 <td className={`${tdCls} pt-3.5`}>
                   <div className="flex items-center justify-end gap-1.5">
                     <button onClick={() => setView(c)} title="View history" className={`${iconBtn} hover:border-brand-blue/40 hover:text-brand-blue`}><Eye className="h-4 w-4" /></button>
