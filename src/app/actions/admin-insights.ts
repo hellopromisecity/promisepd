@@ -13,6 +13,7 @@ import {
   runAction,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { isManager } from "@/lib/auth";
 
 /** Submit (or re-submit) the signed-in member's daily report. */
 export async function submitReport(input: {
@@ -48,7 +49,33 @@ export async function submitReport(input: {
       actor: { id: me.id, name: me.name },
     });
 
-    revalidatePath("/dashboard/insights/messages");
+    revalidatePath("/dashboard/report");
     return { message: "Report submitted." };
+  });
+}
+
+/** Delete one or many daily reports. Managers/admins may delete anyone's;
+ *  a plain staff member may only delete their own. */
+export async function deleteReports(ids: string[]): Promise<ActionResult> {
+  return runAction(async () => {
+    const me = await requireStaff();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Database isn't configured.");
+    const clean = (ids ?? []).filter((x) => typeof x === "string" && x);
+    if (!clean.length) throw new Error("Nothing selected.");
+
+    let q = admin.from("daily_reports").delete().in("id", clean);
+    if (!isManager(me.role)) q = q.eq("member_id", me.id); // staff → own only
+    const { error } = await q;
+    if (error) throw new Error(error.message);
+
+    await logAudit({
+      action: "delete",
+      entity: "daily_report",
+      detail: `Deleted ${clean.length} daily report(s)`,
+      actor: { id: me.id, name: me.name },
+    });
+    revalidatePath("/dashboard/report");
+    return { message: `Deleted ${clean.length} report${clean.length > 1 ? "s" : ""}.` };
   });
 }

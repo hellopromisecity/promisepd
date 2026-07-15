@@ -25,6 +25,7 @@ export type StaffMember = {
   allowance: number;
   deduction: number;
   status: string;
+  investor_ref: string | null;
 };
 
 /** Seed values for the create form (used by the roster "Create login"). */
@@ -127,6 +128,7 @@ function StaffFormModal({
     allowance: member?.allowance ?? 0,
     deduction: member?.deduction ?? 0,
     status: (member?.status as StaffInput["status"]) ?? "active",
+    investor_ref: member?.investor_ref ?? "",
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -188,6 +190,13 @@ function StaffFormModal({
             <Field label="Employee code" value={String(form.employee_code ?? "")} onChange={set("employee_code")} placeholder={editing ? "" : "auto if blank · 100"} />
             <Selectish label="Status" value={form.status ?? "active"} onChange={set("status")} options={STATUSES.map((s) => [s, s])} />
           </div>
+
+          <Field
+            label="Investor ID (optional)"
+            value={String(form.investor_ref ?? "")}
+            onChange={set("investor_ref")}
+            placeholder="Their investor File ID / UID — powers My Projects (blank = match by mobile)"
+          />
 
           <div className="rounded-xl border border-border bg-bg-soft p-3">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Salary (monthly · ৳)</p>

@@ -3,7 +3,7 @@
 /** Secure Vault Server Actions — CRUD over public.vault_credentials.
  *
  *  Stores company logins (hosting, analytics, Supabase, registrar…).
- *  Every call: requireManager() → getAdmin() (service role) → write →
+ *  Every call: requireAdmin() → getAdmin() (service role) → write →
  *  logAudit() → revalidate.  The table is service-role-only (RLS), so
  *  the browser never touches it directly; all access flows through here.
  *
@@ -13,7 +13,7 @@ import { revalidatePath } from "next/cache";
 import {
   getAdmin,
   logAudit,
-  requireManager,
+  requireAdmin,
   runAction,
   ValidationError,
   type ActionResult,
@@ -46,7 +46,7 @@ const trimOrNull = (v: string | undefined): string | null => {
 /** Manager+ only.  Returns [] when Supabase isn't configured. */
 export async function listCredentials(): Promise<VaultCredential[]> {
   try {
-    await requireManager();
+    await requireAdmin();
   } catch {
     return [];
   }
@@ -75,7 +75,7 @@ function buildRow(input: VaultInput) {
 
 export async function createCredential(input: VaultInput): Promise<ActionResult<{ id: string }>> {
   return runAction(async () => {
-    await requireManager();
+    await requireAdmin();
     const admin = getAdmin();
     if (!admin) throw new ValidationError("Database is not configured.");
 
@@ -95,7 +95,7 @@ export async function createCredential(input: VaultInput): Promise<ActionResult<
 
 export async function updateCredential(id: string, input: VaultInput): Promise<ActionResult> {
   return runAction(async () => {
-    await requireManager();
+    await requireAdmin();
     if (!id) throw new ValidationError("Missing id.");
     const admin = getAdmin();
     if (!admin) throw new ValidationError("Database is not configured.");
@@ -112,7 +112,7 @@ export async function updateCredential(id: string, input: VaultInput): Promise<A
 
 export async function deleteCredential(id: string): Promise<ActionResult> {
   return runAction(async () => {
-    await requireManager();
+    await requireAdmin();
     if (!id) throw new ValidationError("Missing id.");
     const admin = getAdmin();
     if (!admin) throw new ValidationError("Database is not configured.");

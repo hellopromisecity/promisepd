@@ -12,7 +12,6 @@ import {
   requireStaff,
   requireManager,
   requireAdmin,
-  requireOwner,
   getAdmin,
   logAudit,
   runAction,
@@ -64,6 +63,8 @@ export type StaffInput = {
   allowance?: number | string;
   deduction?: number | string;
   status?: StaffStatus;
+  /** Optional link to this person's investor account (File ID / UID) — My Projects. */
+  investor_ref?: string;
 };
 
 /** Next free numeric employee code (100, 101, …) for blank submissions. */
@@ -87,7 +88,7 @@ async function nextEmployeeCode(
  *  management). */
 export async function setRole(memberId: string, role: Role): Promise<ActionResult> {
   return runAction(async () => {
-    await requireOwner(); // role changes are owner-only
+    await requireAdmin(); // role changes are admin-only (managers cannot)
     if (!memberId) throw new Error("Missing member");
     if (!ROLES.includes(role)) throw new Error("Invalid role");
 
@@ -218,6 +219,10 @@ export async function createStaff(input: StaffInput): Promise<ActionResult<{ id:
       throw new Error(uErr.message);
     }
 
+    // Investor-ID link — new column, written around the generated types.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin.from("profiles") as any).update({ investor_ref: input.investor_ref?.trim() || null }).eq("id", id);
+
     await logAudit({ action: "create", entity: "profile", entityId: id, detail: `Added staff ${name} (${role})` });
     revalidatePath("/dashboard/staff");
     revalidatePath("/dashboard/attendance");
@@ -261,6 +266,10 @@ export async function updateStaff(id: string, input: StaffInput): Promise<Action
       }
       throw new Error(error.message);
     }
+
+    // Investor-ID link — new column, written around the generated types.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin.from("profiles") as any).update({ investor_ref: input.investor_ref?.trim() || null }).eq("id", id);
 
     // Keep the auth user's contact email in sync when one is set.
     if (email) await admin.auth.admin.updateUserById(id, { email }).catch(() => {});

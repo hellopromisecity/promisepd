@@ -4,6 +4,7 @@
  *  are RLS service-role-only, exactly like the rest of the dashboard.
  *  Types mirror the tables created in migration 0019. */
 
+import { cache } from "react";
 import { getAdmin } from "@/lib/admin-guard";
 
 export type InvestorBalance = {
@@ -308,15 +309,66 @@ const PROFIT_TYPES = new Set(["profit", "profit_share"]);
  *  their profile id (the auth user id).  Returns null if this member isn't
  *  a ported investor.  Service-role read, but scoped strictly to the one
  *  profile_id passed in — a member can only ever load their own data. */
+const ACC_COLS = "uid, fid, full_name, is_active, is_verified, balance";
+type InvestorAcc = { uid: string; fid: string | null; full_name: string | null; is_active: boolean; is_verified: boolean; balance: unknown };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Resolve an investor account by its File ID (fid) / UID, or — failing that
+ *  — by mobile (investor_accounts.phone_number is stored as "+"+mobile). */
+async function resolveInvestorAccount(admin: Admin, ref: string | null, mobile: string | null): Promise<InvestorAcc | null> {
+  const r = (ref ?? "").trim();
+  if (r) {
+    const byFid = await admin.from("investor_accounts").select(ACC_COLS).eq("fid", r).maybeSingle();
+    if (byFid.data) return byFid.data as InvestorAcc;
+    if (UUID_RE.test(r)) {
+      const byUid = await admin.from("investor_accounts").select(ACC_COLS).eq("uid", r).maybeSingle();
+      if (byUid.data) return byUid.data as InvestorAcc;
+    }
+  }
+  const m = (mobile ?? "").replace(/\D/g, "");
+  if (m) {
+    const byPhone = await admin.from("investor_accounts").select(ACC_COLS).eq("phone_number", "+" + m).maybeSingle();
+    if (byPhone.data) return byPhone.data as InvestorAcc;
+  }
+  return null;
+}
+
 export async function investorPortalData(profileId: string): Promise<InvestorPortal | null> {
   const admin = getAdmin();
   if (!admin) return null;
-  const { data: acc } = await admin
-    .from("investor_accounts")
-    .select("uid, fid, full_name, is_active, is_verified, balance")
-    .eq("profile_id", profileId)
-    .maybeSingle();
-  if (!acc) return null;
+  const { data: acc } = await admin.from("investor_accounts").select(ACC_COLS).eq("profile_id", profileId).maybeSingle();
+  return acc ? buildPortal(admin, acc as InvestorAcc) : null;
+}
+
+/** Same portal, resolved for a STAFF member who is ALSO an investor — matched
+ *  by their stored Investor ID (fid/uid) or by mobile. Powers "My Projects". */
+export async function investorPortalForRef(ref: string | null, mobile: string | null): Promise<InvestorPortal | null> {
+  const admin = getAdmin();
+  if (!admin) return null;
+  const acc = await resolveInvestorAccount(admin, ref, mobile);
+  return acc ? buildPortal(admin, acc) : null;
+}
+
+/** Light existence check — does this person have a linked investor account?
+ *  Used to decide whether to show the "My Projects" nav item. */
+export async function hasLinkedInvestor(ref: string | null, mobile: string | null): Promise<boolean> {
+  const admin = getAdmin();
+  if (!admin) return false;
+  return !!(await resolveInvestorAccount(admin, ref, mobile));
+}
+
+/** This member's stored Investor-ID link (profiles.investor_ref), cached per
+ *  request so the layout + the My Projects page share one read. `investor_ref`
+ *  is a new column, so we read it around the generated types. */
+export const getInvestorRef = cache(async (profileId: string): Promise<string | null> => {
+  const admin = getAdmin();
+  if (!admin || !profileId) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin.from("profiles") as any).select("investor_ref").eq("id", profileId).maybeSingle();
+  return (data?.investor_ref as string | null) ?? null;
+});
+
+async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPortal> {
   const uid = acc.uid;
 
   const [invRes, txRes, projRes, typeRes] = await Promise.all([
@@ -422,7 +474,7 @@ export async function investorPortalData(profileId: string): Promise<InvestorPor
   return {
     uid,
     fid: (acc.fid as string | null) ?? null,
-    full_name: acc.full_name,
+    full_name: acc.full_name ?? "",
     is_active: acc.is_active,
     is_verified: acc.is_verified,
     balance: bal(acc.balance as InvestorBalance | null),

@@ -31,6 +31,7 @@ type ProfileRow = {
   deduction: number;
   status: string;
   created_at: string;
+  investor_ref: string | null;
 };
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -56,9 +57,9 @@ export default async function StaffPage() {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
 
-  // Only the owner (super-admin, set via SUPER_ADMIN_EMAILS) may change roles
-  // — so a second admin can't reshuffle the hierarchy or demote the founder.
-  const canEditRoles = me.isOwner;
+  // Only admins may change staff roles — managers cannot (set with the user
+  // 2026-07-15). The last-admin guard in setRole still prevents a lockout.
+  const canEditRoles = isAdmin(me.role);
   // Any admin can manage staff records (add / edit / delete / create login).
   const canManageStaff = isAdmin(me.role);
   const admin = getAdmin();
@@ -80,7 +81,7 @@ export default async function StaffPage() {
   // that migration hasn't been applied yet Postgres errors with 42703 —
   // fall back to the base columns so the roster never goes blank.
   const FULL =
-    "id, name, mobile, username, email, role, employee_code, salary, allowance, deduction, status, created_at";
+    "id, name, mobile, username, email, role, employee_code, salary, allowance, deduction, status, created_at, investor_ref";
   const BASE = "id, name, mobile, username, email, role, created_at";
 
   // `cols` is a runtime string so the typed client can't infer the row —
@@ -111,6 +112,7 @@ export default async function StaffPage() {
     deduction: Number(r.deduction) || 0,
     status: (r.status as string) || "active",
     created_at: String(r.created_at ?? ""),
+    investor_ref: (r.investor_ref as string | null) ?? null,
   }));
 
   // ── Merge the office roster (code) with the accounts (DB) by mobile ──
@@ -281,6 +283,7 @@ export default async function StaffPage() {
                             allowance: acc.allowance,
                             deduction: acc.deduction,
                             status: acc.status || "active",
+                            investor_ref: acc.investor_ref,
                           } satisfies StaffMember}
                         />
                       ) : (

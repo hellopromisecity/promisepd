@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getCurrentUser, isManager } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/ui";
 import { listCredentials } from "@/app/actions/admin-vault";
 import VaultManager from "./VaultManager";
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function VaultPage() {
   const me = await getCurrentUser();
-  // Credentials are sensitive — manager+ only (regular staff can't open it).
-  if (!me || !isManager(me.role)) redirect("/dashboard");
+  // Credentials are sensitive — ADMIN only (managers can't open the Vault).
+  if (!me || !isAdmin(me.role)) redirect("/dashboard");
 
   const credentials = await listCredentials();
 

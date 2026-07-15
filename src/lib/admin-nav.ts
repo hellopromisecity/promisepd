@@ -18,7 +18,6 @@ import {
   TrendingDown,
   Megaphone,
   UserCheck,
-  Lightbulb,
   MessageSquare,
   History,
   Settings,
@@ -47,9 +46,14 @@ export type NavEntry = NavLeaf | NavGroup;
 
 export const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
 
-/** Full nav, in display order (mirrors the agreed dashboard sections). */
+/** Full nav, in display order (mirrors the agreed dashboard sections).
+ *
+ *  Access rules (set with the user 2026-07-15):
+ *   • Staff see ONLY "Report" (+ "My Projects", injected at render time when
+ *     they have a linked investor account). Everything else is manager+.
+ *   • Manager = admin, minus "Vault" (admin-only).                        */
 export const ADMIN_NAV: NavEntry[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, min: "staff" },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, min: "manager" },
   {
     label: "Investments",
     icon: Landmark,
@@ -63,7 +67,7 @@ export const ADMIN_NAV: NavEntry[] = [
   },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
-  { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "staff" },
+  { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },
   {
     label: "Finance",
     icon: Wallet,
@@ -81,21 +85,25 @@ export const ADMIN_NAV: NavEntry[] = [
     icon: Megaphone,
     children: [
       { label: "Overview", href: "/dashboard/marketing", icon: ChartPie, min: "manager" },
-      { label: "Client follow-up", href: "/dashboard/marketing/followup", icon: UserCheck, min: "staff" },
+      { label: "Client follow-up", href: "/dashboard/marketing/followup", icon: UserCheck, min: "manager" },
     ],
   },
-  {
-    label: "Insights",
-    icon: Lightbulb,
-    children: [
-      { label: "Message box", href: "/dashboard/insights/messages", icon: MessageSquare, min: "staff" },
-      { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "manager" },
-    ],
-  },
-  { label: "Vault", href: "/dashboard/vault", icon: KeyRound, min: "manager" },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "staff" },
-  { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "staff" },
+  // Report — daily work reports. The one section every staff member gets.
+  { label: "Report", href: "/dashboard/report", icon: MessageSquare, min: "staff" },
+  // My Projects — injected in AdminShell only when the viewer has a linked
+  // investor account (MY_PROJECTS_LEAF below).
+  { label: "Vault", href: "/dashboard/vault", icon: KeyRound, min: "admin" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "manager" },
+  { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "manager" },
+  { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "manager" },
 ];
+
+/** "My Projects" — the investor-portal view for a staff/manager who is also
+ *  a customer. Injected into the nav (after Report) only when the viewer has
+ *  a linked investor account. Everyone (staff+) may see their own. */
+export const MY_PROJECTS_LEAF: NavLeaf = {
+  label: "My Projects", href: "/dashboard/my-projects", icon: Wallet, min: "staff",
+};
 
 /** Return only the entries (and child leaves) visible to `role`. */
 export function filterNav(role: Role): NavEntry[] {

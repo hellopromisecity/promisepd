@@ -4,21 +4,29 @@
  *  the routed page in the middle.  Role-filters the nav from the member's
  *  role and manages the mobile drawer. */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Member } from "@/lib/auth";
-import { filterNav } from "@/lib/admin-nav";
+import { filterNav, isGroup, MY_PROJECTS_LEAF } from "@/lib/admin-nav";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopbar from "./AdminTopbar";
 
 export default function AdminShell({
   member,
+  showMyProjects = false,
   children,
 }: {
   member: Member;
+  showMyProjects?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const nav = filterNav(member.role);
+  const nav = useMemo(() => {
+    const base = filterNav(member.role);
+    if (!showMyProjects) return base;
+    // Slot "My Projects" right after "Report".
+    const i = base.findIndex((e) => !isGroup(e) && e.href === "/dashboard/report");
+    return i >= 0 ? [...base.slice(0, i + 1), MY_PROJECTS_LEAF, ...base.slice(i + 1)] : [...base, MY_PROJECTS_LEAF];
+  }, [member.role, showMyProjects]);
 
   return (
     <div className="min-h-screen bg-bg-soft text-fg">
