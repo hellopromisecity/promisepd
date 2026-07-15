@@ -142,7 +142,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
   );
 }
 
-function DeleteBtn({ customer, project, className }: { customer: HubCustomer; project: HubProject; className: string }) {
+export function DeleteBtn({ customer, project, className }: { customer: HubCustomer; project: HubProject; className: string }) {
   const [pending, start] = useTransition();
   return (
     <button
@@ -213,7 +213,7 @@ function ReferencePicker({ value, valueName, onPick }: { value: string | null; v
   );
 }
 
-function CustomerFormModal({ project, customer, projects, onClose }: { project: HubProject; customer: HubCustomer | null; projects?: HubProject[]; onClose: () => void }) {
+export function CustomerFormModal({ project, customer, projects, onClose }: { project: HubProject; customer: HubCustomer | null; projects?: HubProject[]; onClose: () => void }) {
   const editing = !!customer;
   const [projKey, setProjKey] = useState(project.key);
   const activeProj = projects?.find((p) => p.key === projKey) ?? project;
@@ -280,7 +280,7 @@ function CustomerFormModal({ project, customer, projects, onClose }: { project: 
   );
 }
 
-function TransactionModal({ customer, project, onClose }: { customer: HubCustomer; project: HubProject; onClose: () => void }) {
+export function TransactionModal({ customer, project, onClose }: { customer: HubCustomer; project: HubProject; onClose: () => void }) {
   const [payments, setPayments] = useState<HubPayment[] | null>(null);
   const [types, setTypes] = useState<TxnType[]>([]);
   const [type, setType] = useState("deposit");
@@ -368,7 +368,7 @@ function TransactionModal({ customer, project, onClose }: { customer: HubCustome
   );
 }
 
-function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCustomer; isDeposit: boolean; onClose: () => void }) {
+export function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCustomer; isDeposit: boolean; onClose: () => void }) {
   const [payments, setPayments] = useState<HubPayment[] | null>(null);
   useEffect(() => { let a = true; getHubCustomerDetail(customer.id).then((d) => { if (a) setPayments(d?.payments ?? []); }); return () => { a = false; }; }, [customer.id]);
   const bio = customer.bio || {};
