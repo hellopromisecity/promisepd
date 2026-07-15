@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Receipt, Eye, Pencil, Trash2, CreditCard, Plus, UserPlus, Check, Send } from "lucide-react";
+import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Receipt, Eye, Pencil, Trash2, CreditCard, Plus, UserPlus, Check, Send, Link2 } from "lucide-react";
 import { Card, TableShell, thCls, tdCls } from "@/components/admin/ui";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 import {
   getHubCustomerDetail, listReferenceOfficers, listTxnTypes, createHubCustomer, updateHubCustomer,
-  deleteHubCustomer, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit, type RefOfficer, type CustomerInput, type TxnType,
+  deleteHubCustomer, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit,
+  linkHubToInvestor, searchInvestors, type RefOfficer, type CustomerInput, type TxnType, type InvestorHit,
 } from "@/app/actions/hub";
 import type { HubCustomer, HubPayment } from "@/lib/hub";
 
@@ -34,6 +35,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
   const [txn, setTxn] = useState<HubCustomer | null>(null);
   const [adding, setAdding] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [linking, setLinking] = useState<HubCustomer | null>(null);
   const isDeposit = project.type === "deposit";
   const custProj = (c: HubCustomer): HubProject => ({ key: c.project_key, name: c.project_name, type: c.project_type, sort: 0 });
 
@@ -158,6 +160,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
                     <button onClick={() => setEdit(c)} title="Edit" className={`${iconBtn} hover:border-brand-blue/40 hover:text-brand-blue`}><Pencil className="h-4 w-4" /></button>
                     <DeleteBtn customer={c} project={custProj(c)} className={iconBtn} />
                     <button onClick={() => setTxn(c)} title="Transactions" className={`${iconBtn} hover:border-emerald-300 hover:text-emerald-600`}><CreditCard className="h-4 w-4" /></button>
+                    <button onClick={() => setLinking(c)} title="Link to app account (sync to their PWA)" className={`${iconBtn} hover:border-violet-300 hover:text-violet-600`}><Link2 className="h-4 w-4" /></button>
                   </div>
                 </td>
               </tr>
@@ -170,6 +173,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
       {txn && <TransactionModal customer={txn} project={custProj(txn)} onClose={() => setTxn(null)} />}
       {(adding || edit) && <CustomerFormModal project={edit ? custProj(edit) : project} customer={edit} projects={isAll && !edit ? projects : undefined} onClose={() => { setAdding(false); setEdit(null); }} />}
       {pushing && <ProfitPushModal project={project} customers={customers} profits={profits ?? {}} onClose={() => setPushing(false)} />}
+      {linking && <LinkModal customer={linking} onClose={() => setLinking(null)} />}
     </Card>
   );
 }
@@ -428,6 +432,46 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
             </div>
           )}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClose: () => void }) {
+  const [q, setQ] = useState(customer.name || "");
+  const [hits, setHits] = useState<InvestorHit[] | null>(null);
+  const [pending, start] = useTransition();
+  useEffect(() => { let a = true; setHits(null); searchInvestors(q).then((h) => { if (a) setHits(h); }); return () => { a = false; }; }, [q]);
+
+  function pick(uid: string, name: string) {
+    (async () => {
+      const ok = await confirmDialog({ title: "Link to app account", message: `Link “${customer.name}” to app account ${name}? Their book payments in ${customer.project_name} will sync into that account, so their PWA shows them.`, confirmText: "Link" });
+      if (!ok) return;
+      start(async () => {
+        const r = await linkHubToInvestor(customer.id, uid);
+        if (r.ok) { toast(r.message || "Linked.", "success"); onClose(); } else toast(r.error, "error");
+      });
+    })();
+  }
+
+  return (
+    <Modal title="Link to app account" subtitle={`${customer.name} · ${customer.project_name}`} onClose={onClose}>
+      <p className="mb-2 text-xs text-fg-muted">Connect this book customer to their app / investor account. Their payments then mirror into that account and show in their PWA — for people whose book & app numbers differ.</p>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search app users by name / UID / FID / mobile…" className={inputCls} />
+      <div className="mt-3 max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
+        {hits === null ? (
+          <div className="py-6 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-blue" /></div>
+        ) : hits.length === 0 ? (
+          <p className="py-6 text-center text-sm text-fg-muted">No app accounts match.</p>
+        ) : hits.map((h) => (
+          <button key={h.uid} disabled={pending} onClick={() => pick(h.uid, h.full_name)} className="flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-left text-sm hover:border-brand-blue/40 disabled:opacity-60">
+            <div className="min-w-0">
+              <div className="truncate font-medium text-fg">{h.full_name || "—"}</div>
+              <div className="truncate text-[11px] text-fg-faint">{h.uid}{h.fid ? ` · FID ${h.fid}` : ""}{h.mobile ? ` · ${h.mobile}` : ""}</div>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-brand-blue"><Link2 className="h-3.5 w-3.5" /> Link</span>
+          </button>
+        ))}
       </div>
     </Modal>
   );

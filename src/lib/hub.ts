@@ -25,6 +25,7 @@ export type HubCustomer = {
   balance: number;
   payments_count: number;
   reference_officer_id: string | null;
+  investor_uid: string | null;
   bio: Record<string, unknown>;
 };
 
@@ -156,6 +157,7 @@ function mapCustomer(c: Record<string, unknown>): HubCustomer {
     balance: n(c.balance),
     payments_count: n(c.payments_count),
     reference_officer_id: (c.reference_officer_id as string) ?? null,
+    investor_uid: (c.investor_uid as string) ?? null,
     bio: (c.bio as Record<string, unknown>) ?? {},
   };
 }

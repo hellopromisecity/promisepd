@@ -18,6 +18,7 @@ type UnifiedCustomer = HubCustomer & {
 
 /** One project a person holds in (shown in their detail popup). */
 export type PersonHolding = {
+  id: string; // the book (hub_customer) id for a "hub" holding — drives the row actions
   project_key: string;
   project_name: string;
   project_type: string;
@@ -134,10 +135,12 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
 
   // book dedup index (avoid double-counting the same investment across systems)
   const hubMobileProj = new Set<string>();
+  const hubUidProj = new Set<string>(); // explicit book↔app link (investor_uid + project)
   const hubNameProjAmt = new Map<string, number[]>();
   for (const c of customers) {
     const mk = last10(c.mobile);
     if (mk) hubMobileProj.add(`${mk}|${c.project_key}`);
+    if (c.investor_uid) hubUidProj.add(`${c.investor_uid}|${c.project_key}`);
     const nk = `${normName(c.name)}|${c.project_key}`;
     const arr = hubNameProjAmt.get(nk) ?? []; arr.push(Math.round(c.total_paid)); hubNameProjAmt.set(nk, arr);
   }
@@ -162,14 +165,15 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       const hp = appProjToHub.get(appProjId);
       if (!hp) continue;
       const byMobile = mk10 !== "" && hubMobileProj.has(`${mk10}|${hp.key}`);
+      const byUid = hubUidProj.has(`${i.uid}|${hp.key}`);
       const byNameAmt = (hubNameProjAmt.get(`${nn}|${hp.key}`) ?? []).some((a) => a === Math.round(t.invested));
-      if (byMobile || byNameAmt) continue; // folded into the matching book row
+      if (byMobile || byUid || byNameAmt) continue; // folded into the matching book row
       appRows.push({
         id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type,
         file_no: i.fid, name: i.full_name || "Unnamed", mobile: i.phone_number || null,
         district: null, nid: null, reference: null, joining_date: i.created_at ? i.created_at.slice(0, 10) : null,
         total_price: 0, total_paid: t.invested, total_remaining: 0, dividend: t.profit, withdrawn: t.withdrawn, balance: t.balance,
-        payments_count: userTxns.filter((x) => x.project_id === appProjId).length, reference_officer_id: null, bio: {},
+        payments_count: userTxns.filter((x) => x.project_id === appProjId).length, reference_officer_id: null, investor_uid: null, bio: {},
         source: "app", uid: i.uid, email: i.email, is_verified: i.is_verified, is_active: i.is_active, invested: t.invested, profit: t.profit, app: appUser,
       });
     }
@@ -199,7 +203,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     p.totalProfit += rowProfit(r);
     p.totalBalance += currentBalance(r);
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
-    p.holdings.push({ project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: r.source, paid: r.total_paid, profit: rowProfit(r), balance: currentBalance(r) });
+    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: r.source, paid: r.total_paid, profit: rowProfit(r), balance: currentBalance(r) });
   }
   const people = [...byPerson.values()].sort((a, b) => b.totalBalance - a.totalBalance);
 

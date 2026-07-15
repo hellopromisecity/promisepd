@@ -8,13 +8,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
-  ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus,
+  ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
 import type { TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
-import type { PersonRow, AppHealth } from "@/lib/all-customers";
-import { CustomerFormModal, type HubProject } from "./HubCustomerList";
+import type { PersonRow, PersonHolding, AppHealth } from "@/lib/all-customers";
+import type { HubCustomer } from "@/lib/hub";
+import { CustomerFormModal, TransactionModal, LinkModal, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import UserActive from "@/app/dashboard/investments/users/UserActive";
@@ -322,45 +323,69 @@ export default function AllCustomersExplorer({
 }
 
 function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => void }) {
+  const [txnH, setTxnH] = useState<PersonHolding | null>(null);
+  const [linkH, setLinkH] = useState<PersonHolding | null>(null);
+  // Rebuild a minimal book customer so the shared Transaction / Link modals work
+  // (they only need id + project + name; the id drives the payment ledger + link).
+  const asHub = (h: PersonHolding): HubCustomer => ({
+    id: h.id, project_key: h.project_key, project_name: h.project_name, project_type: h.project_type,
+    file_no: null, name: person.name, mobile: person.mobile, district: null, nid: null, reference: null,
+    joining_date: person.joined, total_price: 0, total_paid: h.paid, total_remaining: 0, dividend: 0,
+    withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: null, bio: {},
+  });
+  const hp = (h: PersonHolding): HubProject => ({ key: h.project_key, name: h.project_name, type: h.project_type, sort: 0 });
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-14" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-2xl bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div>
-            <h3 className="flex items-center gap-1.5 text-lg font-bold text-fg">{person.name}{person.app && person.is_verified && <BadgeCheck className="h-4 w-4 text-brand-blue" />}</h3>
-            <p className="text-xs text-fg-muted">{localPhone(person.mobile)}{person.uid ? ` · UID ${person.uid}` : ""}{person.fid ? ` · FID ${person.fid}` : ""}</p>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-fg-muted hover:bg-bg-soft"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="px-5 py-4">
-          <div className="grid grid-cols-3 gap-2">
-            <Stat label="Total paid" value={fmt(person.totalPaid)} tone="blue" />
-            <Stat label="Profit" value={fmt(person.totalProfit)} tone="green" />
-            <Stat label="Balance" value={fmt(person.totalBalance)} />
-          </div>
-          <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-fg-muted">Holdings · {person.holdings.length} project{person.holdings.length > 1 ? "s" : ""}</div>
-          <div className="space-y-1.5">
-            {person.holdings.map((h, i) => (
-              <div key={h.project_key + i} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 font-medium text-fg">
-                    {h.project_name}
-                    {h.source === "app" && <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600"><Smartphone className="h-2.5 w-2.5" /> app</span>}
-                  </div>
-                  <div className="text-[11px] text-fg-faint">Paid {fmt(h.paid)}{h.profit ? ` · profit ${fmt(h.profit)}` : ""}</div>
-                </div>
-                <span className="shrink-0 font-bold tabular-nums text-fg">{fmt(h.balance)}</span>
-              </div>
-            ))}
-          </div>
-          {person.app && (
-            <div className="mt-4 flex justify-end">
-              <UserView user={person.app} />
+    <>
+      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-14" onClick={onClose}>
+        <div className="w-full max-w-xl rounded-2xl bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+            <div>
+              <h3 className="flex items-center gap-1.5 text-lg font-bold text-fg">{person.name}{person.app && person.is_verified && <BadgeCheck className="h-4 w-4 text-brand-blue" />}</h3>
+              <p className="text-xs text-fg-muted">{localPhone(person.mobile)}{person.uid ? ` · UID ${person.uid}` : ""}{person.fid ? ` · FID ${person.fid}` : ""}</p>
             </div>
-          )}
+            <button onClick={onClose} className="rounded-lg p-1.5 text-fg-muted hover:bg-bg-soft"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="px-5 py-4">
+            <div className="grid grid-cols-3 gap-2">
+              <Stat label="Total paid" value={fmt(person.totalPaid)} tone="blue" />
+              <Stat label="Profit" value={fmt(person.totalProfit)} tone="green" />
+              <Stat label="Balance" value={fmt(person.totalBalance)} />
+            </div>
+            <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-fg-muted">Holdings · {person.holdings.length} project{person.holdings.length > 1 ? "s" : ""}</div>
+            <div className="space-y-1.5">
+              {person.holdings.map((h, i) => (
+                <div key={h.id + i} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 font-medium text-fg">
+                      {h.project_name}
+                      {h.source === "app" && <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600"><Smartphone className="h-2.5 w-2.5" /> app</span>}
+                    </div>
+                    <div className="text-[11px] text-fg-faint">Paid {fmt(h.paid)}{h.profit ? ` · profit ${fmt(h.profit)}` : ""}</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="font-bold tabular-nums text-fg">{fmt(h.balance)}</span>
+                    {h.source === "hub" && (
+                      <>
+                        <button onClick={() => setTxnH(h)} title="Transactions" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-emerald-300 hover:text-emerald-600"><CreditCard className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setLinkH(h)} title="Link to app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {person.app && (
+              <div className="mt-4 flex justify-end">
+                <UserView user={person.app} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      {txnH && <TransactionModal customer={asHub(txnH)} project={hp(txnH)} onClose={() => setTxnH(null)} />}
+      {linkH && <LinkModal customer={asHub(linkH)} onClose={() => setLinkH(null)} />}
+    </>
   );
 }
 

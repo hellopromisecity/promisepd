@@ -6,6 +6,7 @@ import { getAdmin, logAudit } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
+import { mirrorBookPayment, backfillHubToInvestor } from "@/lib/investor-write";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
@@ -210,8 +211,9 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     const { data: td } = await admin.from("investment_types").select("operator").eq("name", type).maybeSingle();
     const operator = (rec(td)?.operator as string) ?? "+";
     const kind = operator === "-" ? "withdrawal" : /profit|dividend|লভ্যাংশ/i.test(type) ? "dividend" : "deposit";
-    const { data: cd } = await HC(admin).select("mobile").eq("id", customerId).maybeSingle();
-    const mobile = rec(cd)?.mobile as string | null;
+    const { data: cd } = await HC(admin).select("mobile, investor_uid, project_name").eq("id", customerId).maybeSingle();
+    const cust = rec(cd);
+    const mobile = cust?.mobile as string | null;
     const desc = input.description ? `${type} — ${input.description}` : type;
     const { data: mx } = await HP(admin).select("seq").eq("customer_id", customerId).order("seq", { ascending: false }).limit(1).maybeSingle();
     const seq = Number(rec(mx)?.seq ?? -1) + 1;
@@ -220,6 +222,9 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     await recomputeCustomer(admin, customerId);
     // Text the customer (BD numbers only; never throws) — same gateway as App Users.
     await sendTransactionSms({ phone: mobile, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
+    // Mirror into the buyer's app / investor account (linked or mobile-matched)
+    // so their PWA updates too. Never throws.
+    await mirrorBookPayment(admin, { investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction added." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
@@ -300,5 +305,44 @@ export async function pushDepositProfit(projectKey: string, template: string): P
 
     await logAudit({ action: "sms", entity: "deposit_profit_push", entityId: projectKey, detail: `Profit push to ${projectKey}: sent ${sent}, skipped ${skipped} (no mobile)` });
     return { ok: true, sent, skipped, message: `Sent to ${sent} customer${sent !== 1 ? "s" : ""}${skipped ? ` · ${skipped} skipped (no valid mobile)` : ""}.` };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── link a book customer to their app / investor account ─────────
+export type InvestorHit = { uid: string; full_name: string; fid: string | null; mobile: string | null };
+
+/** Search app / investor accounts for the "Link to app account" picker. */
+export async function searchInvestors(query: string): Promise<InvestorHit[]> {
+  const me = await getCurrentUser();
+  if (!me || !isManager(me.role)) return [];
+  const admin = getAdmin();
+  if (!admin) return [];
+  const safe = (query || "").replace(/[^a-zA-Z0-9ঀ-৿ ]/g, "").trim();
+  const base = admin.from("investor_accounts").select("uid, full_name, fid, phone_number").limit(20);
+  const req = safe
+    ? base.or(`full_name.ilike.%${safe}%,uid.ilike.%${safe}%,fid.ilike.%${safe}%,phone_number.ilike.%${safe}%`)
+    : base.order("created_at", { ascending: false });
+  const { data } = await req;
+  return ((data ?? []) as Record<string, unknown>[]).map((a) => ({ uid: a.uid as string, full_name: (a.full_name as string) ?? "", fid: (a.fid as string) ?? null, mobile: (a.phone_number as string) ?? null }));
+}
+
+/** Link a book customer to an app account, then backfill their past book
+ *  payments into it so their PWA shows everything immediately. */
+export async function linkHubToInvestor(hubCustomerId: string, uid: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!hubCustomerId || !uid) return { ok: false, error: "Missing link." };
+    const { data: c } = await HC(admin).select("project_key, project_name").eq("id", hubCustomerId).maybeSingle();
+    const cust = rec(c);
+    if (!cust) return { ok: false, error: "Customer not found." };
+    const { data: inv } = await admin.from("investor_accounts").select("full_name").eq("uid", uid).maybeSingle();
+    if (!inv) return { ok: false, error: "That app account no longer exists." };
+    await HC(admin).update({ investor_uid: uid }).eq("id", hubCustomerId);
+    const added = await backfillHubToInvestor(admin, hubCustomerId, uid, cust.project_name as string);
+    await logAudit({ action: "link", entity: "hub_customer", entityId: hubCustomerId, detail: `Linked to app ${uid}; backfilled ${added} txn(s)` });
+    revalidatePath(`/dashboard/projects/${cust.project_key}`);
+    revalidatePath("/dashboard/projects/all");
+    return { ok: true, message: `Linked to ${(rec(inv)?.full_name as string) || uid}${added ? ` · ${added} past transaction${added !== 1 ? "s" : ""} synced to their app` : ""}.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
