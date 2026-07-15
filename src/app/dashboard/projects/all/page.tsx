@@ -15,7 +15,7 @@ export default async function AllCustomersPage() {
   if (!me || !isManager(me.role)) redirect("/account");
 
   const data = await loadAllCustomers();
-  const projectCount = data.projects.filter((p) => p.key !== "app-users").length;
+  const projectCount = data.projects.filter((p) => p.type !== "investment").length;
 
   return (
     <div className="space-y-6">
@@ -24,15 +24,17 @@ export default async function AllCustomersPage() {
       </Link>
       <PageHeader
         title="All Customers"
-        subtitle={`Every customer across ${projectCount} projects${data.appStats.merged ? `, plus ${data.appStats.merged} app/investment accounts` : ""} — in one place.`}
+        subtitle={`${data.totals.memberships.toLocaleString("en-IN")} project entries · ${data.totals.uniqueCount.toLocaleString("en-IN")} unique people across ${projectCount} projects — book customers + live app holdings, in one place.`}
       />
       <AllCustomersExplorer
         rows={data.rows}
         projects={data.projects}
-        appStats={data.appStats}
+        health={data.health}
+        top={data.top}
+        totals={data.totals}
+        mergedNames={data.mergedNames}
         investorTypes={data.investorTypes}
         investorProjects={data.investorProjects}
-        hub={data.hub}
       />
     </div>
   );

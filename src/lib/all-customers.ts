@@ -1,18 +1,13 @@
 import "server-only";
 import { getAdmin } from "@/lib/admin-guard";
 import { hubAllCustomers, hubProjectSummaries, type HubCustomer } from "@/lib/hub";
-import { listInvestors, listTypes, listProjects, listTransactions, investorTotals } from "@/lib/investments";
+import { listInvestors, listTypes, listProjects, listTransactions, investorTotals, investorProjectTotals } from "@/lib/investments";
 import type { AppUser, UserTxn, TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
 
-/** Synthetic "project" the app/investment accounts live under in the merged view. */
-export const APP_PROJECT_KEY = "app-users";
-export const APP_PROJECT_NAME = "App / Investment";
-
-/** A row in the unified All-Customers grid — a real hub customer OR a live
- *  app/investment account surfaced in place (never copied into the DB). */
+/** A row in the unified All-Customers grid — a real project-book customer OR a
+ *  live app/investment holding, shown per project (never copied into the DB). */
 export type UnifiedCustomer = HubCustomer & {
   source: "hub" | "app";
-  // app-only extras (undefined on hub rows)
   uid?: string;
   email?: string | null;
   is_verified?: boolean;
@@ -23,83 +18,61 @@ export type UnifiedCustomer = HubCustomer & {
   app?: AppUser;
 };
 
-export type AppStats = {
+export type AppHealth = {
   total: number;
   verified: number;
   unverified: number;
   active: number;
   inactive: number;
-  paying: number;
-  nonpaying: number;
-  invested: number;
-  profit: number;
-  aum: number;
   verifiedPct: number;
   activePct: number;
-  merged: number; // how many app accounts were added (not already a customer)
-  top: { uid: string; name: string; balance: number }[];
+  merged: number; // app holdings surfaced here (not already a book customer)
 };
 
 export type AllCustomersData = {
   rows: UnifiedCustomer[];
   projects: { key: string; name: string; type: string; sort: number }[];
-  appStats: AppStats;
+  health: AppHealth;
+  /** Top unique people by CURRENT holding across every project (deposit remaining
+   *  + real-estate invested + app balance), highest first. */
+  top: { name: string; balance: number }[];
+  totals: {
+    collected: number;   // Σ money across every row
+    memberships: number; // one per person-per-project (a person in 5 projects = 5)
+    payers: number;
+    uniqueCount: number; // distinct people (by name)
+    appAccounts: number; // total app accounts
+  };
+  /** Names folded into a book customer by the name+amount match (for spot-checking). */
+  mergedNames: string[];
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
-  hub: { collected: number; customers: number; payers: number; payments: number };
 };
 
-/** BD mobile → last 10 significant digits ("01737000729" and "+8801737000729"
- *  both collapse to "1737000729"), so the dedup matches across formats. */
+/** BD mobile → last 10 significant digits ("01…" and "+8801…" both collapse). */
 function last10(m: string | null | undefined): string {
   const d = (m || "").replace(/\D/g, "");
   return d.length >= 10 ? d.slice(-10) : "";
 }
+/** Person key — normalised full name (mobiles differ across the two systems). */
+const normName = (s: string | null | undefined) => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
+/** Project key — drop parentheticals ("(1200sft)") + punctuation so the app's
+ *  project names line up with the book's ("Ahbab Palace-02"). */
+const normProj = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
 
-const isPaying = (u: AppUser) => u.invested > 0 || u.profit > 0 || u.withdrawn > 0 || u.balance !== 0;
-
-/** Map a live app account into the unified customer shape. */
-function appToRow(u: AppUser): UnifiedCustomer {
-  return {
-    id: `app:${u.uid}`,
-    project_key: APP_PROJECT_KEY,
-    project_name: APP_PROJECT_NAME,
-    project_type: "investment",
-    file_no: u.fid,
-    name: u.full_name || "Unnamed",
-    mobile: u.phone_number || null,
-    district: null,
-    nid: null,
-    reference: null,
-    joining_date: u.created_at ? u.created_at.slice(0, 10) : null,
-    total_price: 0,
-    total_paid: u.invested,
-    total_remaining: 0,
-    dividend: 0,
-    withdrawn: u.withdrawn,
-    balance: u.balance,
-    payments_count: u.txns.length,
-    reference_officer_id: null,
-    bio: {},
-    source: "app",
-    uid: u.uid,
-    email: u.email,
-    is_verified: u.is_verified,
-    is_active: u.is_active,
-    invested: u.invested,
-    profit: u.profit,
-    app: u,
-  };
+/** A person's current holding in one row, for the Top-investors ranking. */
+function currentBalance(c: UnifiedCustomer): number {
+  if (c.source === "app") return c.balance;
+  if (c.project_type === "deposit") return c.total_paid + c.dividend - c.withdrawn; // remaining
+  return c.total_paid; // real estate: what they've put in
 }
 
-/** Load the merged All-Customers dataset: every hub customer, plus every app
- *  account that ISN'T already a customer (matched by mobile). No DB writes. */
 export async function loadAllCustomers(): Promise<AllCustomersData> {
   const admin = getAdmin();
   const empty: AllCustomersData = {
-    rows: [], projects: [], investorTypes: [], investorProjects: [],
-    appStats: { total: 0, verified: 0, unverified: 0, active: 0, inactive: 0, paying: 0, nonpaying: 0, invested: 0, profit: 0, aum: 0, verifiedPct: 0, activePct: 0, merged: 0, top: [] },
-    hub: { collected: 0, customers: 0, payers: 0, payments: 0 },
+    rows: [], projects: [], investorTypes: [], investorProjects: [], top: [], mergedNames: [],
+    health: { total: 0, verified: 0, unverified: 0, active: 0, inactive: 0, verifiedPct: 0, activePct: 0, merged: 0 },
+    totals: { collected: 0, memberships: 0, payers: 0, uniqueCount: 0, appAccounts: 0 },
   };
   if (!admin) return empty;
 
@@ -112,7 +85,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     listTransactions(admin),
   ]);
 
-  // group each investor's transactions (newest-first from the reader)
+  // ── group each investor's transactions (newest-first from the reader) ──
   const op = new Map(types.map((t) => [t.name, t.operator]));
   const pname = new Map(projects.map((p) => [p.project_id, p.project_name]));
   const byUid = new Map<string, UserTxn[]>();
@@ -127,60 +100,111 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     byUid.set(t.uid, list);
   }
 
-  const appUsers: AppUser[] = investors.map((i) => {
-    // Totals from the member's OWN transactions (matches the app), not the
-    // stale balance JSON which understates what was actually invested.
-    const b = investorTotals(byUid.get(i.uid) ?? []);
-    return {
+  // ── app project_id → the matching book project (by normalised name) ──
+  const hubByNorm = new Map<string, { key: string; name: string; type: string }>();
+  for (const p of summaries) hubByNorm.set(normProj(p.name), { key: p.key, name: p.name, type: p.type });
+  const appProjToHub = new Map<string, { key: string; name: string; type: string }>();
+  for (const p of projects) {
+    const hub = hubByNorm.get(normProj(p.project_name));
+    appProjToHub.set(p.project_id, hub ?? { key: "app-" + normProj(p.project_name), name: p.project_name, type: "investment" });
+  }
+
+  // ── book dedup index: mobile+project, and name+project → amounts ──
+  const hubMobileProj = new Set<string>();
+  const hubNameProjAmt = new Map<string, number[]>();
+  for (const c of customers) {
+    const mk = last10(c.mobile);
+    if (mk) hubMobileProj.add(`${mk}|${c.project_key}`);
+    const nk = `${normName(c.name)}|${c.project_key}`;
+    const arr = hubNameProjAmt.get(nk) ?? [];
+    arr.push(Math.round(c.total_paid));
+    hubNameProjAmt.set(nk, arr);
+  }
+
+  // ── expand every app member into per-project rows, deduped against the book ──
+  const appRows: UnifiedCustomer[] = [];
+  const mergedNames = new Set<string>();
+  let verified = 0, active = 0;
+  for (const i of investors) {
+    if (i.is_verified) verified++;
+    if (i.is_active) active++;
+    const userTxns = byUid.get(i.uid) ?? [];
+    const acct = investorTotals(userTxns);
+    const appUser: AppUser = {
       uid: i.uid, fid: i.fid, full_name: i.full_name, phone_number: i.phone_number,
       email: i.email, language: i.language, is_verified: i.is_verified, is_active: i.is_active,
       created_at: i.created_at, last_login: i.last_login,
-      invested: b.total_investment, profit: b.total_profit, withdrawn: b.total_withdrawn, balance: b.total_balance,
-      txns: byUid.get(i.uid) ?? [],
+      invested: acct.total_investment, profit: acct.total_profit, withdrawn: acct.total_withdrawn, balance: acct.total_balance,
+      txns: userTxns,
     };
-  });
-
-  // ── app-account stats over ALL app users (for the health cards) ──
-  let verified = 0, active = 0, paying = 0, invested = 0, profit = 0, aum = 0;
-  for (const u of appUsers) {
-    if (u.is_verified) verified++;
-    if (u.is_active) active++;
-    if (isPaying(u)) paying++;
-    invested += u.invested; profit += u.profit; aum += u.balance;
+    const mk10 = last10(i.phone_number);
+    const nn = normName(i.full_name);
+    for (const [appProjId, t] of investorProjectTotals(userTxns)) {
+      if (t.invested <= 0 && t.profit <= 0 && t.withdrawn <= 0) continue;
+      const hp = appProjToHub.get(appProjId);
+      if (!hp) continue;
+      // Safe-mode dedup: same person already a book customer of this project?
+      const byMobile = mk10 !== "" && hubMobileProj.has(`${mk10}|${hp.key}`);
+      const byNameAmt = (hubNameProjAmt.get(`${nn}|${hp.key}`) ?? []).some((a) => a === Math.round(t.invested));
+      if (byMobile || byNameAmt) { if (byNameAmt && !byMobile) mergedNames.add(i.full_name); continue; }
+      appRows.push({
+        id: `app:${i.uid}:${hp.key}`,
+        project_key: hp.key, project_name: hp.name, project_type: hp.type,
+        file_no: i.fid, name: i.full_name || "Unnamed", mobile: i.phone_number || null,
+        district: null, nid: null, reference: null,
+        joining_date: i.created_at ? i.created_at.slice(0, 10) : null,
+        total_price: 0, total_paid: t.invested, total_remaining: 0,
+        dividend: t.profit, withdrawn: t.withdrawn, balance: t.balance,
+        payments_count: userTxns.filter((x) => x.project_id === appProjId).length,
+        reference_officer_id: null, bio: {},
+        source: "app", uid: i.uid, email: i.email, is_verified: i.is_verified, is_active: i.is_active,
+        invested: t.invested, profit: t.profit, app: appUser,
+      });
+    }
   }
-  const denom = appUsers.length || 1;
-  const top = [...appUsers].sort((a, b) => b.balance - a.balance).slice(0, 8)
-    .map((u) => ({ uid: u.uid, name: u.full_name, balance: u.balance }));
-
-  // ── dedup: only bring app accounts that aren't already a customer ──
-  const hubMobiles = new Set(customers.map((c) => last10(c.mobile)).filter(Boolean));
-  const merged = appUsers.filter((u) => { const k = last10(u.phone_number); return !k || !hubMobiles.has(k); });
 
   const rows: UnifiedCustomer[] = [
     ...customers.map((c) => ({ ...c, source: "hub" as const })),
-    ...merged.map(appToRow),
+    ...appRows,
   ];
 
-  const projOpts = summaries.map((p) => ({ key: p.key, name: p.name, type: p.type, sort: p.sort }));
-  if (merged.length) projOpts.push({ key: APP_PROJECT_KEY, name: APP_PROJECT_NAME, type: "investment", sort: 9999 });
+  // ── unique people + top holders (grouped by name across every row) ──
+  const uniqueNames = new Set<string>();
+  const holdingByName = new Map<string, { name: string; balance: number }>();
+  for (const r of rows) {
+    const nn = normName(r.name);
+    if (nn) uniqueNames.add(nn);
+    const cur = holdingByName.get(nn) ?? { name: r.name || "—", balance: 0 };
+    cur.balance += currentBalance(r);
+    holdingByName.set(nn, cur);
+  }
+  const top = [...holdingByName.values()].sort((a, b) => b.balance - a.balance).slice(0, 8);
 
+  const projOpts = summaries.map((p) => ({ key: p.key, name: p.name, type: p.type, sort: p.sort }));
+  // any app-only projects (no book match) that actually produced rows
+  const seenKeys = new Set(projOpts.map((p) => p.key));
+  for (const r of appRows) if (!seenKeys.has(r.project_key)) { seenKeys.add(r.project_key); projOpts.push({ key: r.project_key, name: r.project_name, type: r.project_type, sort: 9000 }); }
+
+  const denom = investors.length || 1;
   return {
     rows,
     projects: projOpts,
-    appStats: {
-      total: appUsers.length, verified, unverified: appUsers.length - verified,
-      active, inactive: appUsers.length - active, paying, nonpaying: appUsers.length - paying,
-      invested, profit, aum,
+    health: {
+      total: investors.length, verified, unverified: investors.length - verified,
+      active, inactive: investors.length - active,
       verifiedPct: Math.round((verified / denom) * 100), activePct: Math.round((active / denom) * 100),
-      merged: merged.length, top,
+      merged: appRows.length,
     },
+    top,
+    totals: {
+      collected: rows.reduce((s, r) => s + r.total_paid, 0),
+      memberships: rows.length,
+      payers: rows.filter((r) => r.total_paid > 0).length,
+      uniqueCount: uniqueNames.size,
+      appAccounts: investors.length,
+    },
+    mergedNames: [...mergedNames].sort(),
     investorTypes: types.map((t) => ({ name: t.name, operator: t.operator })),
     investorProjects: projects.map((p) => ({ project_id: p.project_id, project_name: p.project_name })),
-    hub: {
-      collected: customers.reduce((s, c) => s + c.total_paid, 0),
-      customers: customers.length,
-      payers: customers.filter((c) => c.total_paid > 0).length,
-      payments: customers.reduce((s, c) => s + c.payments_count, 0),
-    },
   };
 }

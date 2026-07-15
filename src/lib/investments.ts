@@ -325,6 +325,26 @@ export function investorTotals(
   return { total_investment: invested, total_profit: profit, total_withdrawn: withdrawn, total_balance: invested + profit - withdrawn };
 }
 
+/** Same as investorTotals, but broken down per project_id — so the unified
+ *  All-Customers view can show an app member's investment as one row PER
+ *  project (matching how the app itself presents it). */
+export function investorProjectTotals(
+  txns: { type: string; operator: string; amount: number; project_id: string | null }[],
+): Map<string, { invested: number; profit: number; withdrawn: number; balance: number }> {
+  const m = new Map<string, { invested: number; profit: number; withdrawn: number; balance: number }>();
+  for (const t of txns) {
+    if (!t.project_id) continue;
+    const cur = m.get(t.project_id) ?? { invested: 0, profit: 0, withdrawn: 0, balance: 0 };
+    const amt = Number(t.amount) || 0;
+    if (PROFIT_TYPES.has(t.type)) cur.profit += amt;
+    else if (t.operator === "+") cur.invested += amt;
+    else if (t.operator === "-") cur.withdrawn += amt;
+    cur.balance = cur.invested + cur.profit - cur.withdrawn;
+    m.set(t.project_id, cur);
+  }
+  return m;
+}
+
 /** Everything a logged-in investor may see about THEMSELVES, fetched by
  *  their profile id (the auth user id).  Returns null if this member isn't
  *  a ported investor.  Service-role read, but scoped strictly to the one

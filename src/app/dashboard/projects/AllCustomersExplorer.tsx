@@ -1,24 +1,23 @@
 "use client";
 
-/** All Customers — the single unified customer view for Projectify.
+/** All Customers — one unified, per-project customer view for Projectify.
  *
- *  Rows are either real hub customers OR live app/investment accounts surfaced
- *  in place (deduped by mobile, never copied into the DB). It keeps every hub
- *  feature (project filter, bio history, payments, reference officer, Add
- *  customer) and layers on the App-Users feature set (health stats, status
- *  filters, verified/active signals, invested/profit/balance, PDF, paging, and
- *  the per-account view / transactions / edit / active-toggle actions). */
+ *  Rows are project-book customers OR live app/investment holdings, shown one
+ *  row PER person-PER project (deduped against the book in safe mode). It keeps
+ *  every book feature and layers on the app feature set (health, status filters,
+ *  invested/profit/balance, PDF, paging, per-account actions), plus unique-people
+ *  stats and a Top-investors ranking by current holding across all projects. */
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Users, BadgeCheck, TrendingUp, Wallet, Download, FileText, Smartphone,
+  Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy,
-  Phone, MapPin, UserCheck, Eye, Pencil, CreditCard, UserPlus,
+  Phone, MapPin, UserCheck, Eye, Pencil, CreditCard, UserPlus, Info,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
 import type { AppUser, TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
-import type { UnifiedCustomer, AppStats } from "@/lib/all-customers";
+import type { UnifiedCustomer, AppHealth } from "@/lib/all-customers";
 import { HistoryModal, CustomerFormModal, TransactionModal, DeleteBtn, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
@@ -26,7 +25,6 @@ import UserActive from "@/app/dashboard/investments/users/UserActive";
 import InvestorEdit from "@/app/dashboard/investments/users/InvestorEdit";
 import AddUser from "@/app/dashboard/investments/users/AddUser";
 
-const APP_KEY = "app-users";
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
@@ -34,8 +32,7 @@ const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
 type StatusFilter = "all" | "verified" | "unverified" | "active" | "inactive" | "paying" | "nonpaying";
 
-/** Per-row money semantics: app → invested/profit/balance; deposit → paid/dividend/held; real-estate → paid/—/due.
- *  Deposit "held" = deposits + dividends − withdrawals (money still in the company). */
+/** Per-row money semantics: app → invested/profit/balance; deposit → paid/dividend/held (paid+div−wd); real-estate → paid/—/due. */
 function money(c: UnifiedCustomer) {
   const paid = c.total_paid;
   if (c.source === "app") return { paid, profit: c.profit ?? 0, hasProfit: true, balance: c.balance, balLabel: "balance" as const };
@@ -46,14 +43,16 @@ const rowPaying = (c: UnifiedCustomer) =>
   c.source === "app" ? (c.invested! > 0 || c.profit! > 0 || c.withdrawn > 0 || c.balance !== 0) : c.total_paid > 0;
 
 export default function AllCustomersExplorer({
-  rows, projects, appStats, investorTypes, investorProjects, hub,
+  rows, projects, health, top, totals, mergedNames, investorTypes, investorProjects,
 }: {
   rows: UnifiedCustomer[];
   projects: HubProject[];
-  appStats: AppStats;
+  health: AppHealth;
+  top: { name: string; balance: number }[];
+  totals: { collected: number; memberships: number; payers: number; uniqueCount: number; appAccounts: number };
+  mergedNames: string[];
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
-  hub: { collected: number; customers: number; payers: number; payments: number };
 }) {
   const [q, setQ] = useState("");
   const [projFilter, setProjFilter] = useState("all");
@@ -64,7 +63,6 @@ export default function AllCustomersExplorer({
   const [page, setPage] = useState(1);
   const [mounted, setMounted] = useState(false);
 
-  // hub-row modal state (app rows use their own self-contained components)
   const [view, setView] = useState<UnifiedCustomer | null>(null);
   const [edit, setEdit] = useState<UnifiedCustomer | null>(null);
   const [txn, setTxn] = useState<UnifiedCustomer | null>(null);
@@ -73,12 +71,10 @@ export default function AllCustomersExplorer({
   useEffect(() => { const t = setTimeout(() => setMounted(true), 40); return () => clearTimeout(t); }, []);
   useEffect(() => { setPage(1); }, [q, status, projFilter, perPage]);
 
-  const hubProjects = useMemo(() => projects.filter((p) => p.key !== APP_KEY), [projects]);
+  const hubProjects = useMemo(() => projects.filter((p) => p.type !== "investment"), [projects]);
   const custProj = (c: UnifiedCustomer): HubProject => ({ key: c.project_key, name: c.project_name, type: c.project_type, sort: 0 });
+  const maxBal = Math.max(1, ...top.map((t) => t.balance));
 
-  const maxBal = Math.max(1, ...appStats.top.map((t) => t.balance));
-
-  // ── filter + sort ──
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((c) => {
@@ -113,22 +109,14 @@ export default function AllCustomersExplorer({
   const curPage = Math.min(page, pageCount);
   const start = (curPage - 1) * perPage;
   const pageRows = sorted.slice(start, start + perPage);
-
   const setSort = (k: SortKey) => { if (sortKey === k) setAsc((v) => !v); else { setSortKey(k); setAsc(false); } };
 
-  // ── exports (over the current filtered + sorted set) ──
   function exportCsv() {
-    const head = ["#", "Name", "Source", "File/UID", "Mobile", "District", "Reference", "Paid", "Profit", "Balance/Due", "Verified", "Active", "Joined"];
+    const head = ["#", "Name", "Project", "Source", "File/UID", "Mobile", "District", "Reference", "Paid", "Profit", "Balance/Due", "Joined"];
     const lines = [head.join(",")];
     sorted.forEach((c, i) => {
       const m = money(c);
-      const cells = [
-        i + 1, c.name, c.source === "app" ? "App" : c.project_name, c.file_no ?? c.uid ?? "",
-        localPhone(c.mobile), c.district ?? "", c.reference ?? "",
-        Math.round(m.paid), m.hasProfit ? Math.round(m.profit) : "", Math.round(m.balance),
-        c.source === "app" ? (c.is_verified ? "Yes" : "No") : "", c.source === "app" ? (c.is_active ? "Yes" : "No") : "",
-        c.joining_date ?? "",
-      ];
+      const cells = [i + 1, c.name, c.project_name, c.source === "app" ? "App" : "Book", c.file_no ?? c.uid ?? "", localPhone(c.mobile), c.district ?? "", c.reference ?? "", Math.round(m.paid), m.hasProfit ? Math.round(m.profit) : "", Math.round(m.balance), c.joining_date ?? ""];
       lines.push(cells.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -142,20 +130,20 @@ export default function AllCustomersExplorer({
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
     const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
     const cols = [
-      { k: "name", t: "Name", x: 40, w: 170 },
-      { k: "src", t: "Source / Project", x: 210, w: 150 },
-      { k: "phone", t: "Mobile", x: 360, w: 95 },
-      { k: "paid", t: "Paid", x: 455, w: 95, r: true },
-      { k: "profit", t: "Profit", x: 550, w: 85, r: true },
-      { k: "bal", t: "Balance", x: 635, w: 95, r: true },
-      { k: "status", t: "Status", x: 745, w: 60 },
+      { k: "name", t: "Name", x: 40, w: 165 },
+      { k: "proj", t: "Project", x: 205, w: 150 },
+      { k: "phone", t: "Mobile", x: 355, w: 95 },
+      { k: "paid", t: "Paid", x: 450, w: 95, r: true },
+      { k: "profit", t: "Profit", x: 545, w: 85, r: true },
+      { k: "bal", t: "Balance", x: 630, w: 95, r: true },
+      { k: "src", t: "Src", x: 745, w: 55 },
     ];
     const drawHeader = () => {
       doc.setFillColor(24, 71, 161); doc.rect(0, 0, W, 50, "F");
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
       doc.text("Promise City — All Customers", 40, 32);
       doc.setFontSize(9); doc.setFont("helvetica", "normal");
-      doc.text(`${total} rows  •  collected ${pdfMoney(hub.collected)}  •  ${appStats.total} app accounts`, W - 40, 32, { align: "right" });
+      doc.text(`${total} entries  •  ${totals.uniqueCount} unique  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
       doc.setFillColor(238, 241, 246); doc.rect(0, 56, W, 20, "F");
       doc.setTextColor(60, 60, 60); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
       for (const c of cols) doc.text(c.t, c.r ? c.x + c.w - 4 : c.x, 70, { align: c.r ? "right" : "left" });
@@ -169,9 +157,8 @@ export default function AllCustomersExplorer({
       doc.setTextColor(30, 30, 30);
       const m = money(c);
       const cell: Record<string, string> = {
-        name: (c.name || "").slice(0, 34), src: (c.source === "app" ? "App / Investment" : c.project_name).slice(0, 26),
-        phone: localPhone(c.mobile), paid: pdfMoney(m.paid), profit: m.hasProfit ? pdfMoney(m.profit) : "—",
-        bal: pdfMoney(m.balance), status: c.source === "app" ? (c.is_active ? "Active" : "Off") : "Cust.",
+        name: (c.name || "").slice(0, 32), proj: (c.project_name || "").slice(0, 26), phone: localPhone(c.mobile),
+        paid: pdfMoney(m.paid), profit: m.hasProfit ? pdfMoney(m.profit) : "—", bal: pdfMoney(m.balance), src: c.source === "app" ? "App" : "Book",
       };
       for (const col of cols) doc.text(cell[col.k], col.r ? col.x + col.w - 4 : col.x, y, { align: col.r ? "right" : "left" });
       y += 16;
@@ -186,35 +173,34 @@ export default function AllCustomersExplorer({
       {label}{sortKey !== k ? <ArrowUpDown className="h-3 w-3 opacity-40" /> : asc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
     </button>
   );
-
   const iconBtn = "grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors";
 
   return (
     <div className="space-y-5">
       {/* primary stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Total collected" value={compact(hub.collected)} sub={`${hub.payers} have paid`} icon={Wallet} tone="success" />
-        <StatCard label="Customers" value={hub.customers.toLocaleString("en-IN")} sub={`${hub.payments.toLocaleString("en-IN")} payments`} icon={Users} tone="info" />
-        <StatCard label="App accounts" value={appStats.total.toLocaleString("en-IN")} sub={`${appStats.merged} added here · ${appStats.verified} verified`} icon={Smartphone} tone="warning" />
-        <StatCard label="App balance" value={compact(appStats.aum)} sub={`invested ${compact(appStats.invested)}`} icon={TrendingUp} tone="neutral" />
+        <StatCard label="Total collected" value={compact(totals.collected)} sub={`${totals.payers.toLocaleString("en-IN")} paid`} icon={Wallet} tone="success" />
+        <StatCard label="Customers" value={totals.memberships.toLocaleString("en-IN")} sub="one per project entry" icon={Users} tone="info" />
+        <StatCard label="Unique people" value={totals.uniqueCount.toLocaleString("en-IN")} sub={`${compact(totals.collected)} total`} icon={UserRound} tone="warning" />
+        <StatCard label="App accounts" value={totals.appAccounts.toLocaleString("en-IN")} sub={`${health.merged} holdings · ${health.verified} verified`} icon={Smartphone} tone="neutral" />
       </div>
 
-      {/* app-account health */}
+      {/* app-account health + top holders */}
       <div className="grid gap-3 lg:grid-cols-3">
         <div className="rounded-2xl border border-border bg-bg p-4">
           <p className="mb-3 text-sm font-bold text-fg">App account health</p>
           <div className="flex items-center justify-around">
-            <Donut mounted={mounted} pct={appStats.verifiedPct} color="#1847A1" label="Verified" a={`${appStats.verified} yes`} b={`${appStats.unverified} no`} />
-            <Donut mounted={mounted} pct={appStats.activePct} color="#10b981" label="Active" a={`${appStats.active} on`} b={`${appStats.inactive} off`} />
+            <Donut mounted={mounted} pct={health.verifiedPct} color="#1847A1" label="Verified" a={`${health.verified} yes`} b={`${health.unverified} no`} />
+            <Donut mounted={mounted} pct={health.activePct} color="#10b981" label="Active" a={`${health.active} on`} b={`${health.inactive} off`} />
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-bg p-4 lg:col-span-2">
-          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><Trophy className="h-4 w-4 text-amber-500" /> Top investors by balance</p>
-          {appStats.top.length === 0 ? <p className="py-8 text-center text-sm text-fg-muted">No data.</p> : (
+          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><Trophy className="h-4 w-4 text-amber-500" /> Top holders by current balance <span className="text-[11px] font-normal text-fg-faint">(all projects combined)</span></p>
+          {top.length === 0 ? <p className="py-8 text-center text-sm text-fg-muted">No data.</p> : (
             <>
               <div className="flex h-32 items-end gap-1.5">
-                {appStats.top.map((u, i) => (
-                  <div key={u.uid} className="group relative flex h-full flex-1 items-end" title={`${u.name}: ${taka(u.balance)}`}>
+                {top.map((u, i) => (
+                  <div key={u.name + i} className="group relative flex h-full flex-1 items-end" title={`${u.name}: ${taka(u.balance)}`}>
                     <div className="w-full rounded-t bg-gradient-to-t from-brand-blue to-brand-blue/55 transition-[height] duration-700 group-hover:from-brand-blue-dark"
                       style={{ height: mounted ? `${Math.max(3, (u.balance / maxBal) * 100)}%` : "0%", transitionDelay: `${i * 60}ms` }} />
                     <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-fg px-1.5 py-0.5 text-[9px] font-semibold text-bg opacity-0 transition-opacity group-hover:opacity-100">{compact(u.balance)}</span>
@@ -222,12 +208,20 @@ export default function AllCustomersExplorer({
                 ))}
               </div>
               <div className="mt-1.5 flex gap-1.5">
-                {appStats.top.map((u) => <span key={u.uid} className="flex-1 truncate text-center text-[9px] text-fg-faint">{firstName(u.name)}</span>)}
+                {top.map((u, i) => <span key={u.name + i} className="flex-1 truncate text-center text-[9px] text-fg-faint">{firstName(u.name)}</span>)}
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* safe-mode merge note */}
+      {mergedNames.length > 0 && (
+        <details className="rounded-xl border border-border bg-bg-soft/60 px-4 py-2.5 text-xs text-fg-muted">
+          <summary className="flex cursor-pointer items-center gap-1.5 font-semibold text-fg"><Info className="h-3.5 w-3.5 text-brand-blue" /> {mergedNames.length} app holding{mergedNames.length > 1 ? "s" : ""} matched to an existing book customer by name + amount — spot-check</summary>
+          <p className="mt-2 leading-relaxed">{mergedNames.join(" · ")}</p>
+        </details>
+      )}
 
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-2.5">
@@ -245,12 +239,12 @@ export default function AllCustomersExplorer({
         </select>
         <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           <option value="all">Any status</option>
-          <option value="paying">Paying ({appStats.paying + hub.payers})</option>
+          <option value="paying">Paying</option>
           <option value="nonpaying">Non-paying</option>
-          <option value="verified">Verified ({appStats.verified})</option>
-          <option value="unverified">Unverified ({appStats.unverified})</option>
-          <option value="active">Active app ({appStats.active})</option>
-          <option value="inactive">Inactive app ({appStats.inactive})</option>
+          <option value="verified">Verified ({health.verified})</option>
+          <option value="unverified">Unverified ({health.unverified})</option>
+          <option value="active">Active app ({health.active})</option>
+          <option value="inactive">Inactive app ({health.inactive})</option>
         </select>
         <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / page</option>)}
@@ -269,7 +263,7 @@ export default function AllCustomersExplorer({
               <tr className="border-b border-border">
                 <th className="w-10 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">#</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="name" label="Customer" /></th>
-                <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Source / Project</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Project</th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="paid" label="Paid" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="profit" label="Profit" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="balance" label="Balance" right /></th>
@@ -311,17 +305,16 @@ export default function AllCustomersExplorer({
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      {isApp ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/12 px-2 py-0.5 text-[11px] font-semibold text-violet-600"><Smartphone className="h-3 w-3" /> App / Investment</span>
-                      ) : (
-                        <span className="text-fg-muted">{c.project_name}</span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-fg">{c.project_name}</span>
+                        {isApp && <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600"><Smartphone className="h-2.5 w-2.5" /> app</span>}
+                      </div>
                       <div className="mt-0.5 text-[11px] text-fg-faint">{isApp ? (c.file_no ? `FID ${c.file_no}` : "") : `File ${c.file_no ?? "—"}`}</div>
                     </td>
                     <td className="px-3 py-3 text-right font-bold tabular-nums text-brand-blue">{fmt(m.paid)}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{m.hasProfit ? fmt(m.profit) : "—"}</td>
                     <td className={`px-3 py-3 text-right tabular-nums font-semibold ${m.balLabel === "due" ? (m.balance > 0 ? "text-brand-red-dark" : "text-fg-faint") : m.balance < 0 ? "text-brand-red-dark" : "text-fg"}`}
-                      title={m.balLabel === "due" ? "Remaining / due" : m.balLabel === "held" ? "Money held" : "App balance"}>
+                      title={m.balLabel === "due" ? "Remaining / due" : m.balLabel === "held" ? "Money still in company" : "App balance"}>
                       {m.balLabel === "due" && m.balance <= 0 ? "—" : fmt(m.balance)}
                     </td>
                     <td className="px-3 py-3">
