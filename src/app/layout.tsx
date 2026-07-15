@@ -172,11 +172,13 @@ export default function RootLayout({
               // portal's pinned header) silently stop sticking.  Raw <style> on
               // purpose: Lightning CSS drops this when written in globals.css.
               "@supports (overflow:clip){html,body{overflow-x:clip!important}}",
-              // /account (investor portal): clear the fixed navbar (now shown
-              // in both the browser AND the PWA) and dock the sticky header
-              // just below it.
+              // /account (investor portal) in the BROWSER: clear the fixed
+              // navbar and dock the sticky header just below it.
               ".acct-shell{padding-top:5.25rem}@media(min-width:640px){.acct-shell{padding-top:6rem}}",
               ".acct-sticky{top:76px}@media(min-width:640px){.acct-sticky{top:84px}}",
+              // …but inside the installed PWA the chrome is hidden, so the
+              // portal starts at the very top (no navbar to clear) — native feel.
+              "@media all and (display-mode:standalone){.acct-shell{padding-top:1rem}.acct-sticky{top:0}}",
             ].join(""),
           }}
         />
@@ -198,10 +200,10 @@ export default function RootLayout({
           zIndex={2000}
         />
         <SkipLink />
-        {/* Site chrome shows on every page in BOTH the browser and the
-            installed PWA — only /login, /signup, and /dashboard (its own
-            shell) drop it, via SiteChrome.  Route-gated, not display-mode
-            gated, so the PWA looks just like the website. */}
+        {/* Site chrome shows on every public page — /login, /signup and
+            /dashboard drop it entirely (SiteChrome). The investor portal
+            (/account) keeps it in the BROWSER but hides it inside the
+            installed PWA (via .pwa-hide) so the app feels native. */}
         <SiteChrome>
           <Navbar />
         </SiteChrome>

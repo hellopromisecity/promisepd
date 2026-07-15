@@ -21,5 +21,17 @@ export default function SiteChrome({ children, extra = [] }: { children: React.R
     NO_CHROME.has(pathname) ||
     extra.includes(pathname);
   if (isApp) return null;
+
+  // The investor portal (/account) keeps the site chrome in the BROWSER, but
+  // hides it inside the installed PWA so it feels like a native mobile app.
+  // `.pwa-hide` is display:none only under (display-mode: standalone), so it
+  // stays visible on the web and disappears in the app.
+  const isAccount =
+    pathname === "/account" ||
+    pathname.startsWith("/account/") ||
+    pathname === "/en/account" ||
+    pathname.startsWith("/en/account/");
+  if (isAccount) return <div className="pwa-hide">{children}</div>;
+
   return <>{children}</>;
 }
