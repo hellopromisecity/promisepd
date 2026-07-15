@@ -54,11 +54,13 @@ export default async function ProjectsHubPage() {
         <EmptyState icon={Building2} title="No project data yet" message="Import the customer books to populate the hub." />
       ) : (
         <>
+          {/* Company-wide stats come from the unified directory (book + app),
+              so they always match the All-Customers page inside. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Total collected" value={fmt(t.raised)} sub={`across ${projects.length} projects`} icon={Wallet} tone="success" />
-            <StatCard label="Customers" value={t.customers.toLocaleString("en-IN")} sub={`${t.payers.toLocaleString("en-IN")} have paid`} icon={Users} tone="info" />
+            <StatCard label="Total collected" value={fmt(allCust.totals.collected)} sub={`across ${projects.length} projects`} icon={Wallet} tone="success" />
+            <StatCard label="Customers" value={allCust.totals.memberships.toLocaleString("en-IN")} sub={`${allCust.totals.uniqueCount.toLocaleString("en-IN")} unique people`} icon={Users} tone="info" />
             <StatCard label="Payments" value={t.payments.toLocaleString("en-IN")} sub="receipts logged" icon={TrendingUp} tone="warning" />
-            <StatCard label="Avg / payer" value={fmt(t.payers ? t.raised / t.payers : 0)} sub="all projects" icon={PiggyBank} tone="neutral" />
+            <StatCard label="Avg / payer" value={fmt(allCust.totals.payers ? allCust.totals.collected / allCust.totals.payers : 0)} sub={`${allCust.totals.payers.toLocaleString("en-IN")} paying people`} icon={PiggyBank} tone="neutral" />
           </div>
 
           <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard unique={allCust.totals.uniqueCount} memberships={allCust.totals.memberships} raised={allCust.totals.collected} />} />

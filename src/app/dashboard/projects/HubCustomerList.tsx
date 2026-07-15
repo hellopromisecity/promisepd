@@ -160,7 +160,11 @@ export default function HubCustomerList({ customers, project, projects, profits 
                     <button onClick={() => setEdit(c)} title="Edit" className={`${iconBtn} hover:border-brand-blue/40 hover:text-brand-blue`}><Pencil className="h-4 w-4" /></button>
                     <DeleteBtn customer={c} project={custProj(c)} className={iconBtn} />
                     <button onClick={() => setTxn(c)} title="Transactions" className={`${iconBtn} hover:border-emerald-300 hover:text-emerald-600`}><CreditCard className="h-4 w-4" /></button>
-                    <button onClick={() => setLinking(c)} title="Link to app account (sync to their PWA)" className={`${iconBtn} hover:border-violet-300 hover:text-violet-600`}><Link2 className="h-4 w-4" /></button>
+                    {/* Linked customers already sync to their PWA automatically —
+                        the Link action only appears while a row has no app account */}
+                    {!c.investor_uid && (
+                      <button onClick={() => setLinking(c)} title="Link to app account (sync to their PWA)" className={`${iconBtn} hover:border-violet-300 hover:text-violet-600`}><Link2 className="h-4 w-4" /></button>
+                    )}
                   </div>
                 </td>
               </tr>

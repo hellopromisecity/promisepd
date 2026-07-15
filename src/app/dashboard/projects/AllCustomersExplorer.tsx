@@ -369,7 +369,11 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                     {h.source === "hub" && (
                       <>
                         <button onClick={() => setTxnH(h)} title="Transactions" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-emerald-300 hover:text-emerald-600"><CreditCard className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => setLinkH(h)} title="Link to app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
+                        {/* Link only matters while the customer has no app account —
+                            everyone linked already syncs to their PWA automatically */}
+                        {!person.app && (
+                          <button onClick={() => setLinkH(h)} title="Link to app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
+                        )}
                       </>
                     )}
                   </div>
