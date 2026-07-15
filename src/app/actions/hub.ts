@@ -211,7 +211,7 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     const { data: td } = await admin.from("investment_types").select("operator").eq("name", type).maybeSingle();
     const operator = (rec(td)?.operator as string) ?? "+";
     const kind = operator === "-" ? "withdrawal" : /profit|dividend|লভ্যাংশ/i.test(type) ? "dividend" : "deposit";
-    const { data: cd } = await HC(admin).select("mobile, investor_uid, project_name").eq("id", customerId).maybeSingle();
+    const { data: cd } = await HC(admin).select("name, mobile, investor_uid, project_name").eq("id", customerId).maybeSingle();
     const cust = rec(cd);
     const mobile = cust?.mobile as string | null;
     const desc = input.description ? `${type} — ${input.description}` : type;
@@ -222,9 +222,10 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     await recomputeCustomer(admin, customerId);
     // Text the customer (BD numbers only; never throws) — same gateway as App Users.
     await sendTransactionSms({ phone: mobile, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
-    // Mirror into the buyer's app / investor account (linked or mobile-matched)
-    // so their PWA updates too. Never throws.
-    await mirrorBookPayment(admin, { investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description });
+    // Mirror into the buyer's app / investor account so their PWA updates too —
+    // auto-creating the account (mobile + default password) if they have none,
+    // plus the project membership for the PWA card. Never throws.
+    await mirrorBookPayment(admin, { id: customerId, name: cust?.name as string | null, investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction added." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }

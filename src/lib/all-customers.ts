@@ -137,16 +137,18 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   const hubMobileProj = new Set<string>();
   const hubUidProj = new Set<string>(); // explicit book↔app link (investor_uid + project)
   const hubNameProjAmt = new Map<string, number[]>();
+  const uidToName = new Map<string, string>(); // explicit link → the person it belongs to
   for (const c of customers) {
     const mk = last10(c.mobile);
     if (mk) hubMobileProj.add(`${mk}|${c.project_key}`);
-    if (c.investor_uid) hubUidProj.add(`${c.investor_uid}|${c.project_key}`);
+    if (c.investor_uid) { hubUidProj.add(`${c.investor_uid}|${c.project_key}`); uidToName.set(c.investor_uid, normName(c.name)); }
     const nk = `${normName(c.name)}|${c.project_key}`;
     const arr = hubNameProjAmt.get(nk) ?? []; arr.push(Math.round(c.total_paid)); hubNameProjAmt.set(nk, arr);
   }
 
   // expand app members into per-project holdings, deduped against the book
   const appRows: UnifiedCustomer[] = [];
+  const appIdentities: { inv: (typeof investors)[number]; appUser: AppUser }[] = [];
   let verified = 0, active = 0;
   for (const i of investors) {
     if (i.is_verified) verified++;
@@ -158,6 +160,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       language: i.language, is_verified: i.is_verified, is_active: i.is_active, created_at: i.created_at, last_login: i.last_login,
       invested: acct.total_investment, profit: acct.total_profit, withdrawn: acct.total_withdrawn, balance: acct.total_balance, txns: userTxns,
     };
+    appIdentities.push({ inv: i, appUser });
     const mk10 = last10(i.phone_number);
     const nn = normName(i.full_name);
     for (const [appProjId, t] of investorProjectTotals(userTxns)) {
@@ -205,6 +208,21 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
     p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: r.source, paid: r.total_paid, profit: rowProfit(r), balance: currentBalance(r) });
   }
+  // ── attach app identity to every person who has an account ──
+  // When ALL of an investor's app holdings folded into their book rows (linked
+  // or mobile-matched), no app row survives, so the person would lose the app
+  // actions (view/txns/edit/active). Attach by explicit link → mobile → name.
+  const personByMobile = new Map<string, PersonRow>();
+  for (const p of byPerson.values()) { const mk = last10(p.mobile); if (mk && !personByMobile.has(mk)) personByMobile.set(mk, p); }
+  for (const { inv, appUser } of appIdentities) {
+    let p = uidToName.has(inv.uid) ? byPerson.get(uidToName.get(inv.uid)!) : undefined;
+    if (!p) { const mk = last10(inv.phone_number); if (mk) p = personByMobile.get(mk); }
+    if (!p) p = byPerson.get(normName(inv.full_name));
+    if (p && !p.app) {
+      p.app = appUser; p.uid = inv.uid; p.fid = inv.fid; p.email = inv.email; p.is_verified = inv.is_verified; p.is_active = inv.is_active;
+    }
+  }
+
   const people = [...byPerson.values()].sort((a, b) => b.totalBalance - a.totalBalance);
 
   // top holders (already unique — reuse the person aggregate)

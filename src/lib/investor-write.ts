@@ -5,13 +5,46 @@ import { getAdmin } from "@/lib/admin-guard";
 
 /** Writing into the investor system from the project book, so a book payment
  *  also lands in the buyer's app / investor account (which the PWA reads).
- *  Balance rule mirrors admin-investments.ts exactly, so nothing drifts. */
+ *  Balance rule mirrors admin-investments.ts exactly, so nothing drifts.
+ *
+ *  The company is moving EVERYONE onto the app: a book customer with a mobile
+ *  and no app account gets one auto-created (login = mobile + the default
+ *  password below, verified + active); existing accounts are never touched —
+ *  they keep their own password. */
 
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
+
+/** Default password for auto-created member logins (announced to customers).
+ *  Must be ≥6 chars — both our login form and Supabase enforce a 6 minimum. */
+export const DEFAULT_MEMBER_PASSWORD = "258025";
+const AUTH_EMAIL_DOMAIN = "users.promisepd.app";
 
 const INVESTMENT_TYPES = ["investment", "deposit", "booking_money", "installment"];
 const normProj = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
 const last10 = (m: string | null | undefined) => { const d = (m || "").replace(/\D/g, ""); return d.length >= 10 ? d.slice(-10) : ""; };
+/** Canonical login mobile from a book mobile field — which may hold SEVERAL
+ *  numbers ("01704… 01628…"): take the FIRST BD-shaped token, else fall back
+ *  to the digits as an intl number. "" when nothing usable. */
+function canonMobile(raw: string | null | undefined): string {
+  for (const tok of String(raw || "").split(/[^\d+]+/).filter(Boolean)) {
+    const d = tok.replace(/\D/g, "");
+    if (d.length === 11 && d.startsWith("01")) return "880" + d.slice(1);
+    if (d.length === 13 && d.startsWith("8801")) return d;
+    if (d.length === 10 && d.startsWith("1")) return "880" + d;
+  }
+  const all = String(raw || "").replace(/\D/g, "");
+  return all.length >= 8 && all.length <= 15 ? all : "";
+}
+/** App project names fold onto the book name ("Investment (Special Deposit)" →
+ *  "Special Deposit", "… Group-A" → "… A") — same mapping the All-Customers
+ *  merge uses, so deposit-scheme payments mirror into the right app project. */
+function appToHubName(appName: string): string {
+  const g = appName.match(/investment\s*\(([^)]*)\)\s*group[\s-]*([ab])/i);
+  if (g) return `${g[1].trim()} ${g[2].toUpperCase()}`;
+  const i = appName.match(/investment\s*\(([^)]*)\)/i);
+  if (i) return i[1].trim();
+  return appName;
+}
 
 /** Next sequential id, paged so it never collides past 1000 rows (see the
  *  transaction-id collision note in admin-investments.ts). */
@@ -51,12 +84,27 @@ export async function recomputeInvestorBalance(admin: Admin, uid: string) {
   await admin.from("investor_accounts").update({ balance }).eq("uid", uid);
 }
 
-/** hub (book) project name → investment_projects.project_id (by normalised name). */
+/** hub (book) project name → investment_projects.project_id. Matches by the
+ *  normalised name with the app→hub fold, so "Special Deposit" finds
+ *  "Investment (Special Deposit)" and real-estate names match directly. */
 async function projectIdForName(admin: Admin, projectName: string): Promise<string | null> {
   const { data } = await admin.from("investment_projects").select("project_id, project_name");
   const want = normProj(projectName);
-  for (const p of (data ?? []) as any[]) if (normProj(p.project_name) === want) return p.project_id;
+  for (const p of (data ?? []) as any[]) {
+    if (normProj(appToHubName(p.project_name)) === want || normProj(p.project_name) === want) return p.project_id;
+  }
   return null;
+}
+
+/** Make sure the investor is a MEMBER of the project (the `investments` row) —
+ *  the PWA builds its "My Projects" cards from memberships, not transactions,
+ *  so a mirrored payment without one never shows as a project card. */
+export async function ensureMembership(admin: Admin, uid: string, project_id: string): Promise<void> {
+  try {
+    const { data: existing } = await admin.from("investments").select("id").eq("project_id", project_id).eq("uid", uid).maybeSingle();
+    if (existing) return;
+    await admin.from("investments").insert({ uid, project_id, total_paid: 0, discount: 0 } as any);
+  } catch { /* membership is cosmetic — never block the payment */ }
 }
 
 /** The investor account a book customer belongs to: the explicit link
@@ -67,6 +115,67 @@ export async function resolveInvestorUid(admin: Admin, hub: { investor_uid?: str
   if (!mk) return null;
   const { data } = await admin.from("investor_accounts").select("uid, phone_number");
   for (const a of (data ?? []) as any[]) if (last10(a.phone_number) === mk) return a.uid;
+  return null;
+}
+
+/** Record the explicit book↔app link on the hub row (so future payments skip
+ *  the mobile scan and the All-Customers merge de-dups by uid). */
+async function linkHubRow(admin: Admin, hubCustomerId: string | null | undefined, uid: string): Promise<void> {
+  if (!hubCustomerId) return;
+  try { await (admin.from as any)("hub_customers").update({ investor_uid: uid }).eq("id", hubCustomerId); } catch { /* best-effort */ }
+}
+
+/** Resolve the book customer's app account — CREATING one when they have none:
+ *  auth login (synthetic email = canonical mobile, password
+ *  DEFAULT_MEMBER_PASSWORD, pre-confirmed) → member profile → investor account
+ *  (verified + active, zero balance). Existing accounts are returned untouched.
+ *  Returns the uid, or null when no account can be made (no usable mobile). */
+export async function ensureInvestorForHub(
+  admin: Admin,
+  hub: { id?: string | null; name?: string | null; investor_uid?: string | null; mobile?: string | null },
+): Promise<string | null> {
+  const existing = await resolveInvestorUid(admin, hub);
+  if (existing) { if (!hub.investor_uid) await linkHubRow(admin, hub.id, existing); return existing; }
+
+  const name = (hub.name || "").trim();
+  const mobile = canonMobile(hub.mobile);
+  if (!name || mobile.length < 8) return null; // can't build a login without a usable number
+
+  // 1) auth login — or adopt the orphan member profile that already owns this mobile.
+  let profileId: string | null = null;
+  const { data: created, error: cErr } = await admin.auth.admin.createUser({
+    email: `${mobile}@${AUTH_EMAIL_DOMAIN}`,
+    password: DEFAULT_MEMBER_PASSWORD,
+    email_confirm: true,
+    user_metadata: { name, mobile },
+  });
+  if (cErr) {
+    if (!/already|registered|exists/i.test(cErr.message)) return null;
+    const { data: prof } = await admin.from("profiles").select("id").eq("mobile", mobile).maybeSingle();
+    profileId = (prof as any)?.id ?? null; // existing login keeps its own password
+    if (!profileId) return null;
+  } else {
+    profileId = created.user.id;
+    await admin.from("profiles").upsert({ id: profileId, name, mobile, role: "member" } as any, { onConflict: "id" });
+  }
+
+  // 2) investor account (uid race → retry; phone landed meanwhile → re-resolve).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const uid = await nextId(admin, "investor_accounts", "uid", "U", 100001);
+    const { error } = await admin.from("investor_accounts").insert({
+      uid,
+      profile_id: profileId,
+      full_name: name,
+      phone_number: "+" + mobile,
+      language: "bn",
+      is_verified: true,
+      is_active: true,
+      balance: { total_investment: 0, total_profit: 0, total_withdrawn: 0, total_balance: 0 },
+    } as any);
+    if (!error) { await linkHubRow(admin, hub.id, uid); return uid; }
+    if (!/duplicate|unique/i.test(error.message)) return null;
+    if (/phone/i.test(error.message)) return await resolveInvestorUid(admin, hub);
+  }
   return null;
 }
 
@@ -84,12 +193,12 @@ function typeFor(kind: string, preferred: string, types: { name: string; operato
 async function insertMirror(
   admin: Admin,
   uid: string,
-  m: { projectName: string; kind: string; type: string; amount: number; date: string | null; description?: string | null },
+  project_id: string | null,
+  m: { kind: string; type: string; amount: number; date: string | null; description?: string | null },
   types: { name: string; operator: string }[],
 ): Promise<string | null> {
   const amount = Math.round((Number(m.amount) || 0) * 100) / 100;
   if (!(amount > 0)) return null;
-  const project_id = await projectIdForName(admin, m.projectName);
   const type = typeFor(m.kind, m.type, types);
   const date = m.date && /^\d{4}-\d{2}-\d{2}/.test(m.date) ? `${m.date.slice(0, 10)}T00:00:00+06:00` : new Date().toISOString();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -101,32 +210,39 @@ async function insertMirror(
   return null;
 }
 
-/** Mirror a single freshly-added book payment into the investor account (if the
- *  customer resolves to one). Recomputes the investor balance. Never throws. */
+/** Mirror a single freshly-added book payment into the buyer's app account —
+ *  creating the account (mobile + default password) when they don't have one —
+ *  plus the project membership, so their PWA gains the project card too.
+ *  Recomputes the investor balance. Never throws. */
 export async function mirrorBookPayment(
   admin: Admin,
-  hub: { investor_uid?: string | null; mobile?: string | null; project_name: string },
+  hub: { id?: string | null; name?: string | null; investor_uid?: string | null; mobile?: string | null; project_name: string },
   payment: { kind: string; type: string; amount: number; date?: string | null; description?: string | null },
 ): Promise<void> {
   try {
-    const uid = await resolveInvestorUid(admin, hub);
+    const uid = await ensureInvestorForHub(admin, hub);
     if (!uid) return;
-    const { data: types } = await admin.from("investment_types").select("name, operator");
-    await insertMirror(admin, uid, { projectName: hub.project_name, kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null }, (types ?? []) as any[]);
+    const [{ data: types }, project_id] = await Promise.all([
+      admin.from("investment_types").select("name, operator"),
+      projectIdForName(admin, hub.project_name),
+    ]);
+    await insertMirror(admin, uid, project_id, { kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null }, (types ?? []) as any[]);
+    if (project_id) await ensureMembership(admin, uid, project_id);
     await recomputeInvestorBalance(admin, uid);
   } catch { /* mirroring must never break the book payment */ }
 }
 
 /** Backfill: mirror all of a book customer's existing payments into `uid` (used
  *  when they're first linked). Skips payments already mirrored (same project +
- *  amount + date) so re-linking doesn't duplicate. Returns how many were added. */
+ *  amount + date) so re-linking doesn't duplicate, and ensures the project
+ *  membership so the PWA shows the project card. Returns how many were added. */
 export async function backfillHubToInvestor(admin: Admin, hubCustomerId: string, uid: string, projectName: string): Promise<number> {
-  const [{ data: pays }, { data: types }, { data: existing }] = await Promise.all([
+  const [{ data: pays }, { data: types }, { data: existing }, project_id] = await Promise.all([
     admin.from("hub_customer_payments").select("date, amount, kind, description").eq("customer_id", hubCustomerId).order("seq", { ascending: true }),
     admin.from("investment_types").select("name, operator"),
     admin.from("investor_transactions").select("amount, date, project_id").eq("uid", uid),
+    projectIdForName(admin, projectName),
   ]);
-  const project_id = await projectIdForName(admin, projectName);
   const seen = new Set(((existing ?? []) as any[]).map((t) => `${t.project_id}|${Math.round(Number(t.amount) || 0)}|${String(t.date).slice(0, 10)}`));
   let added = 0;
   for (const p of (pays ?? []) as any[]) {
@@ -135,9 +251,10 @@ export async function backfillHubToInvestor(admin: Admin, hubCustomerId: string,
     if (seen.has(`${project_id}|${amt}|${day}`)) continue; // already there
     const sep = String(p.description ?? "").indexOf(" — ");
     const type = sep >= 0 ? String(p.description).slice(0, sep).trim() : "";
-    const id = await insertMirror(admin, uid, { projectName, kind: p.kind, type, amount: p.amount, date: p.date, description: p.description }, (types ?? []) as any[]);
+    const id = await insertMirror(admin, uid, project_id, { kind: p.kind, type, amount: p.amount, date: p.date, description: p.description }, (types ?? []) as any[]);
     if (id) { added++; seen.add(`${project_id}|${amt}|${day}`); }
   }
+  if (project_id) await ensureMembership(admin, uid, project_id);
   if (added) await recomputeInvestorBalance(admin, uid);
   return added;
 }
