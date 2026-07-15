@@ -1,9 +1,9 @@
 "use client";
 
-/** All Customers — a UNIQUE-PERSON directory for Projectify (one row per person,
- *  like Investments → App Users). Each row aggregates that person's holdings
- *  across every project (book + app, deduped); the per-project detail lives on
- *  the individual project pages. Click a row to see their project breakdown. */
+/** All Customers — ONE ROW PER APP ACCOUNT (exactly like Investments → App
+ *  Users; same count, two same-named people stay two rows). Each row carries
+ *  that account's book holdings + app-only money; per-project detail lives on
+ *  the individual project pages. Click a row to see the project breakdown. */
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -123,7 +123,7 @@ export default function AllCustomersExplorer({
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
       doc.text("Promise City — All Customers", 40, 32);
       doc.setFontSize(9); doc.setFont("helvetica", "normal");
-      doc.text(`${total} unique people  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
+      doc.text(`${total} customers  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
       doc.setFillColor(238, 241, 246); doc.rect(0, 56, W, 20, "F");
       doc.setTextColor(60, 60, 60); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
       for (const c of cols) doc.text(c.t, c.r ? c.x + c.w - 4 : c.x, 70, { align: c.r ? "right" : "left" });
@@ -157,8 +157,8 @@ export default function AllCustomersExplorer({
     <div className="space-y-5">
       {/* primary stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Total collected" value={compact(totals.collected)} sub={`${totals.payers.toLocaleString("en-IN")} paid`} icon={Wallet} tone="success" />
-        <StatCard label="Unique people" value={totals.uniqueCount.toLocaleString("en-IN")} sub="one row each" icon={UserRound} tone="info" />
+        <StatCard label="Total collected" value={compact(totals.collected)} sub={`${totals.payers.toLocaleString("en-IN")} paying · ${(totals.uniqueCount - totals.payers).toLocaleString("en-IN")} non-paying`} icon={Wallet} tone="success" />
+        <StatCard label="Customers" value={totals.uniqueCount.toLocaleString("en-IN")} sub="one row per account" icon={UserRound} tone="info" />
         <StatCard label="App accounts" value={totals.appAccounts.toLocaleString("en-IN")} sub={`${health.verified} verified`} icon={Smartphone} tone="warning" />
         <StatCard label="Projects" value={hubProjects.length.toLocaleString("en-IN")} sub="real estate + deposit" icon={Building2} tone="neutral" />
       </div>
@@ -209,8 +209,8 @@ export default function AllCustomersExplorer({
         </select>
         <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           <option value="all">Any status</option>
-          <option value="paying">Paying</option>
-          <option value="nonpaying">Non-paying</option>
+          <option value="paying">Paying ({totals.payers})</option>
+          <option value="nonpaying">Non-paying ({totals.uniqueCount - totals.payers})</option>
           <option value="verified">Verified ({health.verified})</option>
           <option value="unverified">Unverified ({health.unverified})</option>
           <option value="active">Active app ({health.active})</option>

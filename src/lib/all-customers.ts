@@ -4,21 +4,11 @@ import { hubAllCustomers, hubProjectSummaries, type HubCustomer } from "@/lib/hu
 import { listInvestors, listTypes, listProjects, listTransactions, investorTotals, investorProjectTotals } from "@/lib/investments";
 import type { AppUser, UserTxn, TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
 
-/** An internal per-project holding — a book customer OR a live app investment. */
-type UnifiedCustomer = HubCustomer & {
-  source: "hub" | "app";
-  uid?: string;
-  email?: string | null;
-  is_verified?: boolean;
-  is_active?: boolean;
-  invested?: number;
-  profit?: number;
-  app?: AppUser;
-};
-
-/** One project a person holds in (shown in their detail popup). */
+/** One project a customer holds in (shown in their detail popup).
+ *  source "hub" → a real book row (id = hub_customer id, drives the actions);
+ *  source "app" → app-only money in a project with no book row. */
 export type PersonHolding = {
-  id: string; // the book (hub_customer) id for a "hub" holding — drives the row actions
+  id: string;
   project_key: string;
   project_name: string;
   project_type: string;
@@ -28,8 +18,12 @@ export type PersonHolding = {
   balance: number;
 };
 
-/** One UNIQUE person (by name), aggregating every project they hold across the
- *  book + the app — this is what the All-Customers list shows, one row each. */
+/** ONE ROW PER APP ACCOUNT (exactly like Investments → App Users — same count,
+ *  same identities; two people with the same name stay two rows). Every book
+ *  customer now has an account (the 2026-07 migration), so an account row
+ *  carries its linked book holdings + any app-only project money. The only
+ *  name-grouped rows left are the handful of unlinked book customers still
+ *  awaiting a manual "Link to app account". */
 export type PersonRow = {
   id: string;
   name: string;
@@ -64,10 +58,6 @@ export type AllCustomersData = {
   investorProjects: ProjectOpt[];
 };
 
-function last10(m: string | null | undefined): string {
-  const d = (m || "").replace(/\D/g, "");
-  return d.length >= 10 ? d.slice(-10) : "";
-}
 const normName = (s: string | null | undefined) => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
 const normProj = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
 
@@ -84,17 +74,9 @@ function appToHubName(appName: string): string {
   return appName;
 }
 
-/** A holding's current worth: deposit → paid+dividend−withdrawn; real-estate → paid; app → balance. */
-function currentBalance(c: UnifiedCustomer): number {
-  if (c.source === "app") return c.balance;
-  if (c.project_type === "deposit") return c.total_paid + c.dividend - c.withdrawn;
-  return c.total_paid;
-}
-function rowProfit(c: UnifiedCustomer): number {
-  if (c.source === "app") return c.profit ?? 0;
-  if (c.project_type === "deposit") return c.dividend;
-  return 0;
-}
+/** A book holding's worth: deposit → paid+dividend−withdrawn; real-estate → paid. */
+const hubBalance = (c: HubCustomer) => (c.project_type === "deposit" ? c.total_paid + c.dividend - c.withdrawn : c.total_paid);
+const hubProfit = (c: HubCustomer) => (c.project_type === "deposit" ? c.dividend : 0);
 
 export async function loadAllCustomers(): Promise<AllCustomersData> {
   const admin = getAdmin();
@@ -133,22 +115,18 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     appProjToHub.set(p.project_id, hub ?? { key: "app-" + normProj(p.project_name), name: p.project_name, type: "investment" });
   }
 
-  // book dedup index (avoid double-counting the same investment across systems)
-  const hubMobileProj = new Set<string>();
-  const hubUidProj = new Set<string>(); // explicit book↔app link (investor_uid + project)
-  const hubNameProjAmt = new Map<string, number[]>();
-  const uidToName = new Map<string, string>(); // explicit link → the person it belongs to
+  // book rows by their linked account; the rest stay book-only rows
+  const accountUids = new Set(investors.map((i) => i.uid));
+  const rowsByUid = new Map<string, HubCustomer[]>();
+  const unlinked: HubCustomer[] = [];
   for (const c of customers) {
-    const mk = last10(c.mobile);
-    if (mk) hubMobileProj.add(`${mk}|${c.project_key}`);
-    if (c.investor_uid) { hubUidProj.add(`${c.investor_uid}|${c.project_key}`); uidToName.set(c.investor_uid, normName(c.name)); }
-    const nk = `${normName(c.name)}|${c.project_key}`;
-    const arr = hubNameProjAmt.get(nk) ?? []; arr.push(Math.round(c.total_paid)); hubNameProjAmt.set(nk, arr);
+    if (c.investor_uid && accountUids.has(c.investor_uid)) {
+      const l = rowsByUid.get(c.investor_uid) ?? []; l.push(c); rowsByUid.set(c.investor_uid, l);
+    } else unlinked.push(c);
   }
 
-  // expand app members into per-project holdings, deduped against the book
-  const appRows: UnifiedCustomer[] = [];
-  const appIdentities: { inv: (typeof investors)[number]; appUser: AppUser }[] = [];
+  // ── one row per app account ──
+  const people: PersonRow[] = [];
   let verified = 0, active = 0;
   for (const i of investors) {
     if (i.is_verified) verified++;
@@ -160,77 +138,67 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       language: i.language, is_verified: i.is_verified, is_active: i.is_active, created_at: i.created_at, last_login: i.last_login,
       invested: acct.total_investment, profit: acct.total_profit, withdrawn: acct.total_withdrawn, balance: acct.total_balance, txns: userTxns,
     };
-    appIdentities.push({ inv: i, appUser });
-    const mk10 = last10(i.phone_number);
-    const nn = normName(i.full_name);
+
+    const bookRows = rowsByUid.get(i.uid) ?? [];
+    const covered = new Set(bookRows.map((r) => r.project_key));
+    const holdings: PersonHolding[] = bookRows.map((r) => ({
+      id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type,
+      source: "hub" as const, paid: r.total_paid, profit: hubProfit(r), balance: hubBalance(r),
+    }));
+    // app-only money (projects with no book row) — the book ledger wins where both exist
     for (const [appProjId, t] of investorProjectTotals(userTxns)) {
       if (t.invested <= 0 && t.profit <= 0 && t.withdrawn <= 0) continue;
       const hp = appProjToHub.get(appProjId);
-      if (!hp) continue;
-      const byMobile = mk10 !== "" && hubMobileProj.has(`${mk10}|${hp.key}`);
-      const byUid = hubUidProj.has(`${i.uid}|${hp.key}`);
-      const byNameAmt = (hubNameProjAmt.get(`${nn}|${hp.key}`) ?? []).some((a) => a === Math.round(t.invested));
-      if (byMobile || byUid || byNameAmt) continue; // folded into the matching book row
-      appRows.push({
-        id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type,
-        file_no: i.fid, name: i.full_name || "Unnamed", mobile: i.phone_number || null,
-        district: null, nid: null, reference: null, joining_date: i.created_at ? i.created_at.slice(0, 10) : null,
-        total_price: 0, total_paid: t.invested, total_remaining: 0, dividend: t.profit, withdrawn: t.withdrawn, balance: t.balance,
-        payments_count: userTxns.filter((x) => x.project_id === appProjId).length, reference_officer_id: null, investor_uid: null, bio: {},
-        source: "app", uid: i.uid, email: i.email, is_verified: i.is_verified, is_active: i.is_active, invested: t.invested, profit: t.profit, app: appUser,
-      });
+      if (!hp || covered.has(hp.key)) continue;
+      holdings.push({ id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type, source: "app", paid: t.invested, profit: t.profit, balance: t.balance });
     }
+
+    // display mobile: the account's number, unless it's a book:<uid> placeholder
+    const phone = i.phone_number && !/^book:/i.test(i.phone_number) ? i.phone_number : bookRows.find((r) => r.mobile)?.mobile ?? null;
+    const joinedBook = bookRows.map((r) => r.joining_date).filter(Boolean).sort()[0] ?? null;
+    const keys: string[] = [], names: string[] = [];
+    for (const h of holdings) if (!keys.includes(h.project_key)) { keys.push(h.project_key); names.push(h.project_name); }
+
+    people.push({
+      id: i.uid,
+      name: i.full_name || bookRows[0]?.name || "Unnamed",
+      mobile: phone,
+      uid: i.uid, fid: i.fid, email: i.email, is_verified: i.is_verified, is_active: i.is_active, app: appUser,
+      joined: joinedBook ?? (i.created_at ? i.created_at.slice(0, 10) : null),
+      totalPaid: holdings.reduce((s, h) => s + h.paid, 0),
+      totalProfit: holdings.reduce((s, h) => s + h.profit, 0),
+      totalBalance: holdings.reduce((s, h) => s + h.balance, 0),
+      projectKeys: keys, projectNames: names, holdings,
+    });
   }
 
-  const rows: UnifiedCustomer[] = [...customers.map((c) => ({ ...c, source: "hub" as const })), ...appRows];
-
-  // ── aggregate every holding into ONE row per unique person (by name) ──
-  const byPerson = new Map<string, PersonRow>();
-  for (const r of rows) {
+  // ── leftover unlinked book customers (no account yet — e.g. the ambiguous
+  // same-name cases awaiting a manual Link) — grouped by name like before ──
+  const byName = new Map<string, PersonRow>();
+  for (const r of unlinked) {
     const nn = normName(r.name);
     if (!nn) continue;
-    let p = byPerson.get(nn);
+    let p = byName.get(nn);
     if (!p) {
-      p = {
-        id: `person:${nn}`, name: r.name || "—", mobile: null, joined: null,
-        totalPaid: 0, totalProfit: 0, totalBalance: 0, projectKeys: [], projectNames: [], holdings: [],
-      };
-      byPerson.set(nn, p);
+      p = { id: `book:${nn}`, name: r.name || "—", mobile: null, joined: null, totalPaid: 0, totalProfit: 0, totalBalance: 0, projectKeys: [], projectNames: [], holdings: [] };
+      byName.set(nn, p);
     }
     if (!p.mobile && r.mobile) p.mobile = r.mobile;
-    if (r.source === "app" && !p.app) {
-      p.app = r.app; p.uid = r.uid; p.fid = r.file_no; p.email = r.email; p.is_verified = r.is_verified; p.is_active = r.is_active;
-    }
     if (r.joining_date && (!p.joined || r.joining_date < p.joined)) p.joined = r.joining_date;
     p.totalPaid += r.total_paid;
-    p.totalProfit += rowProfit(r);
-    p.totalBalance += currentBalance(r);
+    p.totalProfit += hubProfit(r);
+    p.totalBalance += hubBalance(r);
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
-    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: r.source, paid: r.total_paid, profit: rowProfit(r), balance: currentBalance(r) });
+    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", paid: r.total_paid, profit: hubProfit(r), balance: hubBalance(r) });
   }
-  // ── attach app identity to every person who has an account ──
-  // When ALL of an investor's app holdings folded into their book rows (linked
-  // or mobile-matched), no app row survives, so the person would lose the app
-  // actions (view/txns/edit/active). Attach by explicit link → mobile → name.
-  const personByMobile = new Map<string, PersonRow>();
-  for (const p of byPerson.values()) { const mk = last10(p.mobile); if (mk && !personByMobile.has(mk)) personByMobile.set(mk, p); }
-  for (const { inv, appUser } of appIdentities) {
-    let p = uidToName.has(inv.uid) ? byPerson.get(uidToName.get(inv.uid)!) : undefined;
-    if (!p) { const mk = last10(inv.phone_number); if (mk) p = personByMobile.get(mk); }
-    if (!p) p = byPerson.get(normName(inv.full_name));
-    if (p && !p.app) {
-      p.app = appUser; p.uid = inv.uid; p.fid = inv.fid; p.email = inv.email; p.is_verified = inv.is_verified; p.is_active = inv.is_active;
-    }
-  }
+  people.push(...byName.values());
+  people.sort((a, b) => b.totalBalance - a.totalBalance);
 
-  const people = [...byPerson.values()].sort((a, b) => b.totalBalance - a.totalBalance);
-
-  // top holders (already unique — reuse the person aggregate)
   const top = people.slice(0, 8).map((p) => ({ name: p.name, balance: p.totalBalance }));
 
   const projOpts = summaries.map((p) => ({ key: p.key, name: p.name, type: p.type, sort: p.sort }));
   const seen = new Set(projOpts.map((p) => p.key));
-  for (const r of appRows) if (!seen.has(r.project_key)) { seen.add(r.project_key); projOpts.push({ key: r.project_key, name: r.project_name, type: r.project_type, sort: 9000 }); }
+  for (const p of people) for (const h of p.holdings) if (!seen.has(h.project_key)) { seen.add(h.project_key); projOpts.push({ key: h.project_key, name: h.project_name, type: h.project_type, sort: 9000 }); }
 
   const denom = investors.length || 1;
   return {
