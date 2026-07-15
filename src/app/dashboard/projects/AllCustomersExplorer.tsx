@@ -34,11 +34,12 @@ const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
 type StatusFilter = "all" | "verified" | "unverified" | "active" | "inactive" | "paying" | "nonpaying";
 
-/** Per-row money semantics: app → invested/profit/balance; deposit → paid/dividend/held; real-estate → paid/—/due. */
+/** Per-row money semantics: app → invested/profit/balance; deposit → paid/dividend/held; real-estate → paid/—/due.
+ *  Deposit "held" = deposits + dividends − withdrawals (money still in the company). */
 function money(c: UnifiedCustomer) {
   const paid = c.total_paid;
   if (c.source === "app") return { paid, profit: c.profit ?? 0, hasProfit: true, balance: c.balance, balLabel: "balance" as const };
-  if (c.project_type === "deposit") return { paid, profit: c.dividend, hasProfit: true, balance: c.balance, balLabel: "held" as const };
+  if (c.project_type === "deposit") return { paid, profit: c.dividend, hasProfit: true, balance: c.total_paid + c.dividend - c.withdrawn, balLabel: "held" as const };
   return { paid, profit: 0, hasProfit: false, balance: c.total_remaining, balLabel: "due" as const };
 }
 const rowPaying = (c: UnifiedCustomer) =>

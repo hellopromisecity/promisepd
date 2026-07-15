@@ -7,7 +7,7 @@ import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 import {
   getHubCustomerDetail, listReferenceOfficers, listTxnTypes, createHubCustomer, updateHubCustomer,
-  deleteHubCustomer, addHubPayment, deleteHubPayment, type RefOfficer, type CustomerInput, type TxnType,
+  deleteHubCustomer, addHubPayment, updateHubPayment, deleteHubPayment, type RefOfficer, type CustomerInput, type TxnType,
 } from "@/app/actions/hub";
 import type { HubCustomer, HubPayment } from "@/lib/hub";
 
@@ -288,6 +288,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [receipt, setReceipt] = useState("");
   const [desc, setDesc] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -301,26 +302,57 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   const reload = () => getHubCustomerDetail(customer.id).then((d) => setPayments(d?.payments ?? []));
   useEffect(() => { let a = true; getHubCustomerDetail(customer.id).then((d) => { if (a) setPayments(d?.payments ?? []); }); listTxnTypes().then((t) => { if (a && t.length) setTypes(t); }); return () => { a = false; }; }, [customer.id]);
 
-  function add() {
+  function resetForm() { setAmount(""); setReceipt(""); setDesc(""); setEditingId(null); setErr(null); }
+
+  function submit() {
     setErr(null);
     if (!(parseFloat(amount) > 0)) { setErr("Amount must be greater than 0."); return; }
     start(async () => {
-      const r = await addHubPayment(customer.id, project.key, { date, amount: parseFloat(amount), type, description: desc, receipt_no: receipt });
-      if (r.ok) { toast(r.message || "Added.", "success"); setAmount(""); setReceipt(""); setDesc(""); await reload(); } else setErr(r.error);
+      const payload = { date, amount: parseFloat(amount), type, description: desc, receipt_no: receipt };
+      const r = editingId
+        ? await updateHubPayment(editingId, project.key, payload)
+        : await addHubPayment(customer.id, project.key, payload);
+      if (r.ok) { toast(r.message || "Saved.", "success"); resetForm(); await reload(); } else setErr(r.error);
     });
   }
+
+  // Load a transaction back into the form for editing. Recover the original
+  // type + note from the stored "type — note" description; fall back to a
+  // dropdown option that preserves the row's kind (deposit/withdrawal/dividend).
+  function startEdit(p: HubPayment) {
+    const d = p.description ?? "";
+    const sep = d.indexOf(" — ");
+    const rawType = (sep >= 0 ? d.slice(0, sep) : d).trim();
+    const note = sep >= 0 ? d.slice(sep + 3) : "";
+    const known = txnOptions.find((o) => o.name.toLowerCase() === rawType.toLowerCase());
+    const pick = known ? known.name
+      : p.kind === "withdrawal" ? (txnOptions.find((o) => o.operator === "-")?.name ?? (rawType || "withdrawal"))
+      : p.kind === "dividend" ? (txnOptions.find((o) => /dividend|লভ্যাংশ|profit/i.test(o.name))?.name ?? "dividend")
+      : (txnOptions.find((o) => o.operator === "+" && !/dividend|লভ্যাংশ|profit/i.test(o.name))?.name ?? txnOptions[0]?.name ?? "deposit");
+    setType(pick);
+    setAmount(String(p.amount));
+    setDate(p.date ?? new Date().toISOString().slice(0, 10));
+    setReceipt(p.receipt_no ?? "");
+    setDesc(note);
+    setEditingId(p.id);
+    setErr(null);
+  }
+
   async function del(p: HubPayment) {
     const ok = await confirmDialog({ title: "Remove transaction", message: `Delete ${fmt(p.amount)} on ${fmtDate(p.date)}?`, confirmText: "Delete", danger: true });
     if (!ok) return;
     const r = await deleteHubPayment(p.id, project.key);
-    if (r.ok) { toast("Removed.", "success"); await reload(); } else toast(r.error, "error");
+    if (r.ok) { toast("Removed.", "success"); if (editingId === p.id) resetForm(); await reload(); } else toast(r.error, "error");
   }
 
   return (
     <Modal title={`Transactions — ${customer.name}`} subtitle={`${project.name} · paid ${fmt(customer.total_paid)}`} onClose={onClose} wide>
       <div className="grid gap-5 sm:grid-cols-[1fr_1.2fr]">
         <div>
-          <h4 className="mb-2 text-sm font-bold text-fg">Add transaction</h4>
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-bold text-fg">{editingId ? "Edit transaction" : "Add transaction"}</h4>
+            {editingId && <button onClick={resetForm} className="text-[11px] font-semibold text-fg-muted hover:text-brand-blue">Cancel edit</button>}
+          </div>
           {err && <div className="mb-2 rounded-lg border border-brand-red/30 bg-brand-red-tint px-3 py-2 text-xs text-brand-red-dark">{err}</div>}
           <div className="space-y-2.5">
             <div><label className={labelCls}>Type</label>
@@ -334,8 +366,8 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
               <div><label className={labelCls}>Receipt #</label><input className={inputCls} value={receipt} onChange={(e) => setReceipt(e.target.value)} /></div>
             </div>
             <div><label className={labelCls}>Note</label><input className={inputCls} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional" /></div>
-            <button onClick={add} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
-              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add transaction
+            <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editingId ? "Save changes" : "Add transaction"}
             </button>
           </div>
         </div>
@@ -348,15 +380,16 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
           ) : (
             <div className="max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
               {payments.map((p) => (
-                <div key={p.id} className="group flex items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-sm">
+                <div key={p.id} className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${editingId === p.id ? "border-brand-blue/50 bg-brand-blue-tint" : "border-border bg-bg-soft"}`}>
                   <div className="min-w-0">
                     <span className="font-medium text-fg">{fmtDate(p.date)}</span>
                     {p.description && <span className="ml-2 text-xs text-fg-muted">{p.description}</span>}
                     {p.receipt_no && <span className="ml-2 text-[11px] text-fg-faint">#{p.receipt_no}</span>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <span className={`font-bold tabular-nums ${p.kind === "withdrawal" ? "text-brand-red" : p.kind === "dividend" ? "text-emerald-600" : "text-brand-blue"}`}>{p.kind === "withdrawal" ? "−" : "+"}{fmt(p.amount)}</span>
-                    <button onClick={() => del(p)} className="rounded p-1 text-fg-faint opacity-0 transition-opacity hover:text-brand-red group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => startEdit(p)} title="Edit" className="rounded p-1 text-fg-faint opacity-0 transition-opacity hover:text-brand-blue group-hover:opacity-100"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => del(p)} title="Delete" className="rounded p-1 text-fg-faint opacity-0 transition-opacity hover:text-brand-red group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
               ))}
@@ -382,22 +415,24 @@ export function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCu
   return (
     <Modal title={customer.name || "—"} subtitle={`${customer.project_name} · File ${customer.file_no ?? "—"}${customer.mobile ? ` · ${customer.mobile}` : ""}${customer.reference ? ` · ref ${customer.reference}` : ""}`} onClose={onClose} wide>
       <div className={`grid grid-cols-2 gap-2 ${isDeposit ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
-        <Stat label="Paid" value={fmt(customer.total_paid)} tone="blue" />
+        <Stat label="Total paid" value={fmt(customer.total_paid)} tone="blue" />
         {isDeposit ? (
           <>
-            <Stat label="Withdrawn" value={fmt(customer.withdrawn)} />
-            {/* Remaining = money currently in the company (deposits − withdrawals),
-                regardless of whether the final withdrawal has been taken. */}
-            <Stat label="Remaining" value={fmt(Math.max(0, customer.total_paid - customer.withdrawn))} tone="green" />
-            <Stat label="Dividend" value={fmt(customer.dividend)} />
+            <Stat label="Total withdrawn" value={fmt(customer.withdrawn)} />
+            <Stat label="Total dividend" value={fmt(customer.dividend)} />
+            {/* Remaining balance = everything still held for the customer:
+                deposits + dividends − withdrawals (what's actually left in the
+                company after every withdrawal). */}
+            <Stat label="Remaining balance" value={fmt(customer.total_paid + customer.dividend - customer.withdrawn)} tone="green" />
+            <Stat label="Transactions" value={String(customer.payments_count)} />
           </>
         ) : (
           <>
             <Stat label="Price" value={fmt(customer.total_price)} />
             <Stat label="Remaining" value={fmt(customer.total_remaining)} />
+            <Stat label="Payments" value={String(customer.payments_count)} />
           </>
         )}
-        <Stat label="Payments" value={String(customer.payments_count)} />
       </div>
       <div className="mt-4 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
         {bioRows.filter(([, v]) => v).map(([k, v]) => (

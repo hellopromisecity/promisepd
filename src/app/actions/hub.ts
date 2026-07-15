@@ -237,3 +237,26 @@ export async function deleteHubPayment(paymentId: string, projectKey: string): P
     return { ok: true, message: "Transaction removed." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
+
+/** Edit an existing transaction in place (amount / date / type / receipt / note),
+ *  then re-roll the customer totals. No SMS is sent on an edit. */
+export async function updateHubPayment(paymentId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string }): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!(Number(input.amount) > 0)) return { ok: false, error: "Amount must be greater than 0." };
+    const { data: pd } = await HP(admin).select("customer_id").eq("id", paymentId).maybeSingle();
+    const p = rec(pd);
+    if (!p) return { ok: false, error: "Transaction not found." };
+    const type = input.type || "deposit";
+    const { data: td } = await admin.from("investment_types").select("operator").eq("name", type).maybeSingle();
+    const operator = (rec(td)?.operator as string) ?? "+";
+    const kind = operator === "-" ? "withdrawal" : /profit|dividend|লভ্যাংশ/i.test(type) ? "dividend" : "deposit";
+    const desc = input.description ? `${type} — ${input.description}` : type;
+    const { error } = await HP(admin).update({ date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null }).eq("id", paymentId);
+    if (error) return { ok: false, error: error.message };
+    await recomputeCustomer(admin, p.customer_id as string);
+    revalidatePath(`/dashboard/projects/${projectKey}`);
+    return { ok: true, message: "Transaction updated." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
