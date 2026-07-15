@@ -4,7 +4,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PageHeader, EmptyState } from "@/components/admin/ui";
 import {
-  listInvestors, listTypes, listProjects, listTransactions, bal,
+  listInvestors, listTypes, listProjects, listTransactions, investorTotals,
   type InvestorAccount, type InvestmentType, type InvestmentProject, type InvestorTransaction,
 } from "@/lib/investments";
 import AppUsersExplorer from "./AppUsersExplorer";
@@ -52,7 +52,9 @@ export default async function InvestorUsersPage() {
   }
 
   const users: AppUser[] = investors.map((i) => {
-    const b = bal(i.balance);
+    // Totals from the member's OWN transactions (matches the app), not the
+    // stale balance JSON which understates what was actually invested.
+    const b = investorTotals(byUid.get(i.uid) ?? []);
     return {
       uid: i.uid,
       fid: i.fid,

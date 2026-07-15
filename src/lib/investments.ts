@@ -305,6 +305,26 @@ export type InvestorPortal = {
 
 const PROFIT_TYPES = new Set(["profit", "profit_share"]);
 
+/** An app user's account totals, summed from their OWN transactions the same
+ *  way the PWA shows per-project figures — NOT the stored `balance` JSON, which
+ *  is a stale denormalised cache that omits whole payment types and badly
+ *  understates what was actually invested. Invested = the member's "+" non-profit
+ *  credits, Profit = profit credits, Withdrawn = "−" debits — all project-tagged,
+ *  matching buildPortal so the dashboard reconciles with the app. */
+export function investorTotals(
+  txns: { type: string; operator: string; amount: number; project_id: string | null }[],
+): InvestorBalance {
+  let invested = 0, profit = 0, withdrawn = 0;
+  for (const t of txns) {
+    if (!t.project_id) continue;
+    const amt = Number(t.amount) || 0;
+    if (PROFIT_TYPES.has(t.type)) profit += amt;
+    else if (t.operator === "+") invested += amt;
+    else if (t.operator === "-") withdrawn += amt;
+  }
+  return { total_investment: invested, total_profit: profit, total_withdrawn: withdrawn, total_balance: invested + profit - withdrawn };
+}
+
 /** Everything a logged-in investor may see about THEMSELVES, fetched by
  *  their profile id (the auth user id).  Returns null if this member isn't
  *  a ported investor.  Service-role read, but scoped strictly to the one

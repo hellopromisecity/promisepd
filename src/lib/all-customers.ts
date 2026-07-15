@@ -1,7 +1,7 @@
 import "server-only";
 import { getAdmin } from "@/lib/admin-guard";
 import { hubAllCustomers, hubProjectSummaries, type HubCustomer } from "@/lib/hub";
-import { listInvestors, listTypes, listProjects, listTransactions, bal } from "@/lib/investments";
+import { listInvestors, listTypes, listProjects, listTransactions, investorTotals } from "@/lib/investments";
 import type { AppUser, UserTxn, TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
 
 /** Synthetic "project" the app/investment accounts live under in the merged view. */
@@ -128,7 +128,9 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   }
 
   const appUsers: AppUser[] = investors.map((i) => {
-    const b = bal(i.balance);
+    // Totals from the member's OWN transactions (matches the app), not the
+    // stale balance JSON which understates what was actually invested.
+    const b = investorTotals(byUid.get(i.uid) ?? []);
     return {
       uid: i.uid, fid: i.fid, full_name: i.full_name, phone_number: i.phone_number,
       email: i.email, language: i.language, is_verified: i.is_verified, is_active: i.is_active,
