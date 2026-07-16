@@ -34,7 +34,7 @@ export default function DepositProfitPanel({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const set = cfg.enabled && cfg.per_lakh > 0;
-  const cycleYears = Math.max(1, Math.round(cfg.cycle_days / 360));
+  const cycleYears = Math.max(1, Math.round(cfg.cycle_days / 365));
   const cycleLabel = cycleYears === 1 ? "yearly" : `${cycleYears}-year`;
 
   return (
@@ -90,7 +90,7 @@ function Tile({ tone, icon: Icon, value, label, sub }: { tone: "emerald" | "blue
 
 function RateForm({ projectKey, cfg, onDone, onCancel }: { projectKey: string; cfg: PanelConfig; onDone: () => void; onCancel: () => void }) {
   const [perLakh, setPerLakh] = useState(cfg.per_lakh ? String(cfg.per_lakh) : "");
-  const [cycleDays, setCycleDays] = useState(String(cfg.cycle_days || 720));
+  const [cycleDays, setCycleDays] = useState(String(cfg.cycle_days || 365));
   const [cycleStart, setCycleStart] = useState(cfg.cycle_start ?? "");
   const [payout, setPayout] = useState(cfg.payout_date ?? "");
   const [nextPayout, setNextPayout] = useState(cfg.next_payout ?? "");
@@ -98,7 +98,7 @@ function RateForm({ projectKey, cfg, onDone, onCancel }: { projectKey: string; c
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const days = Math.max(1, Math.round(Number(cycleDays) || 720));
+  const days = Math.max(1, Math.round(Number(cycleDays) || 365));
   const daily = (Number(perLakh) || 0) / days;
 
   function save() {
@@ -122,8 +122,8 @@ function RateForm({ projectKey, cfg, onDone, onCancel }: { projectKey: string; c
         </div>
         <div>
           <label className={labelCls}>Cycle length (days)</label>
-          <input type="number" className={inputCls} value={cycleDays} onChange={(e) => setCycleDays(e.target.value)} placeholder="360" />
-          <p className="mt-1 text-[11px] text-fg-muted">360 = 1 year · 720 = 2 years (30-day months)</p>
+          <input type="number" className={inputCls} value={cycleDays} onChange={(e) => setCycleDays(e.target.value)} placeholder="365" />
+          <p className="mt-1 text-[11px] text-fg-muted">365 = 1 year · 730 = 2 years</p>
         </div>
         <div>
           <label className={labelCls}>Cycle start</label>

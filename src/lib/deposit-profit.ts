@@ -10,14 +10,18 @@ import { getAdmin } from "@/lib/admin-guard";
  *  it was held), across the whole cycle.
  *
  *  Rate is one editable number per scheme:
- *    Special Deposit  : ৳25,000 / lakh / YEAR  (= ৳69.444 / lakh / day, 360-day year)
- *  Change `per_lakh` (or the dates) and every member's profit recomputes. */
+ *    Special Deposit  : ৳13,000 / lakh / YEAR  (= ৳35.616 / lakh / day, 365-day year)
+ *  Change `per_lakh` (or the dates) and every member's profit recomputes.
+ *
+ *  Day counting: the start date earns, the payout date pays out (exclusive) —
+ *  so with a 15 Jul → 15 Jul cycle (365 days) a full-cycle ৳1,00,000 gets
+ *  exactly `per_lakh`, to the taka. Set the dates a year apart, not 364 days. */
 
 export type ProfitConfig = {
   project_key: string;
   enabled: boolean;
   per_lakh: number;            // dividend per 1,00,000 over one full cycle
-  cycle_days: number;          // days in a full cycle → the rate divisor (360 = 1yr, 720 = 2yr)
+  cycle_days: number;          // days in a full cycle → the rate divisor (365 = 1yr, 730 = 2yr)
   cycle_start: string | null;  // cycle start; balance already in here earns from this date
   payout_date: string | null;  // payout / "as of" date — profit accrues to here
   next_payout: string | null;  // projection target (next cycle's payout)
@@ -28,7 +32,7 @@ const DAY = 86400000;
 const parseDay = (iso: string | null) => (iso ? Date.parse(`${iso}T00:00:00Z`) : NaN);
 const days = (from: number, to: number) => Math.max(0, Math.round((to - from) / DAY));
 
-/** Per-lakh daily rate implied by the cycle, e.g. 25000 / 360 = 69.444. */
+/** Per-lakh daily rate implied by the cycle, e.g. 13000 / 365 = 35.616. */
 export function dailyPerLakh(cfg: Pick<ProfitConfig, "per_lakh" | "cycle_days">): number {
   return cfg.cycle_days > 0 ? cfg.per_lakh / cfg.cycle_days : 0;
 }
@@ -84,7 +88,7 @@ export function projectedProfit(principal: number, cfg: ProfitConfig): number {
 }
 
 const DEFAULT_CFG = (key: string): ProfitConfig => ({
-  project_key: key, enabled: false, per_lakh: 0, cycle_days: 360,
+  project_key: key, enabled: false, per_lakh: 0, cycle_days: 365,
   cycle_start: null, payout_date: null, next_payout: null, note: null,
 });
 
@@ -93,7 +97,7 @@ function mapCfg(d: Record<string, unknown>): ProfitConfig {
     project_key: d.project_key as string,
     enabled: !!d.enabled,
     per_lakh: Number(d.per_lakh) || 0,
-    cycle_days: Number(d.cycle_days) || 360,
+    cycle_days: Number(d.cycle_days) || 365,
     cycle_start: (d.cycle_start as string) ?? null,
     payout_date: (d.payout_date as string) ?? null,
     next_payout: (d.next_payout as string) ?? null,
