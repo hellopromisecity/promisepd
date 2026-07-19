@@ -77,7 +77,16 @@ export default function AllCustomersExplorer({
 
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
+    const term = q.trim().toLowerCase();
+    // Searching "Promise City" matches every customer OF that project too (via
+    // the project name) — so rows whose OWN name/number/File/UID match rank
+    // first, instead of the person you meant drowning on the last page.
+    const direct = (p: PersonRow) => `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.fid ?? ""} ${p.email ?? ""}`.toLowerCase().includes(term);
     return [...filtered].sort((a, b) => {
+      if (term) {
+        const da = direct(a) ? 0 : 1, db = direct(b) ? 0 : 1;
+        if (da !== db) return da - db;
+      }
       let d = 0;
       if (sortKey === "name") d = a.name.localeCompare(b.name);
       else if (sortKey === "joined") d = (a.joined ?? "").localeCompare(b.joined ?? "");
@@ -86,7 +95,7 @@ export default function AllCustomersExplorer({
       else d = a.totalBalance - b.totalBalance;
       return d * dir;
     });
-  }, [filtered, sortKey, asc]);
+  }, [filtered, sortKey, asc, q]);
 
   const total = sorted.length;
   const pageCount = Math.max(1, Math.ceil(total / perPage));
