@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Receipt, Eye, Pencil, Trash2, CreditCard, Plus, UserPlus, Check, Send, Link2 } from "lucide-react";
 import { Card, TableShell, thCls, tdCls } from "@/components/admin/ui";
 import { confirmDialog } from "@/components/ui/Dialog";
@@ -183,6 +184,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
 }
 
 export function DeleteBtn({ customer, project, className }: { customer: HubCustomer; project: HubProject; className: string }) {
+  const router = useRouter();
   const [pending, start] = useTransition();
   return (
     <button
@@ -192,7 +194,7 @@ export function DeleteBtn({ customer, project, className }: { customer: HubCusto
       onClick={async () => {
         const ok = await confirmDialog({ title: "Delete customer", message: `Remove “${customer.name}” from ${project.name}? Any referral commission credited to the marketing officer is reversed too.`, confirmText: "Delete", danger: true });
         if (!ok) return;
-        start(async () => { const r = await deleteHubCustomer(customer.id, project.key); if (r.ok) toast(r.message || "Deleted.", "success"); else toast(r.error, "error"); });
+        start(async () => { const r = await deleteHubCustomer(customer.id, project.key); if (r.ok) { toast(r.message || "Deleted.", "success"); router.refresh(); } else toast(r.error, "error"); });
       }}
     >
       {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -254,6 +256,7 @@ export function ReferencePicker({ value, valueName, onPick }: { value: string | 
 }
 
 export function CustomerFormModal({ project, customer, projects, onClose }: { project: HubProject; customer: HubCustomer | null; projects?: HubProject[]; onClose: () => void }) {
+  const router = useRouter();
   const editing = !!customer;
   const [projKey, setProjKey] = useState(project.key);
   const activeProj = projects?.find((p) => p.key === projKey) ?? project;
@@ -278,7 +281,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
     const input: CustomerInput = { name, file_no: file, mobile, district, shares, total_price: parseFloat(price) || 0, joining_date: joining, reference: refName, reference_officer_id: refId, email, password };
     start(async () => {
       const r = editing ? await updateHubCustomer(customer!.id, project.key, input) : await createHubCustomer(activeProj, input);
-      if (r.ok) { toast(r.message || "Saved.", "success"); onClose(); } else setErr(r.error);
+      if (r.ok) { toast(r.message || "Saved.", "success"); router.refresh(); onClose(); } else setErr(r.error);
     });
   }
 
@@ -332,6 +335,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
 }
 
 export function TransactionModal({ customer, project, onClose }: { customer: HubCustomer; project: HubProject; onClose: () => void }) {
+  const router = useRouter();
   const [payments, setPayments] = useState<HubPayment[] | null>(null);
   const [types, setTypes] = useState<TxnType[]>([]);
   const [type, setType] = useState("deposit");
@@ -363,7 +367,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
       const r = editingId
         ? await updateHubPayment(editingId, project.key, payload)
         : await addHubPayment(customer.id, project.key, payload);
-      if (r.ok) { toast(r.message || "Saved.", "success"); resetForm(); await reload(); } else setErr(r.error);
+      if (r.ok) { toast(r.message || "Saved.", "success"); resetForm(); await reload(); router.refresh(); } else setErr(r.error);
     });
   }
 
@@ -393,7 +397,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
     const ok = await confirmDialog({ title: "Remove transaction", message: `Delete ${fmt(p.amount)} on ${fmtDate(p.date)}?`, confirmText: "Delete", danger: true });
     if (!ok) return;
     const r = await deleteHubPayment(p.id, project.key);
-    if (r.ok) { toast("Removed.", "success"); if (editingId === p.id) resetForm(); await reload(); } else toast(r.error, "error");
+    if (r.ok) { toast("Removed.", "success"); if (editingId === p.id) resetForm(); await reload(); router.refresh(); } else toast(r.error, "error");
   }
 
   return (
@@ -453,6 +457,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
 }
 
 export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClose: () => void }) {
+  const router = useRouter();
   const [q, setQ] = useState(customer.name || "");
   const [hits, setHits] = useState<InvestorHit[] | null>(null);
   const [pending, start] = useTransition();
@@ -464,7 +469,7 @@ export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClos
       if (!ok) return;
       start(async () => {
         const r = await linkHubToInvestor(customer.id, uid);
-        if (r.ok) { toast(r.message || "Linked.", "success"); onClose(); } else toast(r.error, "error");
+        if (r.ok) { toast(r.message || "Linked.", "success"); router.refresh(); onClose(); } else toast(r.error, "error");
       });
     })();
   }
