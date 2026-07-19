@@ -87,7 +87,7 @@ export async function recomputeInvestorBalance(admin: Admin, uid: string) {
 /** hub (book) project name → investment_projects.project_id. Matches by the
  *  normalised name with the app→hub fold, so "Special Deposit" finds
  *  "Investment (Special Deposit)" and real-estate names match directly. */
-async function projectIdForName(admin: Admin, projectName: string): Promise<string | null> {
+export async function projectIdForName(admin: Admin, projectName: string): Promise<string | null> {
   const { data } = await admin.from("investment_projects").select("project_id, project_name");
   const want = normProj(projectName);
   for (const p of (data ?? []) as any[]) {
@@ -133,6 +133,7 @@ async function linkHubRow(admin: Admin, hubCustomerId: string | null | undefined
 export async function ensureInvestorForHub(
   admin: Admin,
   hub: { id?: string | null; name?: string | null; investor_uid?: string | null; mobile?: string | null },
+  opts?: { fid?: string | null; email?: string | null; password?: string | null },
 ): Promise<string | null> {
   const existing = await resolveInvestorUid(admin, hub);
   if (existing) { if (!hub.investor_uid) await linkHubRow(admin, hub.id, existing); return existing; }
@@ -140,14 +141,16 @@ export async function ensureInvestorForHub(
   const name = (hub.name || "").trim();
   const mobile = canonMobile(hub.mobile);
   if (!name || mobile.length < 8) return null; // can't build a login without a usable number
+  const email = opts?.email?.trim() || null;
+  const password = opts?.password?.trim() || DEFAULT_MEMBER_PASSWORD;
 
   // 1) auth login — or adopt the orphan member profile that already owns this mobile.
   let profileId: string | null = null;
   const { data: created, error: cErr } = await admin.auth.admin.createUser({
     email: `${mobile}@${AUTH_EMAIL_DOMAIN}`,
-    password: DEFAULT_MEMBER_PASSWORD,
+    password,
     email_confirm: true,
-    user_metadata: { name, mobile },
+    user_metadata: { name, mobile, email },
   });
   if (cErr) {
     if (!/already|registered|exists/i.test(cErr.message)) return null;
@@ -156,17 +159,21 @@ export async function ensureInvestorForHub(
     if (!profileId) return null;
   } else {
     profileId = created.user.id;
-    await admin.from("profiles").upsert({ id: profileId, name, mobile, role: "member" } as any, { onConflict: "id" });
+    await admin.from("profiles").upsert({ id: profileId, name, mobile, email, role: "member" } as any, { onConflict: "id" });
   }
 
-  // 2) investor account (uid race → retry; phone landed meanwhile → re-resolve).
+  // 2) investor account (uid race → retry; phone landed meanwhile → re-resolve;
+  //    a taken File ID just drops off rather than blocking the account).
+  let fid = opts?.fid?.trim() || null;
   for (let attempt = 0; attempt < 5; attempt++) {
     const uid = await nextId(admin, "investor_accounts", "uid", "U", 100001);
     const { error } = await admin.from("investor_accounts").insert({
       uid,
       profile_id: profileId,
+      fid,
       full_name: name,
       phone_number: "+" + mobile,
+      email,
       language: "bn",
       is_verified: true,
       is_active: true,
@@ -174,6 +181,7 @@ export async function ensureInvestorForHub(
     } as any);
     if (!error) { await linkHubRow(admin, hub.id, uid); return uid; }
     if (!/duplicate|unique/i.test(error.message)) return null;
+    if (/fid/i.test(error.message)) { fid = null; continue; }
     if (/phone/i.test(error.message)) return await resolveInvestorUid(admin, hub);
   }
   return null;

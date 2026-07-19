@@ -250,6 +250,25 @@ export async function updateInvestor(uid: string, input: InvestorInput): Promise
   });
 }
 
+/** Admin-set a member's app password (their login = mobile + this password). */
+export async function resetMemberPassword(uid: string, password: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!uid) throw new ValidationError("Missing investor.");
+    if (!password || password.trim().length < 6) throw new ValidationError("Password must be at least 6 characters.");
+    const { data } = await admin.from("investor_accounts").select("uid, full_name, profile_id").eq("uid", uid).maybeSingle();
+    const acc = data as { uid: string; full_name: string | null; profile_id: string | null } | null;
+    if (!acc) throw new ValidationError("That app user no longer exists.");
+    if (!acc.profile_id) throw new ValidationError("No login yet — add a mobile number first.");
+    const { error } = await admin.auth.admin.updateUserById(acc.profile_id, { password: password.trim() });
+    if (error) throw new Error(error.message);
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Reset app password for ${acc.full_name ?? uid}` });
+    return { message: "Password updated." };
+  });
+}
+
 /** Quick activate / deactivate toggle (the red person icon in the old app). */
 export async function setInvestorActive(uid: string, active: boolean): Promise<ActionResult> {
   return runAction(async () => {

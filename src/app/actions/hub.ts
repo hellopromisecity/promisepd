@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin, logAudit } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
-import { hubCustomer, hubProjectCustomers, type HubCustomer, type HubPayment } from "@/lib/hub";
+import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
-import { mirrorBookPayment, backfillHubToInvestor } from "@/lib/investor-write";
+import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName } from "@/lib/investor-write";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
@@ -137,6 +137,8 @@ export type CustomerInput = {
   name: string; file_no?: string; mobile?: string; district?: string;
   reference?: string; reference_officer_id?: string | null; shares?: string;
   joining_date?: string; total_price?: number;
+  /** App-login extras (create only): the account is made alongside the customer. */
+  email?: string; password?: string;
 };
 
 // ── customer CRUD ────────────────────────────────────────────────
@@ -157,8 +159,61 @@ export async function createHubCustomer(project: { key: string; name: string; ty
     const cid = rec(data)?.id as string;
     const entryId = await syncCommission(admin, { project_key: project.key, name: input.name, file_no: input.file_no || null, joining_date: input.joining_date || null, reference_officer_id: input.reference_officer_id || null, commission_entry_id: null, shares: input.shares || null });
     if (entryId) await HC(admin).update({ commission_entry_id: entryId }).eq("id", cid);
+    // Every customer IS an app user: create (or link) their account right away —
+    // login = mobile + the given password (default 258025) — plus the project
+    // membership so their PWA shows the project card from day one.
+    const uid = await ensureInvestorForHub(
+      admin,
+      { id: cid, name: input.name, mobile: input.mobile },
+      { fid: input.file_no || null, email: input.email || null, password: input.password || null },
+    );
+    if (uid) {
+      const pid = await projectIdForName(admin, project.name);
+      if (pid) await ensureMembership(admin, uid, pid);
+    }
     revalidatePath(`/dashboard/projects/${project.key}`);
-    return { ok: true, message: "Customer added." };
+    revalidatePath("/dashboard/projects/all");
+    return { ok: true, message: uid ? "Customer added — app account ready (mobile + password)." : "Customer added (no usable mobile — app login can be added later)." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** Put an EXISTING app user into a project — creates their book row (linked to
+ *  their account) + the app membership, so the project page, All Customers and
+ *  their PWA all agree. Used by the unified Edit modal in All Customers. */
+export async function assignCustomerToProject(uid: string, projectKey: string, input: Omit<CustomerInput, "name" | "email" | "password">): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, phone_number, fid").eq("uid", uid).maybeSingle();
+    const acc = rec(accD);
+    if (!acc) return { ok: false, error: "App user not found." };
+    const meta = await hubProjectMeta(projectKey);
+    if (!meta) return { ok: false, error: "Project not found." };
+    const { data: dup } = await HC(admin).select("id").eq("project_key", projectKey).eq("investor_uid", uid).maybeSingle();
+    if (dup) return { ok: false, error: "Already a customer of this project." };
+
+    // account phone "+8801…" → book-style local "01…"; placeholders stay empty
+    const raw = String(acc.phone_number ?? "");
+    const digits = raw.replace(/\D/g, "");
+    const mobile = input.mobile || (/^book:/i.test(raw) ? null : digits.startsWith("880") ? "0" + digits.slice(3) : digits || null);
+
+    const { data, error } = await HC(admin).insert({
+      project_key: projectKey, project_name: meta.name, project_type: meta.type, sort_order: meta.sort,
+      source_tab: `manual-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+      file_no: input.file_no || (acc.fid as string) || null, name: acc.full_name as string, mobile, district: input.district || null,
+      reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
+      joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
+      investor_uid: uid, bio: { shares: input.shares || null },
+    }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    const cid = rec(data)?.id as string;
+    const entryId = await syncCommission(admin, { project_key: projectKey, name: acc.full_name as string, file_no: input.file_no || (acc.fid as string) || null, joining_date: input.joining_date || null, reference_officer_id: input.reference_officer_id || null, commission_entry_id: null, shares: input.shares || null });
+    if (entryId) await HC(admin).update({ commission_entry_id: entryId }).eq("id", cid);
+    const pid = await projectIdForName(admin, meta.name);
+    if (pid) await ensureMembership(admin, uid, pid);
+    revalidatePath(`/dashboard/projects/${projectKey}`);
+    revalidatePath("/dashboard/projects/all");
+    return { ok: true, message: `Added to ${meta.name}.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 

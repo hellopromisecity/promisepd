@@ -216,7 +216,7 @@ function Modal({ title, subtitle, onClose, children, wide }: { title: string; su
 }
 
 /** Marketing-officer autocomplete for the Reference field. */
-function ReferencePicker({ value, valueName, onPick }: { value: string | null; valueName: string | null; onPick: (id: string | null, name: string) => void }) {
+export function ReferencePicker({ value, valueName, onPick }: { value: string | null; valueName: string | null; onPick: (id: string | null, name: string) => void }) {
   const [officers, setOfficers] = useState<RefOfficer[] | null>(null);
   const [q, setQ] = useState(valueName ?? "");
   const [open, setOpen] = useState(false);
@@ -266,6 +266,8 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   const [joining, setJoining] = useState(customer?.joining_date ?? "");
   const [refId, setRefId] = useState<string | null>((customer as unknown as { reference_officer_id?: string })?.reference_officer_id ?? null);
   const [refName, setRefName] = useState(customer?.reference ?? "");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const earnsCommission = ["fuzala-tower", "fuzala-complex", "promise-city", "ahbab-palace-01", "ahbab-palace-02"].includes(activeProj.key);
@@ -273,7 +275,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   function submit() {
     setErr(null);
     if (!name.trim()) { setErr("Name is required."); return; }
-    const input: CustomerInput = { name, file_no: file, mobile, district, shares, total_price: parseFloat(price) || 0, joining_date: joining, reference: refName, reference_officer_id: refId };
+    const input: CustomerInput = { name, file_no: file, mobile, district, shares, total_price: parseFloat(price) || 0, joining_date: joining, reference: refName, reference_officer_id: refId, email, password };
     start(async () => {
       const r = editing ? await updateHubCustomer(customer!.id, project.key, input) : await createHubCustomer(activeProj, input);
       if (r.ok) { toast(r.message || "Saved.", "success"); onClose(); } else setErr(r.error);
@@ -304,6 +306,15 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
           <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
           <div><label className={labelCls}>Total price ৳</label><input type="number" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         </div>
+        {!editing && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelCls}>Email <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+              <div><label className={labelCls}>App password</label><input className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="default: 258025" /></div>
+            </div>
+            <p className="-mt-1 text-[11px] text-fg-faint">An app account is created automatically — they log in with the mobile number + this password and see everything in their PWA.</p>
+          </>
+        )}
         <div>
           <label className={labelCls}>Reference (marketing officer)</label>
           <ReferencePicker value={refId} valueName={refName} onPick={(id, n) => { setRefId(id); setRefName(n); }} />

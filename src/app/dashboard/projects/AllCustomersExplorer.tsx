@@ -5,22 +5,24 @@
  *  that account's book holdings + app-only money; per-project detail lives on
  *  the individual project pages. Click a row to see the project breakdown. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
+  Pencil, Loader2, Lock, KeyRound, FolderPlus,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
 import type { TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
 import type { PersonRow, PersonHolding, AppHealth } from "@/lib/all-customers";
 import type { HubCustomer } from "@/lib/hub";
-import { CustomerFormModal, TransactionModal, LinkModal, type HubProject } from "./HubCustomerList";
+import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import UserActive from "@/app/dashboard/investments/users/UserActive";
-import InvestorEdit from "@/app/dashboard/investments/users/InvestorEdit";
-import AddUser from "@/app/dashboard/investments/users/AddUser";
+import { updateInvestor, resetMemberPassword, type InvestorInput } from "@/app/actions/admin-investments";
+import { assignCustomerToProject, type CustomerInput } from "@/app/actions/hub";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -69,7 +71,7 @@ export default function AllCustomersExplorer({
       if (status === "paying" && !(p.totalPaid > 0)) return false;
       if (status === "nonpaying" && p.totalPaid > 0) return false;
       if (!term) return true;
-      return `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.email ?? ""} ${p.projectNames.join(" ")}`.toLowerCase().includes(term);
+      return `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.fid ?? ""} ${p.email ?? ""} ${p.projectNames.join(" ")}`.toLowerCase().includes(term);
     });
   }, [people, q, projFilter, status]);
 
@@ -94,10 +96,10 @@ export default function AllCustomersExplorer({
   const setSort = (k: SortKey) => { if (sortKey === k) setAsc((v) => !v); else { setSortKey(k); setAsc(false); } };
 
   function exportCsv() {
-    const head = ["#", "Name", "Mobile", "App UID", "Projects", "Paid", "Profit", "Balance", "Joined"];
+    const head = ["#", "Name", "Mobile", "File ID", "App UID", "Projects", "Paid", "Profit", "Balance", "Joined"];
     const lines = [head.join(",")];
     sorted.forEach((p, i) => {
-      const cells = [i + 1, p.name, localPhone(p.mobile), p.uid ?? "", p.projectNames.join(" | "), Math.round(p.totalPaid), Math.round(p.totalProfit), Math.round(p.totalBalance), p.joined ?? ""];
+      const cells = [i + 1, p.name, localPhone(p.mobile), p.fid ?? "", p.uid ?? "", p.projectNames.join(" | "), Math.round(p.totalPaid), Math.round(p.totalProfit), Math.round(p.totalBalance), p.joined ?? ""];
       lines.push(cells.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -222,7 +224,6 @@ export default function AllCustomersExplorer({
         </select>
         <button onClick={exportCsv} title="Export CSV" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-fg hover:border-emerald-500/40 hover:text-emerald-600"><Download className="h-4 w-4" /> CSV</button>
         <button onClick={exportPdf} title="Export PDF" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-fg hover:border-brand-red/40 hover:text-brand-red"><FileText className="h-4 w-4" /> PDF</button>
-        <AddUser />
         <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark"><UserPlus className="h-4 w-4" /> Add customer</button>
       </div>
 
@@ -260,7 +261,7 @@ export default function AllCustomersExplorer({
                             {p.name || "—"}
                             {isApp && p.is_verified && <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-brand-blue" />}
                           </p>
-                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-fg-muted"><Phone className="h-3 w-3 text-fg-faint" /> {localPhone(p.mobile)}{isApp && p.uid ? <span className="ml-1 text-fg-faint">· {p.uid}</span> : null}</div>
+                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-fg-muted"><Phone className="h-3 w-3 text-fg-faint" /> {localPhone(p.mobile)}{p.fid ? <span className="ml-1 text-fg-faint">· File {p.fid}</span> : isApp && p.uid ? <span className="ml-1 text-fg-faint">· {p.uid}</span> : null}</div>
                         </div>
                       </button>
                     </td>
@@ -289,7 +290,7 @@ export default function AllCustomersExplorer({
                         {isApp && p.app && (
                           <>
                             <UserTxns user={p.app} types={investorTypes} projects={investorProjects} />
-                            <InvestorEdit investor={{ uid: p.uid!, full_name: p.name, fid: p.fid ?? null, phone_number: p.mobile ?? "", email: p.email ?? null, is_active: !!p.is_active, is_verified: !!p.is_verified }} />
+                            <CustomerEdit person={p} projects={hubProjects} />
                             <UserActive uid={p.uid!} name={p.name} active={!!p.is_active} />
                           </>
                         )}
@@ -320,6 +321,143 @@ export default function AllCustomersExplorer({
       {detail && <PersonModal person={detail} onClose={() => setDetail(null)} />}
       {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
     </div>
+  );
+}
+
+/** Unified Edit — the same fields as Add customer: the app-user profile
+ *  (name / File ID / email / verified / active / password) PLUS "Add to a
+ *  project" so an existing customer can be assigned to any project with the
+ *  usual book fields. One save updates the account everywhere. */
+function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubProject[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"profile" | "assign">("profile");
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  // profile
+  const [name, setName] = useState(person.name);
+  const [fid, setFid] = useState(person.fid ?? "");
+  const [email, setEmail] = useState(person.email ?? "");
+  const [verified, setVerified] = useState(!!person.is_verified);
+  const [active, setActive] = useState(!!person.is_active);
+  const [newPass, setNewPass] = useState("");
+  // assign
+  const openProjects = projects.filter((pr) => !person.projectKeys.includes(pr.key));
+  const [projKey, setProjKey] = useState(openProjects[0]?.key ?? "");
+  const [file, setFile] = useState("");
+  const [district, setDistrict] = useState("");
+  const [joining, setJoining] = useState("");
+  const [shares, setShares] = useState("");
+  const [price, setPrice] = useState("");
+  const [refId, setRefId] = useState<string | null>(null);
+  const [refName, setRefName] = useState("");
+
+  const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand-blue/50";
+  const labelCls = "mb-1 block text-xs font-semibold text-fg-muted";
+
+  function saveProfile() {
+    setErr(null); setMsg(null);
+    const input: InvestorInput = { full_name: name, fid, email, is_active: active, is_verified: verified };
+    start(async () => {
+      const r = await updateInvestor(person.uid!, input);
+      if (!r.ok) return setErr(r.error);
+      if (newPass.trim()) {
+        const pw = await resetMemberPassword(person.uid!, newPass);
+        if (!pw.ok) return setErr(`Saved, but the password wasn’t changed: ${pw.error}`);
+      }
+      setMsg(newPass.trim() ? "Saved — new password is live." : "Saved.");
+      setNewPass("");
+      router.refresh();
+    });
+  }
+
+  function assign() {
+    setErr(null); setMsg(null);
+    if (!projKey) { setErr("Pick a project."); return; }
+    const input: Omit<CustomerInput, "name" | "email" | "password"> = {
+      file_no: file, district, joining_date: joining, shares, total_price: parseFloat(price) || 0,
+      reference: refName, reference_officer_id: refId,
+    };
+    start(async () => {
+      const r = await assignCustomerToProject(person.uid!, projKey, input);
+      if (!r.ok) return setErr(r.error);
+      setMsg(r.message ?? "Added to the project.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} title="Edit user" className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg text-fg-muted transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm">
+        <Pencil className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && setOpen(false)}>
+          <div className="max-h-[92vh] w-full max-w-md animate-[pop_.18s_ease-out] overflow-y-auto rounded-2xl border border-border bg-bg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-bold text-fg">Edit customer</h2>
+              <button type="button" onClick={() => !pending && setOpen(false)} className="rounded-lg p-1 text-fg-muted transition-colors hover:bg-bg-soft hover:text-fg" aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-bg-soft p-1">
+              {([["profile", "Profile & login"], ["assign", "Add to project"]] as const).map(([k, label]) => (
+                <button key={k} type="button" onClick={() => { setTab(k); setErr(null); setMsg(null); }} className={`rounded-lg py-2 text-xs font-bold transition-colors ${tab === k ? "bg-fg text-bg shadow" : "text-fg-muted hover:text-fg"}`}>{label}</button>
+              ))}
+            </div>
+
+            {err && <div className="mb-3 rounded-xl border border-brand-red/30 bg-brand-red-tint px-3 py-2 text-sm text-brand-red-dark">{err}</div>}
+            {msg && <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{msg}</div>}
+
+            {tab === "profile" ? (
+              <div className="space-y-3">
+                <div><label className={labelCls}>Full name</label><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={labelCls}>File ID</label><input className={inputCls} value={fid} onChange={(e) => setFid(e.target.value)} placeholder="—" /></div>
+                  <div>
+                    <label className={labelCls}>Mobile <span className="font-normal normal-case text-fg-faint">(login key)</span></label>
+                    <div className="flex items-center gap-1.5 rounded-xl border border-border bg-bg-soft/60 px-3 py-2.5 text-sm text-fg-muted"><Lock className="h-3.5 w-3.5 shrink-0 text-fg-faint" /><span className="truncate">{localPhone(person.mobile) || "—"}</span></div>
+                  </div>
+                </div>
+                <div><label className={labelCls}>Email <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                <div><label className={labelCls}><KeyRound className="mr-1 inline h-3.5 w-3.5" /> New app password <span className="font-normal normal-case text-fg-faint">(leave blank to keep)</span></label><input className={inputCls} value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="min 6 characters" /></div>
+                <div className="flex items-center gap-5 pt-1">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-fg"><input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} className="h-4 w-4 accent-brand-blue" /> Verified</label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-fg"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-4 w-4 accent-brand-blue" /> Active</label>
+                </div>
+                <button onClick={saveProfile} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+                  {pending && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-fg-muted">Already in: <span className="font-semibold text-fg">{person.projectNames.join(", ") || "no project yet"}</span></p>
+                <div><label className={labelCls}>Project *</label>
+                  <select className={inputCls} value={projKey} onChange={(e) => setProjKey(e.target.value)}>
+                    {openProjects.length === 0 && <option value="">— already in every project —</option>}
+                    {openProjects.map((pr) => <option key={pr.key} value={pr.key}>{pr.name}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={labelCls}>File no.</label><input className={inputCls} value={file} onChange={(e) => setFile(e.target.value)} placeholder={person.fid ?? ""} /></div>
+                  <div><label className={labelCls}>Joining date</label><input type="date" className={inputCls} value={joining} onChange={(e) => setJoining(e.target.value)} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={labelCls}>District</label><input className={inputCls} value={district} onChange={(e) => setDistrict(e.target.value)} /></div>
+                  <div><label className={labelCls}>Total price ৳</label><input type="number" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+                </div>
+                <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
+                <div><label className={labelCls}>Reference (marketing officer)</label><ReferencePicker value={refId} valueName={refName} onPick={(id, n) => { setRefId(id); setRefName(n); }} /></div>
+                <button onClick={assign} disabled={pending || !projKey} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+                  {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />} Add to project
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
