@@ -240,6 +240,43 @@ export async function mirrorBookPayment(
   } catch { /* mirroring must never break the book payment */ }
 }
 
+/** Keep the mirror in step when a book payment is EDITED or DELETED. The 1:1
+ *  mirror is found by (uid, project, old amount, old day); edits rewrite it,
+ *  deletes remove it, and an edit with no mirror yet creates one (so the two
+ *  systems converge). Recomputes the balance. Never throws. */
+export async function syncMirrorOnPaymentChange(
+  admin: Admin,
+  hub: { investor_uid?: string | null; mobile?: string | null; project_name: string },
+  old: { amount: number; date: string | null },
+  next: { kind: string; type: string; amount: number; date?: string | null; description?: string | null } | null,
+): Promise<void> {
+  try {
+    const uid = await resolveInvestorUid(admin, hub);
+    if (!uid) return;
+    const project_id = await projectIdForName(admin, hub.project_name);
+    const oldAmt = Math.round((Number(old.amount) || 0) * 100) / 100;
+    const oldDay = String(old.date ?? "").slice(0, 10);
+    let q = admin.from("investor_transactions").select("transaction_id, date").eq("uid", uid).eq("amount", oldAmt);
+    q = project_id ? q.eq("project_id", project_id) : (q.is("project_id", null) as typeof q);
+    const { data } = await q;
+    const hit = ((data ?? []) as any[]).find((t) => String(t.date).slice(0, 10) === oldDay) ?? null;
+
+    const { data: types } = await admin.from("investment_types").select("name, operator");
+    if (next) {
+      if (!hit) {
+        await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null }, (types ?? []) as any[]);
+      } else {
+        const type = typeFor(next.kind, next.type, (types ?? []) as any[]);
+        const date = next.date && /^\d{4}-\d{2}-\d{2}/.test(next.date) ? `${next.date.slice(0, 10)}T00:00:00+06:00` : (hit.date as string);
+        await admin.from("investor_transactions").update({ type, amount: Math.round((Number(next.amount) || 0) * 100) / 100, date, description: next.description ?? null } as any).eq("transaction_id", hit.transaction_id);
+      }
+    } else if (hit) {
+      await admin.from("investor_transactions").delete().eq("transaction_id", hit.transaction_id);
+    } else return; // deleted a payment that never mirrored — nothing to do
+    await recomputeInvestorBalance(admin, uid);
+  } catch { /* the book stays the source of truth — never block its edit */ }
+}
+
 /** Backfill: mirror all of a book customer's existing payments into `uid` (used
  *  when they're first linked). Skips payments already mirrored (same project +
  *  amount + date) so re-linking doesn't duplicate, and ensures the project
