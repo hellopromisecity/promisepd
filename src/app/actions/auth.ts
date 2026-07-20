@@ -40,7 +40,7 @@ export type SignupPayload = {
 };
 
 export type AuthResult =
-  | { ok: true; message: string }
+  | { ok: true; message: string; dest?: string }
   | { ok: false; error: string };
 
 // ── Config / validators ───────────────────────────────────────────
@@ -252,6 +252,22 @@ async function seedInvestorAccount(
 
 // ── Actions ───────────────────────────────────────────────────────
 
+/** Where a fresh login should land: staff/admins go STRAIGHT to the dashboard
+ *  (no /account flash-then-redirect), members to their account. */
+async function loginDest(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    const id = data.user?.id;
+    const admin = createAdminClient();
+    if (!id || !admin) return "/account";
+    const { data: prof } = await admin.from("profiles").select("role").eq("id", id).maybeSingle();
+    const role = (prof as { role?: string } | null)?.role ?? "member";
+    return role && role !== "member" ? "/dashboard" : "/account";
+  } catch {
+    return "/account";
+  }
+}
+
 export async function login(payload: LoginPayload): Promise<AuthResult> {
   const id = payload.identifier?.trim();
   if (!id) return { ok: false, error: "মোবাইল নম্বর, ইউজারনেম বা ইমেইল দিন।" };
@@ -271,7 +287,7 @@ export async function login(payload: LoginPayload): Promise<AuthResult> {
       email,
       password: payload.password,
     });
-    if (!error) return { ok: true, message: "সফলভাবে লগইন হয়েছে।" };
+    if (!error) return { ok: true, message: "সফলভাবে লগইন হয়েছে।", dest: await loginDest(supabase) };
     lastError = error.message;
   }
 
@@ -282,7 +298,7 @@ export async function login(payload: LoginPayload): Promise<AuthResult> {
   // the normal flow above.  Runs ONLY after the normal sign-in failed, so it
   // never affects accounts that were created natively.
   const legacyOk = await tryLegacyLogin(candidates, payload.password, supabase);
-  if (legacyOk) return { ok: true, message: "সফলভাবে লগইন হয়েছে।" };
+  if (legacyOk) return { ok: true, message: "সফলভাবে লগইন হয়েছে।", dest: await loginDest(supabase) };
 
   console.error("[auth/login]", lastError);
   return { ok: false, error: "ভুল মোবাইল/ইউজারনেম/ইমেইল বা পাসওয়ার্ড।" };

@@ -8,6 +8,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { PageHeader, Card, StatCard, EmptyState } from "@/components/admin/ui";
 import { analyticsConfigured, getAnalytics, RANGE_LABELS, type DateRange } from "@/lib/analytics";
 import RangeSelect from "./RangeSelect";
+import DailyChart from "./DailyChart";
 
 export const metadata: Metadata = {
   title: "Analytics",
@@ -63,10 +64,6 @@ SEARCH_CONSOLE_SITE_URL=https://promisecity.vercel.app/`}</pre>
     );
   }
 
-  const maxDaily = Math.max(1, ...data.daily.map((d) => d.users));
-  const W = 760, H = 150, pad = 6;
-  const bw = data.daily.length ? (W - pad * 2) / data.daily.length : 0;
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -98,12 +95,7 @@ SEARCH_CONSOLE_SITE_URL=https://promisecity.vercel.app/`}</pre>
         {data.daily.length === 0 ? (
           <p className="py-8 text-center text-sm text-fg-muted">No data for this range yet.</p>
         ) : (
-          <svg viewBox={`0 0 ${W} ${H}`} className="h-[150px] w-full" preserveAspectRatio="none" role="img" aria-label="Daily active users">
-            {data.daily.map((d, i) => {
-              const h = (d.users / maxDaily) * (H - pad * 2);
-              return <rect key={i} x={pad + i * bw + bw * 0.12} y={H - pad - h} width={bw * 0.76} height={Math.max(1, h)} rx="2" fill="#1847A1" opacity={0.85} />;
-            })}
-          </svg>
+          <DailyChart daily={data.daily} />
         )}
       </Card>
 

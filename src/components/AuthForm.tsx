@@ -95,9 +95,10 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           setCountry(DEFAULT_COUNTRY);
           setEmailOrUsername("");
         }
-        // Honour a same-origin ?next= (set by the auth middleware), else
-        // land on the member dashboard.  Reject absolute / protocol-
-        // relative targets to avoid open redirects.
+        // Honour a same-origin ?next= (set by the auth middleware); otherwise
+        // the server says where this login belongs — staff/admins go straight
+        // to /dashboard (no /account flash), members to their account.
+        // Reject absolute / protocol-relative targets to avoid open redirects.
         const params =
           typeof window !== "undefined"
             ? new URLSearchParams(window.location.search)
@@ -106,7 +107,9 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         const dest =
           next && next.startsWith("/") && !next.startsWith("//")
             ? next
-            : lp("/account");
+            : res.dest === "/dashboard"
+              ? "/dashboard"
+              : lp("/account");
         router.push(dest);
         router.refresh();
       }
