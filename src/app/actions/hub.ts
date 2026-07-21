@@ -25,6 +25,21 @@ async function guard(): Promise<Admin | null> {
   return getAdmin();
 }
 
+/** hub_customer_payments.mirror_tx (migration 0029) — the hard link to the
+ *  payment's mirrored app transaction, so edits/deletes hit exactly the right
+ *  one. Both helpers are best-effort: payments keep working even before the
+ *  column exists. */
+async function readMirrorTx(admin: Admin, paymentId: string): Promise<string | null> {
+  try {
+    const { data, error } = await HP(admin).select("mirror_tx").eq("id", paymentId).maybeSingle();
+    if (error) return null;
+    return (rec(data)?.mirror_tx as string) ?? null;
+  } catch { return null; }
+}
+async function writeMirrorTx(admin: Admin, paymentId: string, tx: string | null): Promise<void> {
+  try { await HP(admin).update({ mirror_tx: tx }).eq("id", paymentId); } catch { /* pre-0029 */ }
+}
+
 /** Real-estate project → the marketing point-item that referral earns.
  *  Deposit schemes earn no commission (no entry). */
 const PROJECT_ITEM: Record<string, string> = {
@@ -279,8 +294,10 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     await sendTransactionSms({ phone: mobile, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
     // Mirror into the buyer's app / investor account so their PWA updates too —
     // auto-creating the account (mobile + default password) if they have none,
-    // plus the project membership for the PWA card. Never throws.
-    await mirrorBookPayment(admin, { id: customerId, name: cust?.name as string | null, investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description });
+    // plus the project membership for the PWA card. Never throws. The payment
+    // row remembers its mirror (mirror_tx) so a later edit/delete syncs exactly.
+    const mtx = await mirrorBookPayment(admin, { id: customerId, name: cust?.name as string | null, investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description });
+    if (mtx) await writeMirrorTx(admin, rec(ins)?.id as string, mtx);
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction added." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
@@ -293,12 +310,13 @@ export async function deleteHubPayment(paymentId: string, projectKey: string): P
     const { data } = await HP(admin).select("customer_id, amount, date").eq("id", paymentId).maybeSingle();
     const p = rec(data);
     if (!p) return { ok: false, error: "Not found." };
+    const mirrorTx = await readMirrorTx(admin, paymentId);
     await HP(admin).delete().eq("id", paymentId);
     await recomputeCustomer(admin, p.customer_id as string);
     // keep the app/PWA in step: drop the mirrored transaction too. Never throws.
     const { data: cd } = await HC(admin).select("mobile, investor_uid, project_name").eq("id", p.customer_id).maybeSingle();
     const cust = rec(cd);
-    if (cust) await syncMirrorOnPaymentChange(admin, { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string }, { amount: Number(p.amount), date: (p.date as string) ?? null }, null);
+    if (cust) await syncMirrorOnPaymentChange(admin, { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string }, { amount: Number(p.amount), date: (p.date as string) ?? null }, null, mirrorTx);
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction removed." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
@@ -322,15 +340,21 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
     const { error } = await HP(admin).update({ date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null }).eq("id", paymentId);
     if (error) return { ok: false, error: error.message };
     await recomputeCustomer(admin, p.customer_id as string);
-    // keep the app/PWA in step: rewrite the mirrored transaction too. Never throws.
+    // keep the app/PWA in step: rewrite the mirrored transaction too (found by
+    // its stored mirror_tx; self-heals the link for older rows). Never throws.
+    const mirrorTx = await readMirrorTx(admin, paymentId);
     const { data: cd } = await HC(admin).select("mobile, investor_uid, project_name").eq("id", p.customer_id).maybeSingle();
     const cust = rec(cd);
-    if (cust) await syncMirrorOnPaymentChange(
-      admin,
-      { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string },
-      { amount: Number(p.amount), date: (p.date as string) ?? null },
-      { kind, type, amount: Number(input.amount), date: input.date, description: input.description },
-    );
+    if (cust) {
+      const newTx = await syncMirrorOnPaymentChange(
+        admin,
+        { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string },
+        { amount: Number(p.amount), date: (p.date as string) ?? null },
+        { kind, type, amount: Number(input.amount), date: input.date, description: input.description },
+        mirrorTx,
+      );
+      if (newTx !== mirrorTx) await writeMirrorTx(admin, paymentId, newTx);
+    }
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction updated." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }

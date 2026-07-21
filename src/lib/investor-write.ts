@@ -20,6 +20,15 @@ export const DEFAULT_MEMBER_PASSWORD = "258025";
 const AUTH_EMAIL_DOMAIN = "users.promisepd.app";
 
 const INVESTMENT_TYPES = ["investment", "deposit", "booking_money", "installment"];
+/** BD calendar day of a stored transaction date. Postgres hands timestamptz
+ *  back in UTC — "2026-07-20T18:00:00+00:00" IS 21 Jul in Bangladesh, which is
+ *  the day the book's date column says — so comparing raw date-part slices
+ *  silently misses by one day (the bug that duplicated an edited payment's
+ *  mirror). Always compare through this. */
+function bdDay(iso: unknown): string {
+  const t = Date.parse(String(iso ?? ""));
+  return Number.isFinite(t) ? new Date(t + 6 * 3600 * 1000).toISOString().slice(0, 10) : String(iso ?? "").slice(0, 10);
+}
 const normProj = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
 const last10 = (m: string | null | undefined) => { const d = (m || "").replace(/\D/g, ""); return d.length >= 10 ? d.slice(-10) : ""; };
 /** Canonical login mobile from a book mobile field — which may hold SEVERAL
@@ -221,60 +230,76 @@ async function insertMirror(
 /** Mirror a single freshly-added book payment into the buyer's app account —
  *  creating the account (mobile + default password) when they don't have one —
  *  plus the project membership, so their PWA gains the project card too.
- *  Recomputes the investor balance. Never throws. */
+ *  Recomputes the investor balance. Returns the mirrored transaction's id so
+ *  the payment row can remember it (mirror_tx). Never throws. */
 export async function mirrorBookPayment(
   admin: Admin,
   hub: { id?: string | null; name?: string | null; investor_uid?: string | null; mobile?: string | null; project_name: string },
   payment: { kind: string; type: string; amount: number; date?: string | null; description?: string | null },
-): Promise<void> {
+): Promise<string | null> {
   try {
     const uid = await ensureInvestorForHub(admin, hub);
-    if (!uid) return;
+    if (!uid) return null;
     const [{ data: types }, project_id] = await Promise.all([
       admin.from("investment_types").select("name, operator"),
       projectIdForName(admin, hub.project_name),
     ]);
-    await insertMirror(admin, uid, project_id, { kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null }, (types ?? []) as any[]);
+    const id = await insertMirror(admin, uid, project_id, { kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null }, (types ?? []) as any[]);
     if (project_id) await ensureMembership(admin, uid, project_id);
     await recomputeInvestorBalance(admin, uid);
-  } catch { /* mirroring must never break the book payment */ }
+    return id;
+  } catch { return null; /* mirroring must never break the book payment */ }
 }
 
-/** Keep the mirror in step when a book payment is EDITED or DELETED. The 1:1
- *  mirror is found by (uid, project, old amount, old day); edits rewrite it,
- *  deletes remove it, and an edit with no mirror yet creates one (so the two
- *  systems converge). Recomputes the balance. Never throws. */
+/** Keep the mirror in step when a book payment is EDITED or DELETED. The
+ *  payment's stored mirror_tx (migration 0029) targets the exact transaction;
+ *  older rows fall back to matching (uid, project, old amount, old BD-day).
+ *  Edits rewrite the mirror, deletes remove it, and an edit with no mirror yet
+ *  creates one (so the two systems converge). Recomputes the balance. Returns
+ *  the mirror's id after the change (for self-healing storage); never throws. */
 export async function syncMirrorOnPaymentChange(
   admin: Admin,
   hub: { investor_uid?: string | null; mobile?: string | null; project_name: string },
   old: { amount: number; date: string | null },
   next: { kind: string; type: string; amount: number; date?: string | null; description?: string | null } | null,
-): Promise<void> {
+  mirrorTx?: string | null,
+): Promise<string | null> {
   try {
     const uid = await resolveInvestorUid(admin, hub);
-    if (!uid) return;
+    if (!uid) return null;
     const project_id = await projectIdForName(admin, hub.project_name);
-    const oldAmt = Math.round((Number(old.amount) || 0) * 100) / 100;
-    const oldDay = String(old.date ?? "").slice(0, 10);
-    let q = admin.from("investor_transactions").select("transaction_id, date").eq("uid", uid).eq("amount", oldAmt);
-    q = project_id ? q.eq("project_id", project_id) : (q.is("project_id", null) as typeof q);
-    const { data } = await q;
-    const hit = ((data ?? []) as any[]).find((t) => String(t.date).slice(0, 10) === oldDay) ?? null;
+
+    let hit: { transaction_id: string; date: unknown } | null = null;
+    if (mirrorTx) {
+      const { data } = await admin.from("investor_transactions").select("transaction_id, date").eq("transaction_id", mirrorTx).eq("uid", uid).maybeSingle();
+      hit = (data as any) ?? null;
+    }
+    if (!hit) {
+      const oldAmt = Math.round((Number(old.amount) || 0) * 100) / 100;
+      const oldDay = String(old.date ?? "").slice(0, 10);
+      let q = admin.from("investor_transactions").select("transaction_id, date").eq("uid", uid).eq("amount", oldAmt);
+      q = project_id ? q.eq("project_id", project_id) : (q.is("project_id", null) as typeof q);
+      const { data } = await q;
+      hit = ((data ?? []) as any[]).find((t) => bdDay(t.date) === oldDay || String(t.date).slice(0, 10) === oldDay) ?? null;
+    }
 
     const { data: types } = await admin.from("investment_types").select("name, operator");
+    let result: string | null = null;
     if (next) {
       if (!hit) {
-        await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null }, (types ?? []) as any[]);
+        result = await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null }, (types ?? []) as any[]);
       } else {
         const type = typeFor(next.kind, next.type, (types ?? []) as any[]);
         const date = next.date && /^\d{4}-\d{2}-\d{2}/.test(next.date) ? `${next.date.slice(0, 10)}T00:00:00+06:00` : (hit.date as string);
         await admin.from("investor_transactions").update({ type, amount: Math.round((Number(next.amount) || 0) * 100) / 100, date, description: next.description ?? null } as any).eq("transaction_id", hit.transaction_id);
+        result = hit.transaction_id;
       }
     } else if (hit) {
       await admin.from("investor_transactions").delete().eq("transaction_id", hit.transaction_id);
-    } else return; // deleted a payment that never mirrored — nothing to do
+    } else return null; // deleted a payment that never mirrored — nothing to do
     await recomputeInvestorBalance(admin, uid);
-  } catch { /* the book stays the source of truth — never block its edit */ }
+    return result;
+  } catch { return null; /* the book stays the source of truth — never block its edit */ }
 }
 
 /** Backfill: mirror all of a book customer's existing payments into `uid` (used
@@ -288,7 +313,7 @@ export async function backfillHubToInvestor(admin: Admin, hubCustomerId: string,
     admin.from("investor_transactions").select("amount, date, project_id").eq("uid", uid),
     projectIdForName(admin, projectName),
   ]);
-  const seen = new Set(((existing ?? []) as any[]).map((t) => `${t.project_id}|${Math.round(Number(t.amount) || 0)}|${String(t.date).slice(0, 10)}`));
+  const seen = new Set(((existing ?? []) as any[]).map((t) => `${t.project_id}|${Math.round(Number(t.amount) || 0)}|${bdDay(t.date)}`));
   let added = 0;
   for (const p of (pays ?? []) as any[]) {
     const amt = Math.round(Number(p.amount) || 0);

@@ -6,6 +6,12 @@
 
 import {
   LayoutDashboard,
+  Landmark,
+  UsersRound,
+  Briefcase,
+  ReceiptText,
+  Tags,
+  UserMinus,
   BarChart3,
   Users,
   CalendarCheck,
@@ -24,12 +30,6 @@ import {
   Settings,
   Rocket,
   KeyRound,
-  Landmark,
-  UsersRound,
-  Briefcase,
-  ReceiptText,
-  Tags,
-  UserMinus,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/auth";
@@ -55,6 +55,9 @@ export const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
  *   • Manager = admin, minus "Vault" (admin-only).                        */
 export const ADMIN_NAV: NavEntry[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, min: "manager" },
+  // LEGACY — kept ONLY to view old records during the Projectify transition.
+  // Everything is managed from Projectify now; REMOVE this whole group from
+  // the sidebar on 1 August 2026 (user's decision, 2026-07-21).
   {
     label: "Investments",
     icon: Landmark,

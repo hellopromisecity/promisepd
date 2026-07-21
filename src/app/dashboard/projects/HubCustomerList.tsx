@@ -378,7 +378,16 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
     const d = p.description ?? "";
     const sep = d.indexOf(" — ");
     const rawType = (sep >= 0 ? d.slice(0, sep) : d).trim();
-    const note = sep >= 0 ? d.slice(sep + 3) : "";
+    let note = sep >= 0 ? d.slice(sep + 3) : "";
+    // Older edits stacked the type prefix ("booking_money — booking_money — …")
+    // — peel every leading "<type> — " so the note comes back clean.
+    for (let i = 0; i < 6; i++) {
+      const at = note.indexOf(" — ");
+      if (at < 0) break;
+      const head = note.slice(0, at).trim().toLowerCase();
+      if (head !== rawType.toLowerCase() && !txnOptions.some((o) => o.name.toLowerCase() === head)) break;
+      note = note.slice(at + 3);
+    }
     const known = txnOptions.find((o) => o.name.toLowerCase() === rawType.toLowerCase());
     const pick = known ? known.name
       : p.kind === "withdrawal" ? (txnOptions.find((o) => o.operator === "-")?.name ?? (rawType || "withdrawal"))

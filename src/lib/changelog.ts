@@ -25,6 +25,19 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.0",
+    date: "2026-07-21",
+    title: "One customer world — everything runs from Projectify",
+    changes: [
+      { kind: "new", text: "Every customer is now an app user. All 573 book customers were migrated to app accounts in one pass — existing users untouched (their own passwords keep working), everyone else got a login (mobile + the default password) with their full payment history and project cards in their PWA. Self-signups appear in All Customers automatically." },
+      { kind: "new", text: "One flow for everything: a single Add customer button also creates the app login (email + password fields built in); the Edit pencil is a full editor — profile & login (File ID, email, verified/active, set a new app password) plus “Add to project” to place anyone in any project with reference commission. Rows show File IDs, and search now puts direct name/number matches first." },
+      { kind: "new", text: "Projectify project pages now carry the app project's full details (description, goal, per-user share, dates, status) with Edit / Add Project / guarded Delete — one edit updates the website, the admin and the investor PWA together. The Analytics daily chart shows each day's visitors on hover." },
+      { kind: "improved", text: "Transactions from anywhere sync everywhere: the book entry, the customer's app transactions, their PWA balance AND project card, plus the SMS — and now edits and deletes update the mirrored app transaction too (each payment remembers its mirror; migration 0029)." },
+      { kind: "fixed", text: "An edited payment could duplicate its app-side copy (a same-day timezone slip made the sync miss the original and add a new one). Matching is timezone-proof now, the hard link prevents any repeat, and the one affected account was repaired to the taka." },
+      { kind: "changed", text: "Projectify is now the single home for customers, transactions, logins and projects. The old Investments menu stays only to look up old records during the transition and leaves the sidebar on 1 August. Staff/admin logins land straight on the dashboard, and the dividend engine's “365 days = 1 year” is locked in everywhere." },
+    ],
+  },
+  {
     version: "2.0.0",
     date: "2026-07-15",
     title: "Promise City 2.0 — the whole company, in one place",
