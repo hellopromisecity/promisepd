@@ -25,9 +25,49 @@ export type ContactEmailPayload = {
   message: string;
 };
 
-/** Where lead notifications land + who they're "from". */
-const NOTIFY_TO = process.env.CONTACT_NOTIFY_EMAIL || "hellopromisecity@gmail.com";
+/** Every lead notification goes to ALL office inboxes (comma-separated
+ *  CONTACT_NOTIFY_EMAIL overrides). NOTE: until promisepd.com is verified at
+ *  resend.com/domains, the shared onboarding@resend.dev sender can only reach
+ *  the Resend account's own inbox — sendTeamEmail falls back to it so at
+ *  least one copy always lands. */
+export const NOTIFY_RECIPIENTS = (process.env.CONTACT_NOTIFY_EMAIL || "kamrulhasanfaridi95@gmail.com,hellopromisecity@gmail.com,promisegroup2023@gmail.com")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+/** The Resend account's own inbox — the only reachable one pre-domain-verify. */
+const OWNER_INBOX = "hellopromisecity@gmail.com";
 const FROM = process.env.CONTACT_FROM_EMAIL || "PromisePD <onboarding@resend.dev>";
+
+/** Send one notification to the whole team. Tries all inboxes first; if the
+ *  shared-sender restriction rejects that, retries with the account's own
+ *  inbox so the lead is never silently dropped. Returns who actually got it. */
+export async function sendTeamEmail(opts: {
+  subject: string;
+  html: string;
+  replyTo?: string;
+  attachments?: { filename: string; content: string }[];
+}): Promise<{ sent: boolean; to: string[] }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log("[email] RESEND_API_KEY not set — skipping notification.");
+    return { sent: false, to: [] };
+  }
+  const resend = new Resend(apiKey);
+  const base = { from: FROM, replyTo: opts.replyTo, subject: opts.subject, html: opts.html, attachments: opts.attachments };
+  try {
+    const { error } = await resend.emails.send({ ...base, to: NOTIFY_RECIPIENTS });
+    if (!error) return { sent: true, to: NOTIFY_RECIPIENTS };
+    if (/verify a domain|only send testing|validation_error/i.test(`${error.name} ${error.message}`)) {
+      const { error: e2 } = await resend.emails.send({ ...base, to: OWNER_INBOX });
+      if (!e2) return { sent: true, to: [OWNER_INBOX] };
+      console.error("[email] fallback send failed:", e2);
+    } else {
+      console.error("[email] send failed:", error);
+    }
+    return { sent: false, to: [] };
+  } catch (err) {
+    console.error("[email] unexpected send error:", err);
+    return { sent: false, to: [] };
+  }
+}
 
 /** Resend's shared `onboarding@resend.dev` sender can ONLY deliver
  *  to your own Resend-account email until you verify a domain.  So
@@ -76,31 +116,13 @@ export async function sendResetCodeEmail(
 export async function sendContactNotification(
   payload: ContactEmailPayload,
 ): Promise<{ sent: boolean }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.log("[email] RESEND_API_KEY not set — skipping notification.");
-    return { sent: false };
-  }
-
-  try {
-    const resend = new Resend(apiKey);
-    const { error } = await resend.emails.send({
-      from: FROM,
-      to: NOTIFY_TO,
-      // Team can hit "Reply" and write straight back to the lead.
-      replyTo: payload.email,
-      subject: `নতুন যোগাযোগ — ${payload.name}`,
-      html: buildContactEmailHtml(payload),
-    });
-    if (error) {
-      console.error("[email] resend send failed:", error);
-      return { sent: false };
-    }
-    return { sent: true };
-  } catch (err) {
-    console.error("[email] unexpected send error:", err);
-    return { sent: false };
-  }
+  // Team can hit "Reply" and write straight back to the lead.
+  const r = await sendTeamEmail({
+    subject: `নতুন যোগাযোগ — ${payload.name}`,
+    html: buildContactEmailHtml(payload),
+    replyTo: payload.email,
+  });
+  return { sent: r.sent };
 }
 
 /** Branded "thanks for subscribing" welcome email to a newsletter
