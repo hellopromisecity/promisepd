@@ -302,6 +302,105 @@ export async function syncMirrorOnPaymentChange(
   } catch { return null; /* the book stays the source of truth — never block its edit */ }
 }
 
+const r2 = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100;
+
+/** Re-roll a book customer's totals from their payments (same math as the
+ *  hub actions' recompute — kept in step so the two never drift). */
+async function recomputeHubCustomer(admin: Admin, customerId: string): Promise<void> {
+  const { data } = await (admin.from as any)("hub_customer_payments").select("amount, kind").eq("customer_id", customerId);
+  const rows = (data ?? []) as Record<string, unknown>[];
+  let paid = 0, dividend = 0, withdrawn = 0;
+  for (const p of rows) { const a = Number(p.amount) || 0; const k = p.kind as string; if (k === "dividend") dividend += a; else if (k === "withdrawal") withdrawn += a; else paid += a; }
+  await (admin.from as any)("hub_customers").update({ total_paid: r2(paid), dividend: r2(dividend), withdrawn: r2(withdrawn), payments_count: rows.length }).eq("id", customerId);
+}
+
+/** The customer's book row in the app project's book — creating one when the
+ *  project has a book but this customer isn't in it yet. Null when the app
+ *  project has no book at all. */
+async function hubRowForAppProject(admin: Admin, uid: string, project_id: string): Promise<{ id: string } | null> {
+  const { data: projD } = await admin.from("investment_projects").select("project_name").eq("project_id", project_id).maybeSingle();
+  const appName = (projD as { project_name?: string } | null)?.project_name;
+  if (!appName) return null;
+  const want = normProj(appToHubName(appName));
+
+  const { data: mineD } = await (admin.from as any)("hub_customers").select("id, project_name, deleted_at").eq("investor_uid", uid);
+  const mine = ((mineD ?? []) as Record<string, unknown>[]).find((r) => !r.deleted_at && (normProj(r.project_name as string) === want || normProj(appToHubName(r.project_name as string)) === want));
+  if (mine) return { id: mine.id as string };
+
+  // project meta from any existing book row of that project
+  const meta = await (async () => {
+    for (let from = 0; ; from += 1000) {
+      const { data } = await (admin.from as any)("hub_customers").select("project_key, project_name, project_type, sort_order").range(from, from + 999);
+      const rows = (data ?? []) as Record<string, unknown>[];
+      const hit = rows.find((r) => normProj(r.project_name as string) === want || normProj(appToHubName(r.project_name as string)) === want);
+      if (hit) return hit;
+      if (rows.length < 1000) return null;
+    }
+  })();
+  if (!meta) return null; // the app project has no book — nothing to write into
+
+  const { data: accD } = await admin.from("investor_accounts").select("full_name, phone_number, fid").eq("uid", uid).maybeSingle();
+  const acc = accD as { full_name: string | null; phone_number: string | null; fid: string | null } | null;
+  if (!acc) return null;
+  const digits = String(acc.phone_number ?? "").replace(/\D/g, "");
+  const mobile = /^book:/i.test(String(acc.phone_number ?? "")) ? null : digits.startsWith("880") ? "0" + digits.slice(3) : digits || null;
+  const { data: ins, error } = await (admin.from as any)("hub_customers").insert({
+    project_key: meta.project_key, project_name: meta.project_name, project_type: meta.project_type, sort_order: meta.sort_order,
+    source_tab: `apptxn-${Date.now()}`, name: acc.full_name ?? "Unnamed", mobile, file_no: acc.fid ?? null,
+    total_price: 0, total_paid: 0, payments_count: 0, investor_uid: uid, bio: {},
+  }).select("id").single();
+  if (error) return null;
+  return { id: (ins as { id: string }).id };
+}
+
+/** REVERSE mirror: an app transaction (added in the Transactions editor) also
+ *  lands in the project BOOK, which every Projectify page reads. The book
+ *  payment stores mirror_tx = the transaction id so the pair stays 1:1 both
+ *  ways. No SMS here (the app editor already texts). Never throws. */
+export async function syncBookFromAppTxn(
+  admin: Admin,
+  txn: { transaction_id: string; uid: string; project_id: string | null; type: string; operator: string; amount: number; date?: string | null; rashid_number?: string | null; description?: string | null },
+  mode: "create" | "update" | "delete",
+): Promise<void> {
+  try {
+    // the linked book payment, if the pair already exists (best-effort pre-0029)
+    let payment: { id: string; customer_id: string } | null = null;
+    try {
+      const { data, error } = await (admin.from as any)("hub_customer_payments").select("id, customer_id").eq("mirror_tx", txn.transaction_id).maybeSingle();
+      if (!error) payment = (data as { id: string; customer_id: string } | null) ?? null;
+    } catch { /* mirror_tx column not migrated yet */ }
+
+    if (mode === "delete") {
+      if (!payment) return;
+      await (admin.from as any)("hub_customer_payments").delete().eq("id", payment.id);
+      await recomputeHubCustomer(admin, payment.customer_id);
+      return;
+    }
+
+    const kind = txn.operator === "-" ? "withdrawal" : /dividend|লভ্যাংশ|profit/i.test(txn.type) ? "dividend" : "deposit";
+    const day = txn.date && /^\d{4}-\d{2}-\d{2}/.test(String(txn.date)) ? String(txn.date).slice(0, 10) : bdDay(txn.date ?? new Date().toISOString());
+    const desc = txn.description ? `${txn.type} — ${txn.description}` : txn.type;
+    const row = { date: day, amount: r2(txn.amount), kind, description: desc, receipt_no: txn.rashid_number || null };
+
+    if (payment) {
+      await (admin.from as any)("hub_customer_payments").update(row).eq("id", payment.id);
+      await recomputeHubCustomer(admin, payment.customer_id);
+      return;
+    }
+
+    // no pair yet → create it (covers both fresh adds and older unlinked edits)
+    if (!txn.project_id) return; // a general (no-project) txn has no book home
+    const hub = await hubRowForAppProject(admin, txn.uid, txn.project_id);
+    if (!hub) return;
+    const { data: mx } = await (admin.from as any)("hub_customer_payments").select("seq").eq("customer_id", hub.id).order("seq", { ascending: false }).limit(1).maybeSingle();
+    const seq = Number((mx as { seq?: number } | null)?.seq ?? -1) + 1;
+    const { error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, mirror_tx: txn.transaction_id });
+    if (error) await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row }); // pre-0029 fallback
+    await recomputeHubCustomer(admin, hub.id);
+    await ensureMembership(admin, txn.uid, txn.project_id);
+  } catch { /* the app-side save must never fail because of the book copy */ }
+}
+
 /** Backfill: mirror all of a book customer's existing payments into `uid` (used
  *  when they're first linked). Skips payments already mirrored (same project +
  *  amount + date) so re-linking doesn't duplicate, and ensures the project

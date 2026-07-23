@@ -2,6 +2,7 @@ import "server-only";
 import { getAdmin } from "@/lib/admin-guard";
 import { hubAllCustomers, hubProjectSummaries, type HubCustomer } from "@/lib/hub";
 import { listInvestors, listTypes, listProjects, listTransactions, investorTotals, investorProjectTotals } from "@/lib/investments";
+import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
 import type { AppUser, UserTxn, TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
 
 /** One project a customer holds in (shown in their detail popup).
@@ -136,6 +137,22 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     byUid.set(t.uid, list);
   }
 
+  // ── live (accrued) deposit dividend per book row, same engine as the
+  // project pages — so a fully-withdrawn deposit shows its TRUE remaining
+  // (e.g. principal 8,00,000 + accrued 81,044 − withdrawn 8,81,044 = 0,
+  // not −81,044 just because the dividend wasn't recorded as a row) ──
+  const accrued = new Map<string, number>();
+  for (const s of summaries.filter((x) => x.type === "deposit")) {
+    try {
+      const cfg = await getProfitConfig(s.key);
+      if (!cfg.enabled) continue;
+      const ids = customers.filter((c) => c.project_key === s.key).map((c) => c.id);
+      const m = await accruedProfitByCustomer(ids, cfg);
+      for (const [id, v] of m) accrued.set(id, v);
+    } catch { /* a scheme without a rate simply shows recorded dividends */ }
+  }
+  const hubAcc = (c: HubCustomer) => accrued.get(c.id) ?? 0;
+
   // app project → book project (fixed naming so we land on the real 9)
   const hubByNorm = new Map<string, { key: string; name: string; type: string }>();
   for (const p of summaries) hubByNorm.set(normProj(p.name), { key: p.key, name: p.name, type: p.type });
@@ -173,7 +190,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     const covered = new Set(bookRows.map((r) => r.project_key));
     const holdings: PersonHolding[] = bookRows.map((r) => ({
       id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type,
-      source: "hub" as const, paid: r.total_paid, profit: hubProfit(r), balance: hubBalance(r),
+      source: "hub" as const, paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r),
     }));
     // app-only money (projects with no book row) — the book ledger wins where both exist
     for (const [appProjId, t] of investorProjectTotals(userTxns)) {
@@ -216,10 +233,10 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     if (!p.mobile && r.mobile) p.mobile = r.mobile;
     if (r.joining_date && (!p.joined || r.joining_date < p.joined)) p.joined = r.joining_date;
     p.totalPaid += r.total_paid;
-    p.totalProfit += hubProfit(r);
-    p.totalBalance += hubBalance(r);
+    p.totalProfit += hubProfit(r) + hubAcc(r);
+    p.totalBalance += hubBalance(r) + hubAcc(r);
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
-    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", paid: r.total_paid, profit: hubProfit(r), balance: hubBalance(r) });
+    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
   }
   people.push(...byName.values());
   people.sort((a, b) => b.totalBalance - a.totalBalance);

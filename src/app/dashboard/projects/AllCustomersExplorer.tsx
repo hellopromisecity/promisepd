@@ -5,7 +5,7 @@
  *  that account's book holdings + app-only money; per-project detail lives on
  *  the individual project pages. Click a row to see the project breakdown. */
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
@@ -348,10 +348,25 @@ export default function AllCustomersExplorer({
  *  Deactivate (type "deactivate") and Delete (type "delete" → 30-day archive). */
 function RowMenu({ person }: { person: PersonRow }) {
   const router = useRouter();
+  const btnRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; up: boolean }>({ top: 0, left: 0, up: false });
   const [confirm, setConfirm] = useState<null | "deactivate" | "activate" | "delete">(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  // The table scrolls inside a max-height container, so an absolutely-placed
+  // menu gets CLIPPED on the bottom rows (it looked like "nothing opens").
+  // Position it fixed from the button instead, flipping upward near the edge.
+  function toggle() {
+    if (open) return setOpen(false);
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) {
+      const up = r.bottom > window.innerHeight - 130;
+      setPos({ top: up ? r.top - 6 : r.bottom + 6, left: Math.max(8, r.right - 192), up });
+    }
+    setOpen(true);
+  }
 
   function run(kind: "deactivate" | "activate" | "delete") {
     setErr(null);
@@ -365,13 +380,13 @@ function RowMenu({ person }: { person: PersonRow }) {
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} title="More actions" className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg text-fg-muted transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm">
+      <button ref={btnRef} type="button" onClick={toggle} title="More actions" className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg text-fg-muted transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm">
         <MoreVertical className="h-4 w-4" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-40 mt-1 w-48 overflow-hidden rounded-xl border border-border bg-bg shadow-xl">
+          <div className="fixed z-40 w-48 overflow-hidden rounded-xl border border-border bg-bg shadow-xl" style={{ top: pos.top, left: pos.left, transform: pos.up ? "translateY(-100%)" : undefined }}>
             <button type="button" onClick={() => { setOpen(false); setErr(null); setConfirm(person.is_active ? "deactivate" : "activate"); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-fg hover:bg-bg-soft">
               {person.is_active ? <UserX className="h-4 w-4 text-amber-600" /> : <UserCheck className="h-4 w-4 text-emerald-600" />} {person.is_active ? "Deactivate user" : "Activate user"}
             </button>

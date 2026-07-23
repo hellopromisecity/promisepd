@@ -24,7 +24,7 @@ import {
   type ActionResult,
 } from "@/lib/admin-guard";
 import { sendTransactionSms } from "@/lib/sms";
-import { DEFAULT_MEMBER_PASSWORD } from "@/lib/investor-write";
+import { DEFAULT_MEMBER_PASSWORD, syncBookFromAppTxn } from "@/lib/investor-write";
 
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
 
@@ -178,6 +178,21 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       });
     }
 
+    // Book copy: the transaction also lands in the project BOOK, so the
+    // Projectify project pages and All Customers show it too (reverse of the
+    // book→app mirror; the pair is linked by mirror_tx). Never throws.
+    await syncBookFromAppTxn(admin, {
+      transaction_id: id!,
+      uid,
+      project_id,
+      type,
+      operator: (ty as { operator: string }).operator ?? "+",
+      amount,
+      date: input.date,
+      rashid_number: input.rashid_number,
+      description: input.description,
+    }, creating ? "create" : "update");
+
     await logAudit({
       action: input.transaction_id ? "update" : "create",
       entity: "investor_transaction",
@@ -207,6 +222,8 @@ export async function deleteInvestorTransaction(transactionId: string): Promise<
     const { error } = await admin.from("investor_transactions").delete().eq("transaction_id", transactionId);
     if (error) throw new Error(error.message);
     await recomputeBalance(admin, (existing as { uid: string }).uid);
+    // drop the linked book payment too, so the project pages agree
+    await syncBookFromAppTxn(admin, { transaction_id: transactionId, uid: (existing as { uid: string }).uid, project_id: null, type: "", operator: "+", amount: 0 }, "delete");
 
     await logAudit({ action: "delete", entity: "investor_transaction", entityId: transactionId, detail: `Deleted transaction ${transactionId}` });
     revalidatePath("/dashboard/investments/transactions");
