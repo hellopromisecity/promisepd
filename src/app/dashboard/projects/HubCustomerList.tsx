@@ -429,7 +429,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
               <div><label className={labelCls}>Date</label><input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} /></div>
               <div><label className={labelCls}>Receipt #</label><input className={inputCls} value={receipt} onChange={(e) => setReceipt(e.target.value)} /></div>
             </div>
-            <div><label className={labelCls}>Note</label><input className={inputCls} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional" /></div>
+            <div><label className={labelCls}>Note</label><textarea rows={3} className={`${inputCls} resize-y`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional — long messages wrap here" /></div>
             <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editingId ? "Save changes" : "Add transaction"}
             </button>

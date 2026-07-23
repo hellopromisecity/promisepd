@@ -10,19 +10,18 @@ import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
-  Pencil, Loader2, Lock, KeyRound, FolderPlus,
+  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Archive, RotateCcw, Trash2, UserX, UserCheck,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
 import type { TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
-import type { PersonRow, PersonHolding, AppHealth } from "@/lib/all-customers";
+import type { PersonRow, PersonHolding, AppHealth, ArchivedRow } from "@/lib/all-customers";
 import type { HubCustomer } from "@/lib/hub";
 import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
-import UserActive from "@/app/dashboard/investments/users/UserActive";
-import { updateInvestor, resetMemberPassword, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, type CustomerInput } from "@/app/actions/hub";
+import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
+import { assignCustomerToProject, archivePerson, restorePerson, type CustomerInput } from "@/app/actions/hub";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -32,9 +31,10 @@ type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
 type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying" | "book";
 
 export default function AllCustomersExplorer({
-  people, projects, health, top, totals, investorTypes, investorProjects,
+  people, archived, projects, health, top, totals, investorTypes, investorProjects,
 }: {
   people: PersonRow[];
+  archived: ArchivedRow[];
   projects: HubProject[];
   health: AppHealth;
   top: { name: string; balance: number }[];
@@ -52,6 +52,7 @@ export default function AllCustomersExplorer({
   const [mounted, setMounted] = useState(false);
   const [detail, setDetail] = useState<PersonRow | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setMounted(true), 40); return () => clearTimeout(t); }, []);
   useEffect(() => { setPage(1); }, [q, status, projFilter, perPage]);
@@ -209,6 +210,13 @@ export default function AllCustomersExplorer({
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-brand-blue/30 bg-brand-blue-tint px-3 py-2.5 text-sm font-bold text-brand-blue">
           <Users className="h-4 w-4" /> {total.toLocaleString("en-IN")} <span className="font-medium text-brand-blue/70">of {people.length}</span>
         </span>
+        {/* deleted customers wait here 30 days before they're gone for good */}
+        <button
+          onClick={() => setShowArchive((v) => !v)}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${showArchive ? "border-amber-400 bg-amber-500/15 text-amber-600" : "border-border bg-bg text-fg-muted hover:border-amber-400/60 hover:text-amber-600"}`}
+        >
+          <Archive className="h-4 w-4" /> Archive ({archived.length})
+        </button>
         <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, mobile, UID, project…"
@@ -236,7 +244,9 @@ export default function AllCustomersExplorer({
         <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark"><UserPlus className="h-4 w-4" /> Add customer</button>
       </div>
 
-      {/* table */}
+      {showArchive ? (
+        <ArchivePanel archived={archived} />
+      ) : (
       <div className="overflow-hidden rounded-2xl border border-border bg-bg">
         <div className="max-h-[560px] overflow-auto">
           <table className="w-full min-w-[860px] border-collapse text-sm">
@@ -300,7 +310,7 @@ export default function AllCustomersExplorer({
                           <>
                             <UserTxns user={p.app} types={investorTypes} projects={investorProjects} />
                             <CustomerEdit person={p} projects={hubProjects} />
-                            <UserActive uid={p.uid!} name={p.name} active={!!p.is_active} />
+                            <RowMenu person={p} />
                           </>
                         )}
                       </div>
@@ -326,9 +336,134 @@ export default function AllCustomersExplorer({
           </div>
         </div>
       </div>
+      )}
 
       {detail && <PersonModal person={detail} onClose={() => setDetail(null)} />}
       {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
+    </div>
+  );
+}
+
+/** ⋯ row menu — the risky actions live behind a dropdown with type-to-confirm:
+ *  Deactivate (type "deactivate") and Delete (type "delete" → 30-day archive). */
+function RowMenu({ person }: { person: PersonRow }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState<null | "deactivate" | "activate" | "delete">(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function run(kind: "deactivate" | "activate" | "delete") {
+    setErr(null);
+    start(async () => {
+      const r = kind === "delete" ? await archivePerson(person.uid!) : await setInvestorActive(person.uid!, kind === "activate");
+      if (!r.ok) return setErr(r.error);
+      setConfirm(null);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)} title="More actions" className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg text-fg-muted transition-all hover:-translate-y-0.5 hover:border-brand-blue/40 hover:text-brand-blue hover:shadow-sm">
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-40 mt-1 w-48 overflow-hidden rounded-xl border border-border bg-bg shadow-xl">
+            <button type="button" onClick={() => { setOpen(false); setErr(null); setConfirm(person.is_active ? "deactivate" : "activate"); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-fg hover:bg-bg-soft">
+              {person.is_active ? <UserX className="h-4 w-4 text-amber-600" /> : <UserCheck className="h-4 w-4 text-emerald-600" />} {person.is_active ? "Deactivate user" : "Activate user"}
+            </button>
+            <button type="button" onClick={() => { setOpen(false); setErr(null); setConfirm("delete"); }} className="flex w-full items-center gap-2 border-t border-border/60 px-3 py-2.5 text-left text-sm font-medium text-brand-red-dark hover:bg-brand-red-tint">
+              <Trash2 className="h-4 w-4" /> Delete user
+            </button>
+          </div>
+        </>
+      )}
+      {confirm && <TypeConfirm kind={confirm} name={person.name} pending={pending} err={err} onCancel={() => setConfirm(null)} onConfirm={() => run(confirm)} />}
+    </div>
+  );
+}
+
+/** Confirmation that makes you TYPE the action word before Confirm unlocks. */
+function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm }: {
+  kind: "deactivate" | "activate" | "delete"; name: string; pending: boolean; err: string | null;
+  onCancel: () => void; onConfirm: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const word = kind === "delete" ? "delete" : kind === "deactivate" ? "deactivate" : null;
+  const ready = !word || typed.trim().toLowerCase() === word;
+  const danger = kind === "delete";
+  const title = kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : "Activate user";
+  const message =
+    kind === "delete"
+      ? `“${name}” disappears from every list — All Customers, the project pages and reports. They stay in the Archive for 30 days, restorable in one click.`
+      : kind === "deactivate"
+        ? `“${name}” stays everywhere but their app account is switched off.`
+        : `Switch “${name}”’s app account back on.`;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && onCancel()}>
+      <div className="w-full max-w-sm animate-[pop_.18s_ease-out] rounded-2xl border border-border bg-bg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className={`text-base font-bold ${danger ? "text-brand-red-dark" : "text-fg"}`}>{title}</h2>
+        <p className="mt-2 text-sm text-fg-muted">{message}</p>
+        {word && (
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-semibold text-fg-muted">Type <span className={`font-mono font-bold ${danger ? "text-brand-red-dark" : "text-amber-600"}`}>{word}</span> to confirm</label>
+            <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={word} className="w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none focus:border-brand-blue/50" />
+          </div>
+        )}
+        {err && <p className="mt-3 rounded-lg bg-brand-red-tint px-3 py-2 text-xs font-medium text-brand-red-dark">{err}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} disabled={pending} className="rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-semibold text-fg hover:border-brand-blue/40 disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={!ready || pending} className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40 ${danger ? "bg-brand-red hover:bg-brand-red-dark" : "bg-brand-blue hover:bg-brand-blue-dark"}`}>
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />} Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The 30-day recycle bin — deleted customers wait here with a Restore button. */
+function ArchivePanel({ archived }: { archived: ArchivedRow[] }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  function restore(uid: string) {
+    setBusy(uid);
+    start(async () => {
+      const r = await restorePerson(uid);
+      setBusy(null);
+      if (r.ok) router.refresh();
+    });
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl border border-amber-400/40 bg-bg">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-amber-500/10 px-4 py-3">
+        <Archive className="h-4 w-4 text-amber-600" />
+        <h3 className="text-sm font-bold text-fg">Archive</h3>
+        <span className="text-xs text-fg-muted">deleted customers stay here for 30 days — restore brings everything back exactly as it was</span>
+      </div>
+      {archived.length === 0 ? (
+        <p className="px-4 py-12 text-center text-sm text-fg-muted">The archive is empty. When you delete a customer they wait here for 30 days first.</p>
+      ) : (
+        <ul className="divide-y divide-border/60">
+          {archived.map((a) => (
+            <li key={a.uid} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-fg">{a.name}</p>
+                <p className="text-[11px] text-fg-muted">{localPhone(a.mobile)}{a.fid ? ` · File ${a.fid}` : ""} · {a.uid} · deleted {fmtDate(a.deletedAt.slice(0, 10))}</p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums text-fg">{fmt(a.balance)}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${a.daysLeft <= 7 ? "bg-brand-red-tint text-brand-red-dark" : "bg-amber-500/15 text-amber-600"}`}>{a.daysLeft} days left</span>
+              <button type="button" onClick={() => restore(a.uid)} disabled={pending} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-bg px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50">
+                {busy === a.uid && pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Restore
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -347,6 +482,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   // profile
   const [name, setName] = useState(person.name);
   const [fid, setFid] = useState(person.fid ?? "");
+  const [mobileVal, setMobileVal] = useState(localPhone(person.mobile) || "");
   const [email, setEmail] = useState(person.email ?? "");
   const [verified, setVerified] = useState(!!person.is_verified);
   const [active, setActive] = useState(!!person.is_active);
@@ -368,14 +504,22 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   function saveProfile() {
     setErr(null); setMsg(null);
     const input: InvestorInput = { full_name: name, fid, email, is_active: active, is_verified: verified };
+    const digitsOf = (s: string) => (s || "").replace(/\D/g, "");
+    const mobileChanged = mobileVal.trim() !== "" && digitsOf(mobileVal) !== digitsOf(localPhone(person.mobile) || "");
     start(async () => {
+      // number first — it's the login key, and everything (auth, profile,
+      // account, linked book rows → SMS) moves with it
+      if (mobileChanged) {
+        const mv = await changeMemberMobile(person.uid!, mobileVal.trim());
+        if (!mv.ok) return setErr(mv.error);
+      }
       const r = await updateInvestor(person.uid!, input);
       if (!r.ok) return setErr(r.error);
       if (newPass.trim()) {
         const pw = await resetMemberPassword(person.uid!, newPass);
         if (!pw.ok) return setErr(`Saved, but the password wasn’t changed: ${pw.error}`);
       }
-      setMsg(newPass.trim() ? "Saved — new password is live." : "Saved.");
+      setMsg([mobileChanged ? "Number changed — they log in with the new number now." : null, newPass.trim() ? "New password is live." : null].filter(Boolean).join(" ") || "Saved.");
       setNewPass("");
       router.refresh();
     });
@@ -425,8 +569,8 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className={labelCls}>File ID</label><input className={inputCls} value={fid} onChange={(e) => setFid(e.target.value)} placeholder="—" /></div>
                   <div>
-                    <label className={labelCls}>Mobile <span className="font-normal normal-case text-fg-faint">(login key)</span></label>
-                    <div className="flex items-center gap-1.5 rounded-xl border border-border bg-bg-soft/60 px-3 py-2.5 text-sm text-fg-muted"><Lock className="h-3.5 w-3.5 shrink-0 text-fg-faint" /><span className="truncate">{localPhone(person.mobile) || "—"}</span></div>
+                    <label className={labelCls}>Mobile <span className="font-normal normal-case text-fg-faint">(login key — changing it moves their login too)</span></label>
+                    <input className={inputCls} value={mobileVal} onChange={(e) => setMobileVal(e.target.value)} placeholder="01XXXXXXXXX" />
                   </div>
                 </div>
                 <div><label className={labelCls}>Email <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} /></div>
@@ -479,7 +623,7 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
     id: h.id, project_key: h.project_key, project_name: h.project_name, project_type: h.project_type,
     file_no: null, name: person.name, mobile: person.mobile, district: null, nid: null, reference: null,
     joining_date: person.joined, total_price: 0, total_paid: h.paid, total_remaining: 0, dividend: 0,
-    withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: null, bio: {},
+    withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: null, deleted_at: null, bio: {},
   });
   const hp = (h: PersonHolding): HubProject => ({ key: h.project_key, name: h.project_name, type: h.project_type, sort: 0 });
 

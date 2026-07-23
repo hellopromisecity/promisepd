@@ -48,8 +48,20 @@ export type AppHealth = {
   verifiedPct: number; activePct: number;
 };
 
+/** A deleted customer sitting in the 30-day archive, restorable in one click. */
+export type ArchivedRow = {
+  uid: string;
+  name: string;
+  mobile: string | null;
+  fid: string | null;
+  balance: number;
+  deletedAt: string;
+  daysLeft: number;
+};
+
 export type AllCustomersData = {
   people: PersonRow[];
+  archived: ArchivedRow[];
   projects: { key: string; name: string; type: string; sort: number }[];
   health: AppHealth;
   top: { name: string; balance: number }[];
@@ -83,15 +95,31 @@ const hubProfit = (c: HubCustomer) => (c.project_type === "deposit" ? c.dividend
 export async function loadAllCustomers(): Promise<AllCustomersData> {
   const admin = getAdmin();
   const empty: AllCustomersData = {
-    people: [], projects: [], investorTypes: [], investorProjects: [], top: [],
+    people: [], archived: [], projects: [], investorTypes: [], investorProjects: [], top: [],
     health: { total: 0, verified: 0, unverified: 0, active: 0, inactive: 0, verifiedPct: 0, activePct: 0 },
     totals: { collected: 0, memberships: 0, uniqueCount: 0, appAccounts: 0, payers: 0 },
   };
   if (!admin) return empty;
 
-  const [customers, summaries, investors, types, projects, txns] = await Promise.all([
+  const [customersAll, summaries, investorsAll, types, projects, txns] = await Promise.all([
     hubAllCustomers(), hubProjectSummaries(), listInvestors(admin), listTypes(admin), listProjects(admin), listTransactions(admin),
   ]);
+
+  // ── soft-deleted (archived) customers: out of every list, restorable 30 days ──
+  const DAY = 86400000;
+  const now = Date.now();
+  const customers = customersAll.filter((c) => !c.deleted_at);
+  const investors = investorsAll.filter((i) => !(i as unknown as { deleted_at?: string }).deleted_at);
+  const archived: ArchivedRow[] = investorsAll
+    .filter((i) => (i as unknown as { deleted_at?: string }).deleted_at)
+    .map((i) => {
+      const deletedAt = String((i as unknown as { deleted_at?: string }).deleted_at);
+      const daysLeft = 30 - Math.floor((now - Date.parse(deletedAt)) / DAY);
+      const bal = (i.balance as { total_balance?: number } | null)?.total_balance ?? 0;
+      return { uid: i.uid, name: i.full_name || "Unnamed", mobile: i.phone_number, fid: i.fid, balance: Number(bal) || 0, deletedAt, daysLeft };
+    })
+    .filter((a) => a.daysLeft > 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
 
   // group each investor's transactions
   const op = new Map(types.map((t) => [t.name, t.operator]));
@@ -205,6 +233,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   const denom = investors.length || 1;
   return {
     people,
+    archived,
     projects: projOpts,
     health: {
       total: investors.length, verified, unverified: investors.length - verified, active, inactive: investors.length - active,

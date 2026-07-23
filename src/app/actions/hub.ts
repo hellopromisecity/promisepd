@@ -18,6 +18,9 @@ const rec = (d: unknown) => (d ?? null) as any;
 const HC = (a: Admin) => (a.from as any)("hub_customers");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const HP = (a: Admin) => (a.from as any)("hub_customer_payments");
+// deleted_at (0030) isn't in the generated types yet → loosen this one too.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const IA = (a: Admin) => (a.from as any)("investor_accounts");
 
 async function guard(): Promise<Admin | null> {
   const me = await getCurrentUser();
@@ -189,6 +192,41 @@ export async function createHubCustomer(project: { key: string; name: string; ty
     revalidatePath(`/dashboard/projects/${project.key}`);
     revalidatePath("/dashboard/projects/all");
     return { ok: true, message: uid ? "Customer added — app account ready (mobile + password)." : "Customer added (no usable mobile — app login can be added later)." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── delete → 30-day archive → restore (soft delete, migration 0030) ──
+/** "Delete" a customer: hide the account + every linked book row everywhere,
+ *  but keep them restorable for 30 days (a financial ledger never hard-deletes
+ *  by accident). Login is switched off while archived. */
+export async function archivePerson(uid: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!uid) return { ok: false, error: "Missing user." };
+    const { error } = await IA(admin).update({ deleted_at: new Date().toISOString(), is_active: false }).eq("uid", uid);
+    if (error) {
+      return { ok: false, error: /deleted_at|column/i.test(String(error.message)) ? "Archive needs migration 0030 — run the SQL first." : String(error.message) };
+    }
+    await HC(admin).update({ deleted_at: new Date().toISOString() }).eq("investor_uid", uid);
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    return { ok: true, message: "Moved to the archive — restorable for 30 days." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** Bring an archived customer back exactly as they were. */
+export async function restorePerson(uid: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!uid) return { ok: false, error: "Missing user." };
+    const { error } = await IA(admin).update({ deleted_at: null, is_active: true }).eq("uid", uid);
+    if (error) return { ok: false, error: String(error.message) };
+    await HC(admin).update({ deleted_at: null }).eq("investor_uid", uid);
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    return { ok: true, message: "Restored — back in every list." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 

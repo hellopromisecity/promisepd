@@ -28,6 +28,7 @@ export default async function AllCustomersPage() {
       />
       <AllCustomersExplorer
         people={data.people}
+        archived={data.archived}
         projects={data.projects}
         health={data.health}
         top={data.top}

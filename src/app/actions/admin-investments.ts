@@ -24,6 +24,7 @@ import {
   type ActionResult,
 } from "@/lib/admin-guard";
 import { sendTransactionSms } from "@/lib/sms";
+import { DEFAULT_MEMBER_PASSWORD } from "@/lib/investor-write";
 
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
 
@@ -247,6 +248,68 @@ export async function updateInvestor(uid: string, input: InvestorInput): Promise
     await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Updated investor ${name}` });
     revalidatePath("/dashboard/investments/users");
     return { message: "Investor saved." };
+  });
+}
+
+/** Change a member's MOBILE NUMBER — the login key. Updates everything that
+ *  depends on it in one go: the auth login (synthetic email), their profile,
+ *  the investor account, and every linked book row (so SMS goes to the new
+ *  number too). If the account never had a login (no mobile before), one is
+ *  created now with the default password. Their password is never changed. */
+export async function changeMemberMobile(uid: string, rawMobile: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!uid) throw new ValidationError("Missing investor.");
+    const mobile = canonMobile(rawMobile ?? "");
+    if (mobile.length < 8) throw new ValidationError("Enter a valid mobile number (01XXXXXXXXX).");
+
+    const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, phone_number, profile_id").eq("uid", uid).maybeSingle();
+    const acc = accD as { uid: string; full_name: string | null; phone_number: string | null; profile_id: string | null } | null;
+    if (!acc) throw new ValidationError("That app user no longer exists.");
+    const last10 = (m: string | null) => { const d = (m || "").replace(/\D/g, ""); return d.length >= 10 ? d.slice(-10) : d; };
+    if (last10(acc.phone_number) === last10(mobile)) return { message: "That's already their number." };
+
+    // the number must not belong to someone else
+    const { data: all } = await admin.from("investor_accounts").select("uid, phone_number");
+    const clash = (all ?? []).find((a) => a.uid !== uid && last10(a.phone_number as string) === last10(mobile));
+    if (clash) throw new ValidationError(`This number already belongs to ${clash.uid}.`);
+
+    // login: move the existing auth to the new synthetic email — or create a
+    // fresh login (default password) if they never had one
+    let profileId = acc.profile_id;
+    const email = `${mobile}@${AUTH_EMAIL_DOMAIN}`;
+    if (profileId) {
+      const { error } = await admin.auth.admin.updateUserById(profileId, { email, email_confirm: true, user_metadata: { mobile } });
+      if (error) {
+        if (/already|registered|exists/i.test(error.message)) throw new ValidationError("A login already exists with this number — free it first.");
+        throw new Error(error.message);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from("profiles") as any).update({ mobile }).eq("id", profileId);
+    } else {
+      const { data: created, error } = await admin.auth.admin.createUser({ email, password: DEFAULT_MEMBER_PASSWORD, email_confirm: true, user_metadata: { name: acc.full_name, mobile } });
+      if (error) {
+        if (/already|registered|exists/i.test(error.message)) throw new ValidationError("A login already exists with this number — free it first.");
+        throw new Error(error.message);
+      }
+      profileId = created.user.id;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from("profiles") as any).upsert({ id: profileId, name: acc.full_name, mobile, role: "member" }, { onConflict: "id" });
+      await admin.from("investor_accounts").update({ profile_id: profileId }).eq("uid", uid);
+    }
+
+    await admin.from("investor_accounts").update({ phone_number: "+" + mobile }).eq("uid", uid);
+    // linked book rows follow, so transaction SMS reaches the new number
+    const local = mobile.startsWith("880") ? "0" + mobile.slice(3) : mobile;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin.from as any)("hub_customers").update({ mobile: local }).eq("investor_uid", uid);
+
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Changed mobile for ${acc.full_name ?? uid} → ${local}` });
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/investments/users");
+    return { message: acc.profile_id ? "Number changed — they log in with the new number, same password." : `Number set — login created (new number + default password ${DEFAULT_MEMBER_PASSWORD}).` };
   });
 }
 

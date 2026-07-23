@@ -26,6 +26,8 @@ export type HubCustomer = {
   payments_count: number;
   reference_officer_id: string | null;
   investor_uid: string | null;
+  /** Soft delete (migration 0030): archived rows stay restorable for 30 days. */
+  deleted_at: string | null;
   bio: Record<string, unknown>;
 };
 
@@ -59,12 +61,11 @@ export async function hubProjectSummaries(): Promise<HubProjectSummary[]> {
   if (!admin) return [];
   const rows: Record<string, unknown>[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data } = await admin
-      .from("hub_customers")
-      .select("project_key, project_name, project_type, sort_order, total_paid, payments_count")
-      .range(from, from + 999);
-    const r = data ?? [];
-    rows.push(...r);
+    // select * (not named columns) so this still works before migration 0030
+    // adds deleted_at — absent column simply reads as undefined.
+    const { data } = await admin.from("hub_customers").select("*").range(from, from + 999);
+    const r = (data ?? []) as Record<string, unknown>[];
+    rows.push(...r.filter((c) => !c.deleted_at));
     if (r.length < 1000) break;
   }
   const m = new Map<string, HubProjectSummary>();
@@ -111,7 +112,8 @@ export async function hubProjectCustomers(key: string): Promise<HubCustomer[]> {
     rows.push(...r);
     if (r.length < 1000) break;
   }
-  return rows.map(mapCustomer);
+  // archived (soft-deleted) customers stay out of the project pages
+  return rows.map(mapCustomer).filter((c) => !c.deleted_at);
 }
 
 /** One customer + their full payment ledger. */
@@ -158,6 +160,7 @@ function mapCustomer(c: Record<string, unknown>): HubCustomer {
     payments_count: n(c.payments_count),
     reference_officer_id: (c.reference_officer_id as string) ?? null,
     investor_uid: (c.investor_uid as string) ?? null,
+    deleted_at: (c.deleted_at as string) ?? null,
     bio: (c.bio as Record<string, unknown>) ?? {},
   };
 }
