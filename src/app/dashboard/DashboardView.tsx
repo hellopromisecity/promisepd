@@ -50,24 +50,27 @@ function presetRange(id: string): { from: string; to: string } {
 function computeFlow(txns: Txn[], from: string, to: string) {
   const empty = { gran: "month" as "day" | "week" | "month", bars: [] as { label: string; in: number; out: number }[], count: 0, inTotal: 0, outTotal: 0 };
   if (!txns.length) return empty;
-  const dk = (iso: string) => iso.slice(0, 10);
+  // BD calendar day — identical on server (UTC) and browser (BD) so
+  // hydration never mismatches; raw slice(0,10) read midnight-stored rows
+  // (T18:00Z) as the previous day on the server.
+  const dk = (iso: string) => (iso ? new Date(new Date(iso).getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10) : "");
   let fromS = from, toS = to;
   if (!fromS || !toS) {
-    // Last 12 calendar months ending TODAY — never anchored to the latest
-    // transaction, so a future-dated entry can't drag the window forward.
-    const now = new Date();
-    const minD = new Date(now); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
-    toS = toS || now.toLocaleDateString("en-CA");
-    fromS = fromS || minD.toLocaleDateString("en-CA");
+    // Last 12 calendar months ending TODAY (BD day) — never anchored to the
+    // latest transaction, so a future-dated entry can't drag the window forward.
+    const today = dk(new Date().toISOString());
+    const [ty, tm] = today.split("-").map(Number);
+    toS = toS || today;
+    fromS = fromS || new Date(Date.UTC(ty, tm - 12, 1)).toISOString().slice(0, 10);
   }
   const fromD = new Date(`${fromS}T00:00:00`), toD = new Date(`${toS}T00:00:00`);
   if (Number.isNaN(fromD.getTime()) || Number.isNaN(toD.getTime()) || fromD > toD) return empty;
   const span = (toD.getTime() - fromD.getTime()) / 86400000;
   const gran: "day" | "week" | "month" = span <= 45 ? "day" : span <= 180 ? "week" : "month";
   const keyOf = (iso: string) => {
-    const ds = iso.slice(0, 10);
+    const ds = dk(iso); // BD day, hydration-safe
     if (gran === "day") return ds;
-    if (gran === "month") return iso.slice(0, 7);
+    if (gran === "month") return ds.slice(0, 7);
     const d = new Date(`${ds}T00:00:00`); d.setDate(d.getDate() - d.getDay()); return d.toLocaleDateString("en-CA");
   };
   const acc = new Map<string, { in: number; out: number }>();
@@ -101,7 +104,7 @@ const compact = (n: number) => {
 };
 const taka = (n: number) => `৳${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
-const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Dhaka" });
 const initial = (n: string) => (n?.trim()?.[0] ?? "?").toUpperCase();
 
 /** Ease-out count-up that runs once when `on` flips true. */

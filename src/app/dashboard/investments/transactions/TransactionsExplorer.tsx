@@ -51,8 +51,11 @@ function compact(n: number): string {
   return `${sign}৳${Math.round(a).toLocaleString("en-US")}`;
 }
 const taka = (n: number) => `৳${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
-const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
-const dayKey = (iso: string) => (iso || "").slice(0, 10);
+const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Dhaka" }) : "—");
+// BD calendar day of a timestamp — identical on the server (UTC) and the
+// browser (BD), so dates never mismatch during hydration. A raw slice(0,10)
+// read midnight-stored rows (T18:00Z) as the previous day on the server.
+const dayKey = (iso: string) => (iso ? new Date(new Date(iso).getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10) : "");
 
 type SortKey = "date" | "amount" | "type" | "user";
 
@@ -146,14 +149,15 @@ export default function TransactionsExplorer({
     let fromS = applied.from;
     let toS = applied.to;
     if (!fromS || !toS) {
-      // No date filter → the last 12 calendar months ending TODAY. Anchoring
-      // to the latest transaction let a single future-dated entry (a
-      // scheduled maturity withdrawal, a typo) drag the whole window forward
+      // No date filter → the last 12 calendar months ending TODAY (BD day,
+      // computed the same way on server and client so hydration matches).
+      // Anchoring to the latest transaction let a single future-dated entry
+      // (a scheduled maturity withdrawal, a typo) drag the window forward
       // into months that haven't happened yet.
-      const now = new Date();
-      const minD = new Date(now); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
-      toS = toS || now.toLocaleDateString("en-CA");
-      fromS = fromS || minD.toLocaleDateString("en-CA");
+      const today = dayKey(new Date().toISOString());
+      const [ty, tm] = today.split("-").map(Number);
+      toS = toS || today;
+      fromS = fromS || new Date(Date.UTC(ty, tm - 12, 1)).toISOString().slice(0, 10);
     }
     const fromD = new Date(`${fromS}T00:00:00`);
     const toD = new Date(`${toS}T00:00:00`);
@@ -162,9 +166,9 @@ export default function TransactionsExplorer({
     const gran: "day" | "week" | "month" = span <= 45 ? "day" : span <= 180 ? "week" : "month";
 
     const keyOf = (iso: string) => {
-      const ds = iso.slice(0, 10);
+      const ds = dayKey(iso); // BD day, hydration-safe
       if (gran === "day") return ds;
-      if (gran === "month") return iso.slice(0, 7);
+      if (gran === "month") return ds.slice(0, 7);
       const d = new Date(`${ds}T00:00:00`); d.setDate(d.getDate() - d.getDay()); // week start (Sun)
       return d.toLocaleDateString("en-CA");
     };
@@ -226,7 +230,7 @@ export default function TransactionsExplorer({
   function exportCSV() {
     const head = ["Date", "ID", "Receipt", "User", "UID", "Type", "Direction", "Amount", "Project"];
     const body = sorted.map((r) => [
-      String(r.date).slice(0, 10), r.transaction_id, r.rashid ?? "", r.userName, r.uid, r.type,
+      dayKey(r.date), r.transaction_id, r.rashid ?? "", r.userName, r.uid, r.type,
       r.operator === "-" ? "out" : "in", r.amount, r.projectName ?? "",
     ]);
     const csv = [head, ...body].map((row) => row.map((c) => { const v = String(c ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
@@ -262,7 +266,7 @@ export default function TransactionsExplorer({
       doc.setTextColor(30, 30, 30);
       const out = r.operator === "-";
       const cell: Record<string, string> = {
-        date: String(r.date).slice(0, 10), id: r.transaction_id, user: (r.userName || "").slice(0, 38),
+        date: dayKey(r.date), id: r.transaction_id, user: (r.userName || "").slice(0, 38),
         type: r.type, amount: (out ? "-" : "+") + money(r.amount), project: (r.projectName || "").slice(0, 46),
       };
       for (const c of cols) doc.text(cell[c.k], c.r ? c.x + c.w - 4 : c.x, y, { align: c.r ? "right" : "left" });
