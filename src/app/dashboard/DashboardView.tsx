@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Wallet, TrendingUp, Users, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
+  Wallet, TrendingUp, Users, UserRound, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
   Receipt, MessageSquare, Activity, ArrowDownRight,
   CalendarRange, ChevronDown, Download, X, Smartphone, Send, TrendingDown,
 } from "lucide-react";
@@ -344,12 +344,13 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* hero KPIs */}
+      {/* hero KPIs — the same four cards as Projectify's All Customers
+          (its 5th, App accounts, stays there) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi i={0} on={on} value={d.aum} format={compact} label="Total balance" sub="assets under management" icon={Wallet} tone="violet" href="/dashboard/projects" />
-        <Kpi i={1} on={on} value={d.invested} format={compact} label="Total collected" sub="principal in" icon={TrendingUp} tone="emerald" href="/dashboard/transactionify" />
-        <Kpi i={2} on={on} value={d.investors} format={(v) => Math.round(v).toLocaleString("en-US")} label="Customers" sub={`${d.paying} paying`} icon={Users} tone="blue" href="/dashboard/projects" />
-        <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub={`${d.raised.toLocaleString("en-US")} memberships`} icon={Building2} tone="amber" href="/dashboard/projects" />
+        <Kpi i={0} on={on} value={d.invested} format={compact} label="Total collected" sub={`${d.paying} paying · ${Math.max(0, d.investors - d.paying)} non-paying`} icon={TrendingUp} tone="emerald" href="/dashboard/projects" />
+        <Kpi i={1} on={on} value={d.raised} format={(v) => Math.round(v).toLocaleString("en-US")} label="Customers" sub="per project — one person can be several" icon={Users} tone="blue" href="/dashboard/projects" />
+        <Kpi i={2} on={on} value={d.investors} format={(v) => Math.round(v).toLocaleString("en-US")} label="Unique people" sub="one row per account" icon={UserRound} tone="violet" href="/dashboard/projects" />
+        <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub="real estate + deposit" icon={Building2} tone="amber" href="/dashboard/projects" />
       </div>
 
       {/* SMS at a glance — same card design as above; each opens the SMS page */}
