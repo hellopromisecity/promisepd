@@ -313,7 +313,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
               </>
             )}
           </div>
-          <Link href="/dashboard/investments/projects" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 hover:bg-brand-blue-dark">
+          <Link href="/dashboard/projects" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 hover:bg-brand-blue-dark">
             <Plus className="h-4 w-4" /> New project
           </Link>
         </div>
@@ -321,10 +321,10 @@ export default function DashboardView({ data }: { data: DashboardData }) {
 
       {/* hero KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi i={0} on={on} value={d.aum} format={compact} label="Total balance" sub="assets under management" icon={Wallet} tone="violet" href="/dashboard/investments/users" />
-        <Kpi i={1} on={on} value={d.invested} format={compact} label="Total invested" sub="principal in" icon={TrendingUp} tone="emerald" href="/dashboard/investments/transactions" />
-        <Kpi i={2} on={on} value={d.investors} format={(v) => Math.round(v).toLocaleString("en-US")} label="Investors" sub={`${d.paying} paying`} icon={Users} tone="blue" href="/dashboard/investments/users" />
-        <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub={`${compact(d.raised)} raised`} icon={Building2} tone="amber" href="/dashboard/investments/projects" />
+        <Kpi i={0} on={on} value={d.aum} format={compact} label="Total balance" sub="assets under management" icon={Wallet} tone="violet" href="/dashboard/projects" />
+        <Kpi i={1} on={on} value={d.invested} format={compact} label="Total collected" sub="principal in" icon={TrendingUp} tone="emerald" href="/dashboard/transactionify" />
+        <Kpi i={2} on={on} value={d.investors} format={(v) => Math.round(v).toLocaleString("en-US")} label="Customers" sub={`${d.paying} paying`} icon={Users} tone="blue" href="/dashboard/projects" />
+        <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub={`${d.raised.toLocaleString("en-US")} memberships`} icon={Building2} tone="amber" href="/dashboard/projects" />
       </div>
 
       {/* capital flow */}
@@ -335,7 +335,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         <div className="rounded-2xl border border-border bg-bg p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Building2 className="h-4 w-4 text-brand-blue" /> Project funding</h2>
-            <Link href="/dashboard/investments/projects" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline">All <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link href="/dashboard/projects" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline">All <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           {d.funding.length === 0 ? <p className="py-6 text-center text-sm text-fg-muted">No funded projects yet.</p> : (
             <div className="space-y-3.5">
@@ -356,8 +356,8 @@ export default function DashboardView({ data }: { data: DashboardData }) {
 
         <div className="rounded-2xl border border-border bg-bg p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Trophy className="h-4 w-4 text-amber-500" /> Top investors</h2>
-            <Link href="/dashboard/investments/users" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline">All <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Trophy className="h-4 w-4 text-amber-500" /> Top customers</h2>
+            <Link href="/dashboard/projects" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline">All <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           {d.topInvestors.length === 0 ? <p className="py-6 text-center text-sm text-fg-muted">No investors yet.</p> : (
             <>
@@ -383,7 +383,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         <div className="rounded-2xl border border-border bg-bg p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="flex items-center gap-1.5 text-sm font-bold text-fg"><Receipt className="h-4 w-4 text-brand-blue" /> Recent transactions</h2>
-            <Link href="/dashboard/investments/transactions" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline">All <ArrowRight className="h-3.5 w-3.5" /></Link>
+            <Link href="/dashboard/transactionify" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline">All <ArrowRight className="h-3.5 w-3.5" /></Link>
           </div>
           {d.recentTxns.length === 0 ? <p className="py-6 text-center text-sm text-fg-muted">No transactions yet.</p> : (
             <ul className="space-y-2.5">

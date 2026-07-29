@@ -25,6 +25,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.0",
+    date: "2026-07-29",
+    title: "Transactionify — every transaction, one beautiful graph",
+    changes: [
+      { kind: "new", text: "A new “Transactionify” section in the sidebar: every deposit, profit and withdrawal on the platform in one explorer — search, date presets, sortable columns, CSV/PDF export and inline add/edit, exactly like before, but front and centre." },
+      { kind: "new", text: "The flow chart grew up: the old bar towers are now a smooth area graph — green In and red Out curves with gradient fills, faint ৳ gridlines, and a crosshair that follows your mouse showing In / Out / Net for any day, week or month." },
+      { kind: "changed", text: "The legacy Investments menu has left the sidebar (ahead of its 1 August retirement) — Projectify and Transactionify are the two homes now. Old record pages still open from project links when needed." },
+      { kind: "improved", text: "The Dashboard's headline cards now read straight from Projectify's All Customers — total balance, total collected, customer and membership counts, and Top customers all match the Projectify page to the taka." },
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-07-21",
     title: "One customer world — everything runs from Projectify",

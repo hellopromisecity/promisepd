@@ -6,12 +6,7 @@
 
 import {
   LayoutDashboard,
-  Landmark,
-  UsersRound,
-  Briefcase,
   ReceiptText,
-  Tags,
-  UserMinus,
   BarChart3,
   Users,
   CalendarCheck,
@@ -55,20 +50,10 @@ export const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
  *   • Manager = admin, minus "Vault" (admin-only).                        */
 export const ADMIN_NAV: NavEntry[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, min: "manager" },
-  // LEGACY — kept ONLY to view old records during the Projectify transition.
-  // Everything is managed from Projectify now; REMOVE this whole group from
-  // the sidebar on 1 August 2026 (user's decision, 2026-07-21).
-  {
-    label: "Investments",
-    icon: Landmark,
-    children: [
-      { label: "App Users", href: "/dashboard/investments/users", icon: UsersRound, min: "manager" },
-      { label: "Projects", href: "/dashboard/investments/projects", icon: Briefcase, min: "manager" },
-      { label: "All Transactions", href: "/dashboard/investments/transactions", icon: ReceiptText, min: "manager" },
-      { label: "Transaction Types", href: "/dashboard/investments/types", icon: Tags, min: "manager" },
-      { label: "Unsubscribe Requests", href: "/dashboard/investments/unsubscribe", icon: UserMinus, min: "manager" },
-    ],
-  },
+  // Transactionify — every transaction on the platform, one explorer.
+  // (The legacy Investments group was removed from the sidebar 2026-07-29 at
+  // the user's request; its routes stay alive for deep links.)
+  { label: "Transactionify", href: "/dashboard/transactionify", icon: ReceiptText, min: "manager" },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },

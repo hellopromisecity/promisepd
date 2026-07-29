@@ -201,6 +201,7 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     });
     revalidatePath("/dashboard/investments/transactions");
     revalidatePath("/dashboard/investments/users");
+    revalidatePath("/dashboard/transactionify");
     return { data: { id: id! }, message: "Transaction saved." };
   });
 }
@@ -228,6 +229,7 @@ export async function deleteInvestorTransaction(transactionId: string): Promise<
     await logAudit({ action: "delete", entity: "investor_transaction", entityId: transactionId, detail: `Deleted transaction ${transactionId}` });
     revalidatePath("/dashboard/investments/transactions");
     revalidatePath("/dashboard/investments/users");
+    revalidatePath("/dashboard/transactionify");
     return { message: "Transaction deleted." };
   });
 }

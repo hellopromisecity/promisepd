@@ -6,6 +6,7 @@ import {
   listInvestors, listProjects, listTypes, listTransactions, bal,
   type InvestorAccount, type InvestmentProject, type InvestmentType, type InvestorTransaction,
 } from "@/lib/investments";
+import { loadAllCustomers } from "@/lib/all-customers";
 import DashboardView, { type DashboardData } from "./DashboardView";
 
 export const metadata: Metadata = { title: "Dashboard", robots: { index: false, follow: false } };
@@ -57,19 +58,18 @@ export default async function AdminDashboard() {
   };
 
   if (admin) {
-    const [investors, projects, types, txns]: [InvestorAccount[], InvestmentProject[], InvestmentType[], InvestorTransaction[]] =
-      await Promise.all([listInvestors(admin), listProjects(admin), listTypes(admin), listTransactions(admin)]);
+    // Projectify's All Customers is the source of truth for the headline
+    // cards — the exact numbers the user sees on /dashboard/projects
+    // (book + app merged, one row per person, accrued dividends included).
+    const [investors, projects, types, txns, ac]: [InvestorAccount[], InvestmentProject[], InvestmentType[], InvestorTransaction[], Awaited<ReturnType<typeof loadAllCustomers>>] =
+      await Promise.all([listInvestors(admin), listProjects(admin), listTypes(admin), listTransactions(admin), loadAllCustomers()]);
 
     const op = new Map(types.map((t) => [t.name, t.operator]));
     const pname = new Map(projects.map((p) => [p.project_id, p.project_name]));
     const iname = new Map(investors.map((i) => [i.uid, i.full_name]));
 
-    let aum = 0, invested = 0, profit = 0, withdrawn = 0, paying = 0;
-    for (const i of investors) {
-      const b = bal(i.balance);
-      aum += b.total_balance; invested += b.total_investment; profit += b.total_profit; withdrawn += b.total_withdrawn;
-      if (b.total_balance !== 0 || b.total_investment > 0 || b.total_profit > 0 || b.total_withdrawn > 0) paying++;
-    }
+    let withdrawn = 0;
+    for (const i of investors) withdrawn += bal(i.balance).total_withdrawn;
 
     // raised per project (for funding) + a compact txn list the client uses to
     // recompute the capital flow for any selected date range.
@@ -84,7 +84,6 @@ export default async function AdminDashboard() {
       }
     }
 
-    const raised = [...raisedByProject.values()].reduce((s, v) => s + v, 0);
     const funding = projects
       .map((p) => {
         const r = raisedByProject.get(p.project_id) ?? 0;
@@ -94,11 +93,6 @@ export default async function AdminDashboard() {
       .filter((f) => f.goal > 0)
       .sort((a, b) => b.raised - a.raised)
       .slice(0, 6);
-
-    const topInvestors = [...investors]
-      .map((i) => ({ name: i.full_name, balance: bal(i.balance).total_balance }))
-      .sort((a, b) => b.balance - a.balance)
-      .slice(0, 8);
 
     const recentTxns = txns.slice(0, 7).map((t) => ({
       name: iname.get(t.uid) ?? t.uid,
@@ -110,9 +104,16 @@ export default async function AdminDashboard() {
     }));
 
     inv = {
-      aum, invested, profit, withdrawn, investors: investors.length, paying,
-      projects: projects.length, raised, txnCount: txns.length,
-      txns: txnList, funding, topInvestors, recentTxns,
+      aum: ac.people.reduce((s, p) => s + p.totalBalance, 0),
+      invested: ac.totals.collected,
+      profit: ac.people.reduce((s, p) => s + p.totalProfit, 0),
+      withdrawn,
+      investors: ac.totals.uniqueCount,
+      paying: ac.totals.payers,
+      projects: ac.projects.length,
+      raised: ac.totals.memberships, // shown as "N memberships" on the Projects card
+      txnCount: txns.length,
+      txns: txnList, funding, topInvestors: ac.top, recentTxns,
     };
   }
 

@@ -103,7 +103,7 @@ export default function TransactionsExplorer({
   const [draftTo, setDraftTo] = useState("");
   const [applied, setApplied] = useState<{ from: string; to: string }>({ from: "", to: "" });
 
-  // grow the flow-chart bars in on first paint
+  // rise the flow graph in on first paint
   const [chartIn, setChartIn] = useState(false);
   useEffect(() => { const t = setTimeout(() => setChartIn(true), 60); return () => clearTimeout(t); }, []);
 
@@ -274,9 +274,6 @@ export default function TransactionsExplorer({
     doc.save(`transactions-${rangeLabel}.pdf`);
   }
 
-  const maxBar = Math.max(1, ...chart.bars.map((b) => Math.max(b.in, b.out)));
-  const labelStep = Math.max(1, Math.ceil(chart.bars.length / 14)); // thin out labels when many buckets
-
   const STAT = [
     { label: "Inflow", value: stats.inflow, sub: "deposits, profit…", icon: ArrowDownLeft, cls: "text-emerald-600", ring: "from-emerald-50" },
     { label: "Outflow", value: stats.outflow, sub: "withdrawals, fees…", icon: ArrowUpRight, cls: "text-brand-red-dark", ring: "from-brand-red-tint" },
@@ -320,31 +317,14 @@ export default function TransactionsExplorer({
                 <Activity className="h-4 w-4 text-brand-blue" />
                 {chart.gran === "day" ? "Daily flow" : chart.gran === "week" ? "Weekly flow" : "Monthly flow"}
               </p>
-              <p className="text-[11px] text-fg-muted">in vs out · hover a bar for details</p>
+              <p className="text-[11px] text-fg-muted">in vs out · hover the graph for details</p>
             </div>
             <div className="flex items-center gap-3 text-[11px] font-semibold">
               <span className="flex items-center gap-1.5 text-emerald-600"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> In</span>
               <span className="flex items-center gap-1.5 text-brand-red"><span className="h-2.5 w-2.5 rounded-full bg-brand-red" /> Out</span>
             </div>
           </div>
-          <div className="relative flex items-end gap-2 border-b border-border" style={{ height: 124 }}>
-            {chart.bars.map((b, i) => (
-              <div key={i} className="group/bar relative flex h-full min-w-0 flex-1 flex-col items-center justify-end">
-                <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-bg px-2 py-1 text-[10px] shadow-lg opacity-0 transition-opacity duration-200 group-hover/bar:opacity-100">
-                  <p className="font-bold text-fg">{b.label}</p>
-                  <p className="text-emerald-600">In {compact(b.in)}</p>
-                  <p className="text-brand-red">Out {compact(b.out)}</p>
-                </div>
-                <div className="flex w-full items-end gap-[3px]" style={{ height: 100 }}>
-                  <div className="flex-1 rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ height: chartIn ? `${b.in > 0 ? Math.max(4, (b.in / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #059669, #34d399)" }} />
-                  <div className="flex-1 rounded-t-md transition-[height] duration-700 ease-out group-hover/bar:brightness-110" style={{ height: chartIn ? `${b.out > 0 ? Math.max(4, (b.out / maxBar) * 100) : 0}%` : "0%", transitionDelay: `${Math.min(i, 24) * 25}ms`, backgroundImage: "linear-gradient(to top, #E11924, rgba(225,25,36,0.55))" }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-1.5 flex gap-1.5">
-            {chart.bars.map((b, i) => <span key={i} className="flex-1 truncate text-center text-[9px] text-fg-faint">{i % labelStep === 0 ? b.label : ""}</span>)}
-          </div>
+          <FlowGraph bars={chart.bars} mounted={chartIn} />
         </motion.div>
       )}
 
@@ -484,4 +464,130 @@ function pageNumbers(cur: number, count: number): (number | "…")[] {
   if (hi < count - 1) out.push("…");
   out.push(count);
   return out;
+}
+
+/** Smooth in/out area graph (replaces the old bar towers): Catmull-Rom
+ *  curves, gradient fills, faint gridlines with ৳ labels, a hover crosshair
+ *  with dots + tooltip, and always-on endpoint dots. The SVG stretches
+ *  (preserveAspectRatio="none"); strokes stay crisp via non-scaling-stroke
+ *  and all hover chrome is HTML positioned in % so nothing distorts. */
+function FlowGraph({ bars, mounted }: { bars: { label: string; in: number; out: number }[]; mounted: boolean }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 1000, H = 300, TOP = 16, BOT = 4;
+  const n = bars.length;
+  const max = Math.max(1, ...bars.map((b) => Math.max(b.in, b.out)));
+  const X = (i: number) => (n <= 1 ? W / 2 : (i / (n - 1)) * W);
+  const Y = (v: number) => H - BOT - (v / max) * (H - TOP - BOT);
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const clampY = (v: number) => Math.min(H - BOT, Math.max(2, v));
+
+  // Catmull-Rom → cubic bézier; control Ys clamped so the curve never dips
+  // below the zero line between two quiet buckets.
+  const path = (pts: [number, number][]) => {
+    if (!pts.length) return "";
+    let d = `M ${r1(pts[0][0])} ${r1(pts[0][1])}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+      d += ` C ${r1(p1[0] + (p2[0] - p0[0]) / 6)} ${r1(clampY(p1[1] + (p2[1] - p0[1]) / 6))} ${r1(p2[0] - (p3[0] - p1[0]) / 6)} ${r1(clampY(p2[1] - (p3[1] - p1[1]) / 6))} ${r1(p2[0])} ${r1(p2[1])}`;
+    }
+    return d;
+  };
+
+  const inPts = bars.map((b, i) => [X(i), Y(b.in)] as [number, number]);
+  const outPts = bars.map((b, i) => [X(i), Y(b.out)] as [number, number]);
+  const inLine = path(inPts), outLine = path(outPts);
+  const area = (line: string, pts: [number, number][]) =>
+    line ? `${line} L ${r1(pts[pts.length - 1][0])} ${H} L ${r1(pts[0][0])} ${H} Z` : "";
+
+  const step = Math.max(1, Math.ceil(n / 12)); // thin out x labels when many buckets
+  const hb = hover != null ? bars[hover] : null;
+  const hx = hover != null ? X(hover) / W : 0;
+  const pct = (v: number, span: number) => `${(v / span) * 100}%`;
+
+  return (
+    <div>
+      <div
+        className="relative cursor-crosshair border-b border-border"
+        style={{ height: 176 }}
+        onMouseMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          const t = (e.clientX - r.left) / Math.max(1, r.width);
+          setHover(Math.min(n - 1, Math.max(0, Math.round(t * (n - 1)))));
+        }}
+        onMouseLeave={() => setHover(null)}
+      >
+        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+          <defs>
+            <linearGradient id="tfx-in" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+            </linearGradient>
+            <linearGradient id="tfx-out" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#E11924" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#E11924" stopOpacity="0.01" />
+            </linearGradient>
+          </defs>
+          {[0.25, 0.5, 0.75].map((f) => (
+            <line key={f} x1="0" x2={W} y1={r1(Y(max * f))} y2={r1(Y(max * f))} stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 7" vectorEffect="non-scaling-stroke" />
+          ))}
+          <g style={{ transform: mounted ? "scaleY(1)" : "scaleY(0.02)", transformOrigin: `0px ${H}px`, transition: "transform 900ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+            <path d={area(inLine, inPts)} fill="url(#tfx-in)" />
+            <path d={area(outLine, outPts)} fill="url(#tfx-out)" />
+            <path d={inLine} fill="none" stroke="#059669" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={outLine} fill="none" stroke="#E11924" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          </g>
+          {hover != null && (
+            <line x1={r1(X(hover))} x2={r1(X(hover))} y1={TOP - 8} y2={H} stroke="currentColor" strokeOpacity="0.35" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+          )}
+        </svg>
+
+        {/* gridline ৳ labels */}
+        {[0.75, 0.5, 0.25].map((f) => (
+          <span key={f} className="pointer-events-none absolute left-1 -translate-y-full pb-px text-[9px] font-medium text-fg-faint" style={{ top: pct(Y(max * f), H) }}>
+            {compact(max * f)}
+          </span>
+        ))}
+
+        {/* always-on endpoint dots */}
+        {n > 0 && mounted && (
+          <>
+            <span className="pointer-events-none absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-bg" style={{ left: pct(X(n - 1), W), top: pct(Y(bars[n - 1].in), H) }} />
+            <span className="pointer-events-none absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-red ring-2 ring-bg" style={{ left: pct(X(n - 1), W), top: pct(Y(bars[n - 1].out), H) }} />
+          </>
+        )}
+
+        {/* hover dots + tooltip */}
+        {hb && hover != null && (
+          <>
+            <span className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500 shadow ring-2 ring-bg" style={{ left: pct(X(hover), W), top: pct(Y(hb.in), H) }} />
+            <span className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-red shadow ring-2 ring-bg" style={{ left: pct(X(hover), W), top: pct(Y(hb.out), H) }} />
+            <div
+              className="pointer-events-none absolute top-0 z-20 whitespace-nowrap rounded-lg border border-border bg-bg px-2.5 py-1.5 text-[10px] shadow-lg"
+              style={{ left: pct(X(hover), W), transform: hx > 0.82 ? "translateX(calc(-100% - 10px))" : hx < 0.18 ? "translateX(10px)" : "translateX(-50%)" }}
+            >
+              <p className="font-bold text-fg">{hb.label}</p>
+              <p className="font-semibold text-emerald-600">In {compact(hb.in)}</p>
+              <p className="font-semibold text-brand-red">Out {compact(hb.out)}</p>
+              <p className="border-t border-border/70 pt-0.5 font-semibold text-fg-muted">Net {compact(hb.in - hb.out)}</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* x labels, centered under their points */}
+      <div className="relative mt-1.5 h-4">
+        {bars.map((b, i) =>
+          i % step === 0 ? (
+            <span
+              key={i}
+              className="absolute whitespace-nowrap text-[9px] text-fg-faint"
+              style={{ left: pct(X(i), W), transform: i === 0 ? "none" : i >= n - step ? "translateX(-100%)" : "translateX(-50%)" }}
+            >
+              {b.label}
+            </span>
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
 }
