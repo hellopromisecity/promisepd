@@ -25,6 +25,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.1",
+    date: "2026-07-29",
+    title: "A cleaner dashboard — SMS at a glance, honest dates, a fuller graph",
+    changes: [
+      { kind: "new", text: "Four SMS cards on the Dashboard — balance (est.), remaining SMS, sent and cost over 30 days — the same numbers as the SMS page, one click away." },
+      { kind: "fixed", text: "Two old transactions carried day/month-swapped dates from the previous system (01 Aug ↔ 08 Jan, 07 Oct ↔ 10 Jul) — repaired against the book, so nothing future-dated tops the lists anymore. Recent transactions also skips scheduled future entries (like a fixed-date maturity withdrawal), and every date now renders in Bangladesh time on first paint — the brief blank-then-flash on load is gone." },
+      { kind: "improved", text: "Both flow graphs show the last 12 months ending today, start and end on real activity (no hollow months), and the Dashboard's capital flow now stretches edge-to-edge instead of floating in the middle." },
+      { kind: "changed", text: "A leaner sidebar: Finance, Income and Expenses are out; Marketing is now two direct items — Marketing and Client follow-up — no more digging into submenus." },
+    ],
+  },
+  {
     version: "2.2.0",
     date: "2026-07-29",
     title: "Transactionify — every transaction, one beautiful graph",

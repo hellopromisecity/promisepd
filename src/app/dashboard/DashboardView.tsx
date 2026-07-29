@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Wallet, TrendingUp, Users, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
   Receipt, MessageSquare, Newspaper, PiggyBank, Banknote, Activity, ArrowDownRight,
-  CalendarRange, ChevronDown, Download, X,
+  CalendarRange, ChevronDown, Download, X, Smartphone, Send, TrendingDown,
 } from "lucide-react";
 
 export type DashboardData = {
@@ -21,6 +21,11 @@ export type DashboardData = {
   leads: number;
   blogCount: number;
   recentLeads: { name: string; interest: string | null; created_at: string }[];
+  /** KhudeBarta snapshot for the dashboard SMS cards (null until configured). */
+  sms: {
+    estBalance: number; balance: number; remainingSms: number; rate: number;
+    sent30d: number; sentToday: number; sent7d: number; cost30d: number; cost7d: number;
+  } | null;
 };
 
 type Txn = { date: string; op: string; amount: number };
@@ -54,6 +59,7 @@ function computeFlow(txns: Txn[], from: string, to: string) {
   // hydration never mismatches; raw slice(0,10) read midnight-stored rows
   // (T18:00Z) as the previous day on the server.
   const dk = (iso: string) => (iso ? new Date(new Date(iso).getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10) : "");
+  const defaulted = !from || !to; // no explicit range → we may trim empty edges
   let fromS = from, toS = to;
   if (!fromS || !toS) {
     // Last 12 calendar months ending TODAY (BD day) — never anchored to the
@@ -93,6 +99,14 @@ function computeFlow(txns: Txn[], from: string, to: string) {
     const d = new Date(fromD.getFullYear(), fromD.getMonth(), 1), end = new Date(toD.getFullYear(), toD.getMonth(), 1);
     for (; d <= end; d.setMonth(d.getMonth() + 1)) push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, d.toLocaleDateString("en-GB", { month: "short" }));
   }
+  if (defaulted) {
+    // Trim empty edge buckets so the default view starts and ends on real
+    // activity — no hollow months on either side of the graph.
+    let s = 0, e = bars.length;
+    while (s < e && bars[s].in === 0 && bars[s].out === 0) s++;
+    while (e > s && bars[e - 1].in === 0 && bars[e - 1].out === 0) e--;
+    return { gran, bars: bars.slice(s, e), count, inTotal, outTotal };
+  }
   return { gran, bars, count, inTotal, outTotal };
 }
 
@@ -103,6 +117,7 @@ const compact = (n: number) => {
   return `৳${Math.round(v).toLocaleString("en-US")}`;
 };
 const taka = (n: number) => `৳${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
+const bdt = (n: number) => "৳" + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Dhaka" });
 const initial = (n: string) => (n?.trim()?.[0] ?? "?").toUpperCase();
@@ -200,7 +215,10 @@ function FlowChart({ flow, on, subtitle, count, onExport }: {
       </div>
 
       <div className="relative">
-        <svg ref={ref} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 230 }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        {/* preserveAspectRatio="none" stretches the plot across the full card
+            width — the default (meet) centred it with blank gutters on both
+            sides while the label row spanned the whole width. */}
+        <svg ref={ref} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: 230 }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
           <defs>
             <linearGradient id="flowIn" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#1847A1" stopOpacity="0.28" />
@@ -208,13 +226,13 @@ function FlowChart({ flow, on, subtitle, count, onExport }: {
             </linearGradient>
           </defs>
           <path d={inArea} fill="url(#flowIn)" style={{ opacity: on ? 1 : 0, transition: "opacity .8s ease" }} />
-          <path d={line("in")} fill="none" stroke="#1847A1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+          <path d={line("in")} fill="none" stroke="#1847A1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
             pathLength={1} strokeDasharray={1} strokeDashoffset={on ? 0 : 1} style={{ transition: "stroke-dashoffset 1.1s ease" }} />
-          <path d={line("out")} fill="none" stroke="#E11924" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeOpacity="0.85"
+          <path d={line("out")} fill="none" stroke="#E11924" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeOpacity="0.85" vectorEffect="non-scaling-stroke"
             pathLength={1} strokeDasharray={1} strokeDashoffset={on ? 0 : 1} style={{ transition: "stroke-dashoffset 1.3s ease" }} />
           {hover !== null && (
             <g>
-              <line x1={x(hover)} y1={padT - 6} x2={x(hover)} y2={H - padB} stroke="var(--color-border-strong)" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1={x(hover)} y1={padT - 6} x2={x(hover)} y2={H - padB} stroke="var(--color-border-strong)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
               <circle cx={x(hover)} cy={y(flow[hover].in)} r="4" fill="#1847A1" stroke="#fff" strokeWidth="1.5" />
               <circle cx={x(hover)} cy={y(flow[hover].out)} r="4" fill="#E11924" stroke="#fff" strokeWidth="1.5" />
             </g>
@@ -448,6 +466,29 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           </div>
         ))}
       </div>
+
+      {/* SMS at a glance — the SMS page's four KPIs, each card opens it */}
+      {data.sms && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: "SMS balance (est.)", value: bdt(data.sms.estBalance), sub: `checkpoint ${bdt(data.sms.balance)}`, icon: Wallet, ring: "from-emerald-50", cls: "text-emerald-600" },
+            { label: "Remaining SMS", value: data.sms.remainingSms.toLocaleString("en-IN"), sub: `at ${bdt(data.sms.rate)} / SMS`, icon: Smartphone, ring: "from-brand-blue-tint", cls: "text-brand-blue" },
+            { label: "Sent · 30 days", value: data.sms.sent30d.toLocaleString("en-IN"), sub: `${data.sms.sentToday} today · ${data.sms.sent7d} in 7d`, icon: Send, ring: "from-amber-50", cls: "text-amber-600" },
+            { label: "Cost · 30 days", value: bdt(data.sms.cost30d), sub: `7-day ${bdt(data.sms.cost7d)}`, icon: TrendingDown, ring: "from-bg-soft", cls: "text-fg" },
+          ].map((c) => (
+            <Link key={c.label} href="/dashboard/sms" className={`group overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${c.ring} to-bg p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg`}>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{c.label}</p>
+                <span className={`grid h-8 w-8 place-items-center rounded-lg bg-bg/70 ${c.cls} transition-transform duration-300 group-hover:scale-110`}>
+                  <c.icon className="h-4 w-4" />
+                </span>
+              </div>
+              <p className={`mt-1.5 text-xl font-extrabold tabular-nums sm:text-2xl ${c.cls}`}>{c.value}</p>
+              <p className="mt-0.5 truncate text-[11px] text-fg-faint">{c.sub}</p>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

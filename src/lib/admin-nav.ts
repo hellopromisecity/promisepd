@@ -1,8 +1,8 @@
 /** Admin dashboard navigation — single source of truth for the sidebar.
  *
- *  Each entry carries the minimum role that may see it.  Groups (Finance,
- *  Marketing, Insights) are shown when the viewer can see at least one
- *  child.  filterNav(role) returns only what the given role may open. */
+ *  Each entry carries the minimum role that may see it.  A group is shown
+ *  when the viewer can see at least one child.  filterNav(role) returns
+ *  only what the given role may open. */
 
 import {
   LayoutDashboard,
@@ -11,12 +11,8 @@ import {
   Users,
   CalendarCheck,
   Wallet,
-  ChartPie,
-  Building2,
   Newspaper,
   Building,
-  TrendingUp,
-  TrendingDown,
   Megaphone,
   UserCheck,
   MessageSquare,
@@ -57,26 +53,13 @@ export const ADMIN_NAV: NavEntry[] = [
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },
-  {
-    label: "Finance",
-    icon: Wallet,
-    children: [
-      { label: "Overview", href: "/dashboard/finance", icon: ChartPie, min: "manager" },
-      { label: "Bank & cash", href: "/dashboard/finance/bank", icon: Building2, min: "manager" },
-    ],
-  },
+  // Finance / Income / Expenses removed from the sidebar 2026-07-29 (user's
+  // request) — routes stay alive for direct links.
   { label: "Blog", href: "/dashboard/blog", icon: Newspaper, min: "manager" },
   { label: "Projectify", href: "/dashboard/projects", icon: Building, min: "manager" },
-  { label: "Income", href: "/dashboard/income", icon: TrendingUp, min: "manager" },
-  { label: "Expenses", href: "/dashboard/expenses", icon: TrendingDown, min: "manager" },
-  {
-    label: "Marketing",
-    icon: Megaphone,
-    children: [
-      { label: "Overview", href: "/dashboard/marketing", icon: ChartPie, min: "manager" },
-      { label: "Client follow-up", href: "/dashboard/marketing/followup", icon: UserCheck, min: "manager" },
-    ],
-  },
+  // Marketing split into two top-level items 2026-07-29 (was one group).
+  { label: "Marketing", href: "/dashboard/marketing", icon: Megaphone, min: "manager" },
+  { label: "Client follow-up", href: "/dashboard/marketing/followup", icon: UserCheck, min: "manager" },
   // Report — daily work reports. The one section every staff member gets.
   { label: "Report", href: "/dashboard/report", icon: MessageSquare, min: "staff" },
   // My Projects — injected in AdminShell only when the viewer has a linked

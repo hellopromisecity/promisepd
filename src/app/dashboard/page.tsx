@@ -7,6 +7,7 @@ import {
   type InvestorAccount, type InvestmentProject, type InvestmentType, type InvestorTransaction,
 } from "@/lib/investments";
 import { loadAllCustomers } from "@/lib/all-customers";
+import { smsStats } from "@/lib/sms-stats";
 import DashboardView, { type DashboardData } from "./DashboardView";
 
 export const metadata: Metadata = { title: "Dashboard", robots: { index: false, follow: false } };
@@ -43,11 +44,12 @@ async function recentLeads() {
 
 export default async function AdminDashboard() {
   const admin = getAdmin();
-  const [members, leads, recentLeadsList, blogCount] = await Promise.all([
+  const [members, leads, recentLeadsList, blogCount, sms] = await Promise.all([
     tableCount("profiles"),
     tableCount("contact_submissions"),
     recentLeads(),
     publishedBlogCount(),
+    smsStats(),
   ]);
 
   // ---- real investment data (one set of fetches, computed in-process) ----
@@ -94,7 +96,10 @@ export default async function AdminDashboard() {
       .sort((a, b) => b.raised - a.raised)
       .slice(0, 6);
 
-    const recentTxns = txns.slice(0, 7).map((t) => ({
+    // Skip future-dated entries (e.g. a scheduled maturity withdrawal) —
+    // "recent" means things that have actually happened.
+    const nowMs = Date.now();
+    const recentTxns = txns.filter((t) => new Date(t.date).getTime() <= nowMs).slice(0, 7).map((t) => ({
       name: iname.get(t.uid) ?? t.uid,
       type: t.type,
       op: op.get(t.type) ?? "+",
@@ -123,6 +128,12 @@ export default async function AdminDashboard() {
     leads: leads ?? 0,
     blogCount,
     recentLeads: recentLeadsList,
+    sms: sms
+      ? {
+          estBalance: sms.estBalance, balance: sms.balance, remainingSms: sms.remainingSms, rate: sms.rate,
+          sent30d: sms.sent30d, sentToday: sms.sentToday, sent7d: sms.sent7d, cost30d: sms.cost30d, cost7d: sms.cost7d,
+        }
+      : null,
   };
 
   return <DashboardView data={data} />;
