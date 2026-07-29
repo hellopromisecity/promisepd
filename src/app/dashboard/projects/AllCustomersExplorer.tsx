@@ -71,7 +71,9 @@ export default function AllCustomersExplorer({
       if (status === "paying" && !(p.totalPaid > 0)) return false;
       if (status === "nonpaying" && p.totalPaid > 0) return false;
       if (!term) return true;
-      return `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.fid ?? ""} ${p.email ?? ""} ${p.projectNames.join(" ")}`.toLowerCase().includes(term);
+      // every holding's book file number is searchable too — an account's own
+      // File ID can differ from (or lack) the file the office knows
+      return `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.fid ?? ""} ${p.email ?? ""} ${p.holdings.map((h) => h.file_no ?? "").join(" ")} ${p.projectNames.join(" ")}`.toLowerCase().includes(term);
     });
   }, [people, q, projFilter, status]);
 
@@ -81,7 +83,7 @@ export default function AllCustomersExplorer({
     // Searching "Promise City" matches every customer OF that project too (via
     // the project name) — so rows whose OWN name/number/File/UID match rank
     // first, instead of the person you meant drowning on the last page.
-    const direct = (p: PersonRow) => `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.fid ?? ""} ${p.email ?? ""}`.toLowerCase().includes(term);
+    const direct = (p: PersonRow) => `${p.name} ${p.mobile ?? ""} ${p.uid ?? ""} ${p.fid ?? ""} ${p.email ?? ""} ${p.holdings.map((h) => h.file_no ?? "").join(" ")}`.toLowerCase().includes(term);
     return [...filtered].sort((a, b) => {
       if (term) {
         const da = direct(a) ? 0 : 1, db = direct(b) ? 0 : 1;

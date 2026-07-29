@@ -14,6 +14,9 @@ export type PersonHolding = {
   project_name: string;
   project_type: string;
   source: "hub" | "app";
+  /** The book row's file number — searchable even when the app account
+   *  carries a different (or no) File ID. */
+  file_no?: string | null;
   paid: number;
   profit: number;
   balance: number;
@@ -190,7 +193,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     const covered = new Set(bookRows.map((r) => r.project_key));
     const holdings: PersonHolding[] = bookRows.map((r) => ({
       id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type,
-      source: "hub" as const, paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r),
+      source: "hub" as const, file_no: r.file_no ?? null, paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r),
     }));
     // app-only money (projects with no book row) — the book ledger wins where both exist
     for (const [appProjId, t] of investorProjectTotals(userTxns)) {
@@ -210,7 +213,9 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       id: i.uid,
       name: i.full_name || bookRows[0]?.name || "Unnamed",
       mobile: phone,
-      uid: i.uid, fid: i.fid, email: i.email, is_verified: i.is_verified, is_active: i.is_active, app: appUser,
+      // account File ID first, else the first book row's file number — so the
+      // row always shows (and matches) the file the office actually uses
+      uid: i.uid, fid: i.fid || bookRows.map((r) => r.file_no).find(Boolean) || null, email: i.email, is_verified: i.is_verified, is_active: i.is_active, app: appUser,
       joined: joinedBook ?? (i.created_at ? i.created_at.slice(0, 10) : null),
       totalPaid: holdings.reduce((s, h) => s + h.paid, 0),
       totalProfit: holdings.reduce((s, h) => s + h.profit, 0),
@@ -236,7 +241,8 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     p.totalProfit += hubProfit(r) + hubAcc(r);
     p.totalBalance += hubBalance(r) + hubAcc(r);
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
-    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
+    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", file_no: r.file_no ?? null, paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
+    if (!p.fid && r.file_no) p.fid = r.file_no;
   }
   people.push(...byName.values());
   people.sort((a, b) => b.totalBalance - a.totalBalance);

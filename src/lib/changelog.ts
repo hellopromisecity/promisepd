@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.2",
+    date: "2026-07-29",
+    title: "Find anyone by any file number",
+    changes: [
+      { kind: "fixed", text: "All Customers search now matches EVERY file number a person has — the office file on each project book, not just the app account's own File ID. (A customer whose account was opened on a foreign number and whose deposit file carries a different number now comes up either way.)" },
+      { kind: "improved", text: "When an app account has no File ID of its own, the row now shows the office file number from their book — so the File column is never blank for a book customer." },
+      { kind: "changed", text: "The Dashboard's four headline cards are now the exact same four as Projectify's All Customers — collected, customers, unique people, projects — same values, same subtitles." },
+    ],
+  },
+  {
     version: "2.2.1",
     date: "2026-07-29",
     title: "A cleaner dashboard — SMS at a glance, honest dates, a fuller graph",
@@ -47,6 +57,25 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
+    version: "2.1.2",
+    date: "2026-07-26",
+    title: "App entries land in the book too — and deposits show their true remaining",
+    changes: [
+      { kind: "new", text: "A transaction added from the app side now writes the book ledger as well — both worlds stay identical no matter where the entry starts." },
+      { kind: "fixed", text: "Deposit balances now include the live accrued dividend, so a matured, fully-withdrawn deposit shows exactly ৳0 remaining — not a phantom minus figure." },
+      { kind: "fixed", text: "The row action menu no longer gets clipped on the last rows of a long customer list." },
+    ],
+  },
+  {
+    version: "2.1.1",
+    date: "2026-07-23",
+    title: "A form fill can never be lost again",
+    changes: [
+      { kind: "fixed", text: "Every website form submission is saved to the database FIRST (visible in Messages), then emailed to all three office inboxes with the PDF attached — a mail hiccup can no longer swallow a lead." },
+      { kind: "new", text: "Safer customer operations: deactivate/delete now asks you to type the word to confirm, deleted customers rest in a 30-day restorable Archive, and a customer's mobile number can be edited (their login moves with it)." },
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-07-21",
     title: "One customer world — everything runs from Projectify",
@@ -60,6 +89,14 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
+    version: "2.0.1",
+    date: "2026-07-18",
+    title: "Deposit books reconciled — taka to taka",
+    changes: [
+      { kind: "improved", text: "The General Deposit A and Special Deposit dashboards were audited line-by-line against the office sheets — every date, dividend and withdrawal ties out to the taka, with the 365-day year locked in everywhere." },
+    ],
+  },
+  {
     version: "2.0.0",
     date: "2026-07-15",
     title: "Promise City 2.0 — the whole company, in one place",
@@ -69,7 +106,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.7.2",
+    version: "1.7.10",
     date: "2026-07-15",
     title: "Profit Push — text every member their dividend, in one click",
     changes: [
@@ -77,7 +114,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.7.1",
+    version: "1.7.9",
     date: "2026-07-15",
     title: "SMS now reaches every customer — not just app users",
     changes: [
@@ -85,7 +122,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.7.0",
+    version: "1.7.8",
     date: "2026-07-15",
     title: "All Customers — the app and the books, unified",
     changes: [
@@ -95,7 +132,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.9",
+    version: "1.7.7",
     date: "2026-07-15",
     title: "Deposit schemes: a clear money-flow table",
     changes: [
@@ -104,7 +141,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.8",
+    version: "1.7.6",
     date: "2026-07-15",
     title: "Investor totals always live from the ledger",
     changes: [
@@ -112,7 +149,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.7",
+    version: "1.7.5",
     date: "2026-07-15",
     title: "Deposit history: clearer figures + editable transactions",
     changes: [
@@ -121,7 +158,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.6",
+    version: "1.7.4",
     date: "2026-07-15",
     title: "Report inbox, staff roles & My Projects",
     changes: [
@@ -131,7 +168,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.5",
+    version: "1.7.3",
     date: "2026-07-14",
     title: "Deposit dividend now compounds — earns like principal",
     changes: [
@@ -139,7 +176,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.4",
+    version: "1.7.2",
     date: "2026-07-14",
     title: "Deposit dividend now exact — plus deposit-hub polish",
     changes: [
@@ -150,7 +187,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.3",
+    version: "1.7.1",
     date: "2026-07-14",
     title: "Payment Method page — send us money, the easy way",
     changes: [
@@ -158,7 +195,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.2",
+    version: "1.7.0",
     date: "2026-07-14",
     title: "Book a project visit — right from the site",
     changes: [
@@ -166,7 +203,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.1",
+    version: "1.6.10",
     date: "2026-07-13",
     title: "Deposit schemes: automatic dividend (লভ্যাংশ) calculation",
     changes: [
@@ -176,7 +213,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.6.0",
+    version: "1.6.9",
     date: "2026-07-13",
     title: "Projectify — a full customer hub for every project",
     changes: [
@@ -187,7 +224,15 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.10",
+    version: "1.6.8",
+    date: "2026-07-10",
+    title: "Projectify build: the office books come in",
+    changes: [
+      { kind: "new", text: "Behind the scenes, all nine project books — customers, payments, receipt numbers, joining dates — were imported from the office Excel files into the new customer-hub tables, ready for the Projectify launch." },
+    ],
+  },
+  {
+    version: "1.6.7",
     date: "2026-07-07",
     title: "Officer history: per-project client deposit + % paid",
     changes: [
@@ -197,7 +242,31 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.9",
+    version: "1.6.6",
+    date: "2026-07-05",
+    title: "Projectify blueprint signed off",
+    changes: [
+      { kind: "new", text: "The customer-hub design is locked: the nine project books become one dashboard section — per-project customer lists, payment ledgers with receipts, deposit dividends, and a combined all-customers view. Import plan for the office Excel books agreed." },
+    ],
+  },
+  {
+    version: "1.6.5",
+    date: "2026-07-02",
+    title: "Deposit schemes: the Mudaraba model mapped",
+    changes: [
+      { kind: "new", text: "Groundwork for automatic dividends: each scheme's rate table drafted, the day-weighted running-balance (Mudaraba) model designed, and the 15-July cycle alignment agreed with management." },
+    ],
+  },
+  {
+    version: "1.6.4",
+    date: "2026-06-29",
+    title: "Imported points verified to the taka",
+    changes: [
+      { kind: "improved", text: "Post-import audit of the officer ledgers: spot-checks against the master sheet per officer, duplicate-guard re-runs, and leaderboard totals cross-checked — the imported history stands to the taka." },
+    ],
+  },
+  {
+    version: "1.6.3",
     date: "2026-06-26",
     title: "All marketing officers' historical points imported",
     changes: [
@@ -206,7 +275,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.8",
+    version: "1.6.2",
     date: "2026-06-25",
     title: "Leaderboard: live “commission paid to partners” counter",
     changes: [
@@ -214,7 +283,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.7",
+    version: "1.6.1",
     date: "2026-06-25",
     title: "Leaderboards default to “This year”",
     changes: [
@@ -222,7 +291,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.6",
+    version: "1.6.0",
     date: "2026-06-25",
     title: "Public leaderboard now mirrors the internal board · champions podium · calmer #1 card",
     changes: [
@@ -232,7 +301,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.5",
+    version: "1.5.10",
     date: "2026-06-25",
     title: "Award points: fractional quantity + the box stays open for bulk entry",
     changes: [
@@ -241,7 +310,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.4",
+    version: "1.5.9",
     date: "2026-06-25",
     title: "Marketing: rename point items from the Point values panel",
     changes: [
@@ -249,7 +318,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.3",
+    version: "1.5.8",
     date: "2026-06-25",
     title: "Marketing: editable history with reasons & client deposits · glowing podium",
     changes: [
@@ -260,7 +329,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.2",
+    version: "1.5.7",
     date: "2026-06-25",
     title: "Marketing leaderboard: top-3 podium · officer history · cleaner rows",
     changes: [
@@ -270,7 +339,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.1",
+    version: "1.5.6",
     date: "2026-06-25",
     title: "Password reset · all signups visible · PWA chrome · share buttons",
     changes: [
@@ -282,7 +351,15 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.5.0",
+    version: "1.5.5",
+    date: "2026-06-22",
+    title: "Marketing master-sheet: the import engine",
+    changes: [
+      { kind: "new", text: "Built the importer for the officers' historical point ledgers: per-officer Excel mapping (F.C, F.T, A.P, P.C, Facebook, attendance), the Dues column treated as a marker (never summed), totals rows skipped, and a dry-run mode so the real import can be replayed safely." },
+    ],
+  },
+  {
+    version: "1.5.4",
     date: "2026-06-19",
     title: "Fuzala Complex — project documentary video",
     changes: [
@@ -290,7 +367,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.10",
+    version: "1.5.3",
     date: "2026-06-18",
     title: "Unified app icon (final.webp) everywhere · lighter /public",
     changes: [
@@ -299,7 +376,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.9",
+    version: "1.5.2",
     date: "2026-06-18",
     title: "Brand tagline · Google logo · investor site chrome · clearer logout",
     changes: [
@@ -310,7 +387,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.8",
+    version: "1.5.1",
     date: "2026-06-18",
     title: "Polished PWA splash + icon · sticky investor header · team update",
     changes: [
@@ -321,7 +398,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.7",
+    version: "1.5.0",
     date: "2026-06-17",
     title: "Staff: no duplicate rows · owner-only role changes · manager full view",
     changes: [
@@ -331,7 +408,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.6",
+    version: "1.4.10",
     date: "2026-06-16",
     title: "Staff can log in by email (handy when they're also an investor)",
     changes: [
@@ -339,7 +416,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.5",
+    version: "1.4.9",
     date: "2026-06-16",
     title: "Faster page speed — lighter, calmer hero (esp. mobile)",
     changes: [
@@ -349,7 +426,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.4",
+    version: "1.4.8",
     date: "2026-06-16",
     title: "Fix: can't add transactions · marketing TUPAC + TFRAF columns",
     changes: [
@@ -358,7 +435,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.3",
+    version: "1.4.7",
     date: "2026-06-16",
     title: "Signup phone hint — drop the leading 0, accept it either way",
     changes: [
@@ -367,7 +444,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.2",
+    version: "1.4.6",
     date: "2026-06-16",
     title: "Signup — international phone field with country selector",
     changes: [
@@ -376,7 +453,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.1",
+    version: "1.4.5",
     date: "2026-06-16",
     title: "Cleaner investor app — compact header, settings, preset filters",
     changes: [
@@ -387,7 +464,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.4.0",
+    version: "1.4.4",
     date: "2026-06-16",
     title: "Account header polish — language switcher + clearer IDs",
     changes: [
@@ -395,7 +472,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.10",
+    version: "1.4.3",
     date: "2026-06-16",
     title: "Investor app: native PWA feel · project popups · in-app settings",
     changes: [
@@ -405,7 +482,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.9",
+    version: "1.4.2",
     date: "2026-06-15",
     title: "Last 7 days everywhere · dashboard date filter · tighter flow chart",
     changes: [
@@ -415,7 +492,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.8",
+    version: "1.4.1",
     date: "2026-06-15",
     title: "Colourful cards · richer flow chart · transaction SMS",
     changes: [
@@ -425,7 +502,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.7",
+    version: "1.4.0",
     date: "2026-06-15",
     title: "Dashboard — live, real-data redesign",
     changes: [
@@ -435,7 +512,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.6",
+    version: "1.3.10",
     date: "2026-06-15",
     title: "Paying / non-paying filter · attendance is staff-only",
     changes: [
@@ -444,7 +521,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.5",
+    version: "1.3.9",
     date: "2026-06-15",
     title: "Projects — full redesign with investor management",
     changes: [
@@ -455,7 +532,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.4",
+    version: "1.3.8",
     date: "2026-06-15",
     title: "App Users — a complete, powerful redesign",
     changes: [
@@ -466,7 +543,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.3",
+    version: "1.3.7",
     date: "2026-06-15",
     title: "Accurate per-project investment totals",
     changes: [
@@ -474,7 +551,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.2",
+    version: "1.3.6",
     date: "2026-06-15",
     title: "Flow chart follows your filter · clearer cursors",
     changes: [
@@ -483,7 +560,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.1",
+    version: "1.3.5",
     date: "2026-06-15",
     title: "A sidebar you arrange · Investments up top",
     changes: [
@@ -492,7 +569,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.3.0",
+    version: "1.3.4",
     date: "2026-06-15",
     title: "The investor platform — fully ported in",
     changes: [
@@ -503,7 +580,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.10",
+    version: "1.3.3",
     date: "2026-06-15",
     title: "Attendance shows the real day",
     changes: [
@@ -512,7 +589,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.9",
+    version: "1.3.2",
     date: "2026-06-15",
     title: "Bullet-fast dashboard, tuned for Bangladesh",
     changes: [
@@ -522,7 +599,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.8",
+    version: "1.3.1",
     date: "2026-06-14",
     title: "Attendance, beautified · edit your own profile",
     changes: [
@@ -532,7 +609,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.7",
+    version: "1.3.0",
     date: "2026-06-14",
     title: "One-tap attendance + date ranges",
     changes: [
@@ -542,7 +619,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.6",
+    version: "1.2.10",
     date: "2026-06-14",
     title: "Every employee on attendance + fingerprint import",
     changes: [
@@ -551,7 +628,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.5",
+    version: "1.2.9",
     date: "2026-06-14",
     title: "Company roster",
     changes: [
@@ -559,7 +636,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.4",
+    version: "1.2.8",
     date: "2026-06-14",
     title: "Staff management & pay",
     changes: [
@@ -568,7 +645,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.3",
+    version: "1.2.7",
     date: "2026-06-14",
     title: "Multi-tagging, full-height sidebar & Secure Vault",
     changes: [
@@ -578,7 +655,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.2",
+    version: "1.2.6",
     date: "2026-06-14",
     title: "Sign in your way, richer articles",
     changes: [
@@ -589,7 +666,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.1",
+    version: "1.2.5",
     date: "2026-06-14",
     title: "Dashboard footer & finishing touches",
     changes: [
@@ -600,7 +677,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.2.0",
+    version: "1.2.4",
     date: "2026-06-14",
     title: "Land plots, in-app changelog & polish",
     changes: [
@@ -612,7 +689,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.10",
+    version: "1.2.3",
     date: "2026-06-14",
     title: "One-click dashboard, no redirect bounce",
     changes: [
@@ -621,7 +698,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.9",
+    version: "1.2.2",
     date: "2026-06-14",
     title: "Dashboard moved to /dashboard",
     changes: [
@@ -631,7 +708,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.8",
+    version: "1.2.1",
     date: "2026-06-14",
     title: "Marketing roster & leaderboard",
     changes: [
@@ -641,7 +718,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.7",
+    version: "1.2.0",
     date: "2026-06-14",
     title: "Blog reading experience",
     changes: [
@@ -651,7 +728,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.6",
+    version: "1.1.10",
     date: "2026-06-14",
     title: "Rich media in articles",
     changes: [
@@ -660,7 +737,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.5",
+    version: "1.1.9",
     date: "2026-06-14",
     title: "Admin posts go public",
     changes: [
@@ -670,7 +747,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.4",
+    version: "1.1.8",
     date: "2026-06-14",
     title: "Blog publishing fixes",
     changes: [
@@ -680,7 +757,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.3",
+    version: "1.1.7",
     date: "2026-06-13",
     title: "No more browser pop-ups",
     changes: [
@@ -688,7 +765,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.2",
+    version: "1.1.6",
     date: "2026-06-13",
     title: "Analytics & follow-ups",
     changes: [
@@ -698,7 +775,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.1",
+    version: "1.1.5",
     date: "2026-06-13",
     title: "Income & leaderboard depth",
     changes: [
@@ -708,7 +785,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.1.0",
+    version: "1.1.4",
     date: "2026-06-13",
     title: "Marketing officers & live leaderboard",
     changes: [
@@ -717,7 +794,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.10",
+    version: "1.1.3",
     date: "2026-06-13",
     title: "Faster, snappier dashboard",
     changes: [
@@ -726,7 +803,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.9",
+    version: "1.1.2",
     date: "2026-06-13",
     title: "Blog CMS",
     changes: [
@@ -734,7 +811,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.8",
+    version: "1.1.1",
     date: "2026-06-13",
     title: "Admin dashboard — all sections",
     changes: [
@@ -743,7 +820,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.7",
+    version: "1.1.0",
     date: "2026-06-13",
     title: "Member accounts",
     changes: [
@@ -751,7 +828,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.6",
+    version: "1.0.10",
     date: "2026-06-13",
     title: "Fifth division refresh",
     changes: [
@@ -759,7 +836,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.5",
+    version: "1.0.9",
     date: "2026-06-12",
     title: "Installable app (PWA)",
     changes: [
@@ -768,7 +845,24 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.4",
+    version: "1.0.8",
+    date: "2026-06-09",
+    title: "Member accounts: the backend takes shape",
+    changes: [
+      { kind: "new", text: "The installed app now opens straight to the login page, and the member-account backend was drafted — profiles, roles, and mobile-number-as-username login design — ahead of the accounts launch." },
+    ],
+  },
+  {
+    version: "1.0.7",
+    date: "2026-06-06",
+    title: "English site: every corner covered",
+    changes: [
+      { kind: "improved", text: "The English mirror now covers project and division detail pages, the full blog, auth pages and a bilingual sitemap — with a sweep that removed every Bengali leak from /en." },
+      { kind: "fixed", text: "Ahbab Palace 02 corrected per the owner's notes: G+8 with parking on the ground floor, floor-plan button, and the unit diagram put right." },
+    ],
+  },
+  {
+    version: "1.0.6",
     date: "2026-06-03",
     title: "Official forms",
     changes: [
@@ -776,11 +870,28 @@ export const CHANGELOG: ChangelogEntry[] = [
     ],
   },
   {
-    version: "1.0.3",
+    version: "1.0.5",
+    date: "2026-05-31",
+    title: "Flat-allocation form — the first official form goes digital",
+    changes: [
+      { kind: "new", text: "The flat-allocation form fills in online: photo and NID uploads, automatic signature placement, per-box digit fields, and a Bengali-safe PDF drawn pixel-perfect on the office template." },
+    ],
+  },
+  {
+    version: "1.0.4",
     date: "2026-05-28",
     title: "Bilingual website",
     changes: [
       { kind: "new", text: "Full English mirror at /en with a language switcher and SEO hreflang tags." },
+    ],
+  },
+  {
+    version: "1.0.3",
+    date: "2026-05-26",
+    title: "Project pages tell the whole story",
+    changes: [
+      { kind: "new", text: "Fuzala Tower share map (350 shares with sold-out badges), unit-availability diagrams for both Ahbab Palace buildings, per-square-foot pricing, and the founder's “পেছনের গল্প” story page." },
+      { kind: "improved", text: "Site-wide rebrand to PromisePD with fixed WhatsApp/Facebook link previews." },
     ],
   },
   {
@@ -807,6 +918,15 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Launch 🎉",
     changes: [
       { kind: "new", text: "Promise City goes live — homepage, five divisions, projects, gallery, team, the story, partner programme, leaderboard and contact." },
+    ],
+  },
+  {
+    version: "0.9.0",
+    date: "2026-05-18",
+    title: "Countdown to launch",
+    changes: [
+      { kind: "new", text: "The site takes shape ahead of launch: the Promise Journal blog (12 articles + search), the partner income calculator with the 2026 marketing rules, login/signup, contact, team and leaderboard pages." },
+      { kind: "improved", text: "Blue-first colour overhaul, the WebP image pipeline, and a service-worker rewrite that fixed the app freezing on its splash screen." },
     ],
   },
 ];
