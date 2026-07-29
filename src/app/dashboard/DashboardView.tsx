@@ -53,11 +53,12 @@ function computeFlow(txns: Txn[], from: string, to: string) {
   const dk = (iso: string) => iso.slice(0, 10);
   let fromS = from, toS = to;
   if (!fromS || !toS) {
-    let max = "0000-01-01";
-    for (const t of txns) { const d = dk(t.date); if (d > max) max = d; }
-    const maxD = new Date(`${max}T00:00:00`);
-    const minD = new Date(maxD); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
-    toS = toS || max; fromS = fromS || minD.toLocaleDateString("en-CA");
+    // Last 12 calendar months ending TODAY — never anchored to the latest
+    // transaction, so a future-dated entry can't drag the window forward.
+    const now = new Date();
+    const minD = new Date(now); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
+    toS = toS || now.toLocaleDateString("en-CA");
+    fromS = fromS || minD.toLocaleDateString("en-CA");
   }
   const fromD = new Date(`${fromS}T00:00:00`), toD = new Date(`${toS}T00:00:00`);
   if (Number.isNaN(fromD.getTime()) || Number.isNaN(toD.getTime()) || fromD > toD) return empty;

@@ -146,14 +146,13 @@ export default function TransactionsExplorer({
     let fromS = applied.from;
     let toS = applied.to;
     if (!fromS || !toS) {
-      // No date filter → show the LAST 12 MONTHS of activity (anchored to the
-      // latest transaction). Spanning the raw min→max would blow up to dozens
-      // of mostly-empty buckets if a single stray old/future date exists.
-      let max = "0000-01-01";
-      for (const r of filtered) { const d = dayKey(r.date); if (d && d > max) max = d; }
-      const maxD = new Date(`${max}T00:00:00`);
-      const minD = new Date(maxD); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
-      toS = toS || max;
+      // No date filter → the last 12 calendar months ending TODAY. Anchoring
+      // to the latest transaction let a single future-dated entry (a
+      // scheduled maturity withdrawal, a typo) drag the whole window forward
+      // into months that haven't happened yet.
+      const now = new Date();
+      const minD = new Date(now); minD.setMonth(minD.getMonth() - 11); minD.setDate(1);
+      toS = toS || now.toLocaleDateString("en-CA");
       fromS = fromS || minD.toLocaleDateString("en-CA");
     }
     const fromD = new Date(`${fromS}T00:00:00`);
