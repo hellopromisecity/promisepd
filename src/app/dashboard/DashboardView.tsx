@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Wallet, TrendingUp, Users, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
-  Receipt, MessageSquare, Newspaper, PiggyBank, Banknote, Activity, ArrowDownRight,
+  Receipt, MessageSquare, Activity, ArrowDownRight,
   CalendarRange, ChevronDown, Download, X, Smartphone, Send, TrendingDown,
 } from "lucide-react";
 
@@ -226,10 +226,13 @@ function FlowChart({ flow, on, subtitle, count, onExport }: {
             </linearGradient>
           </defs>
           <path d={inArea} fill="url(#flowIn)" style={{ opacity: on ? 1 : 0, transition: "opacity .8s ease" }} />
+          {/* opacity fade-in, NOT the dasharray draw-on trick — pathLength
+              normalisation breaks under non-scaling-stroke on a stretched
+              viewBox and left the last months of the line invisible */}
           <path d={line("in")} fill="none" stroke="#1847A1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
-            pathLength={1} strokeDasharray={1} strokeDashoffset={on ? 0 : 1} style={{ transition: "stroke-dashoffset 1.1s ease" }} />
+            style={{ opacity: on ? 1 : 0, transition: "opacity 1.1s ease" }} />
           <path d={line("out")} fill="none" stroke="#E11924" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeOpacity="0.85" vectorEffect="non-scaling-stroke"
-            pathLength={1} strokeDasharray={1} strokeDashoffset={on ? 0 : 1} style={{ transition: "stroke-dashoffset 1.3s ease" }} />
+            style={{ opacity: on ? 1 : 0, transition: "opacity 1.3s ease" }} />
           {hover !== null && (
             <g>
               <line x1={x(hover)} y1={padT - 6} x2={x(hover)} y2={H - padB} stroke="var(--color-border-strong)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
@@ -349,6 +352,16 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub={`${d.raised.toLocaleString("en-US")} memberships`} icon={Building2} tone="amber" href="/dashboard/projects" />
       </div>
 
+      {/* SMS at a glance — same card design as above; each opens the SMS page */}
+      {data.sms && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Kpi i={4} on={on} value={data.sms.estBalance} format={bdt} label="SMS balance (est.)" sub={`checkpoint ${bdt(data.sms.balance)}`} icon={Wallet} tone="emerald" href="/dashboard/sms" />
+          <Kpi i={5} on={on} value={data.sms.remainingSms} format={(v) => Math.round(v).toLocaleString("en-IN")} label="Remaining SMS" sub={`at ${bdt(data.sms.rate)} / SMS`} icon={Smartphone} tone="blue" href="/dashboard/sms" />
+          <Kpi i={6} on={on} value={data.sms.sent30d} format={(v) => Math.round(v).toLocaleString("en-IN")} label="Sent · 30 days" sub={`${data.sms.sentToday} today · ${data.sms.sent7d} in 7d`} icon={Send} tone="amber" href="/dashboard/sms" />
+          <Kpi i={7} on={on} value={data.sms.cost30d} format={bdt} label="Cost · 30 days" sub={`7-day ${bdt(data.sms.cost7d)}`} icon={TrendingDown} tone="violet" href="/dashboard/sms" />
+        </div>
+      )}
+
       {/* capital flow */}
       <FlowChart flow={flow.bars} on={on} subtitle={applied.label} count={flow.count} onExport={exportFlowCsv} />
 
@@ -449,46 +462,6 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* secondary mini-stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {[
-          { label: "Total profit", value: compact(d.profit), icon: PiggyBank },
-          { label: "Withdrawn", value: compact(d.withdrawn), icon: Banknote },
-          { label: "Transactions", value: d.txnCount.toLocaleString("en-US"), icon: Receipt },
-          { label: "Members", value: data.members.toLocaleString("en-US"), icon: Users },
-          { label: "Leads", value: data.leads.toLocaleString("en-US"), icon: MessageSquare },
-          { label: "Blog posts", value: data.blogCount.toLocaleString("en-US"), icon: Newspaper },
-        ].map((m) => (
-          <div key={m.label} className="rounded-xl border border-border bg-bg p-3">
-            <m.icon className="h-4 w-4 text-fg-faint" />
-            <p className="mt-1.5 text-lg font-extrabold tabular-nums text-fg">{m.value}</p>
-            <p className="text-[11px] text-fg-muted">{m.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* SMS at a glance — the SMS page's four KPIs, each card opens it */}
-      {data.sms && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[
-            { label: "SMS balance (est.)", value: bdt(data.sms.estBalance), sub: `checkpoint ${bdt(data.sms.balance)}`, icon: Wallet, ring: "from-emerald-50", cls: "text-emerald-600" },
-            { label: "Remaining SMS", value: data.sms.remainingSms.toLocaleString("en-IN"), sub: `at ${bdt(data.sms.rate)} / SMS`, icon: Smartphone, ring: "from-brand-blue-tint", cls: "text-brand-blue" },
-            { label: "Sent · 30 days", value: data.sms.sent30d.toLocaleString("en-IN"), sub: `${data.sms.sentToday} today · ${data.sms.sent7d} in 7d`, icon: Send, ring: "from-amber-50", cls: "text-amber-600" },
-            { label: "Cost · 30 days", value: bdt(data.sms.cost30d), sub: `7-day ${bdt(data.sms.cost7d)}`, icon: TrendingDown, ring: "from-bg-soft", cls: "text-fg" },
-          ].map((c) => (
-            <Link key={c.label} href="/dashboard/sms" className={`group overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${c.ring} to-bg p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg`}>
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{c.label}</p>
-                <span className={`grid h-8 w-8 place-items-center rounded-lg bg-bg/70 ${c.cls} transition-transform duration-300 group-hover:scale-110`}>
-                  <c.icon className="h-4 w-4" />
-                </span>
-              </div>
-              <p className={`mt-1.5 text-xl font-extrabold tabular-nums sm:text-2xl ${c.cls}`}>{c.value}</p>
-              <p className="mt-0.5 truncate text-[11px] text-fg-faint">{c.sub}</p>
-            </Link>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
