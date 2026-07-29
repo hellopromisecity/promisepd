@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.3",
+    date: "2026-07-29",
+    title: "The bell rings — plus a sidebar and backdrop with brand feel",
+    changes: [
+      { kind: "new", text: "The 🔔 notification bell finally does something: click it for the latest five transactions — who, what type, how much, when — with a “See all transactions” link straight into Transactionify." },
+      { kind: "improved", text: "Sidebar items now glide on hover — a smooth slide with a light blue highlight — and the whole dashboard sits on a subtle brand backdrop: a soft blue wash from one corner, a soft red from the other, mostly white in between." },
+    ],
+  },
+  {
     version: "2.2.2",
     date: "2026-07-29",
     title: "Find anyone by any file number",

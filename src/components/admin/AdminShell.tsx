@@ -29,7 +29,18 @@ export default function AdminShell({
   }, [member.role, showMyProjects]);
 
   return (
-    <div className="min-h-screen bg-bg-soft text-fg">
+    // Brand-tinted backdrop: a soft blue wash from the top-left and a soft
+    // red wash from the bottom-right over the plain background (~10% + ~10%
+    // over white). Inline style — Tailwind v4 drops arbitrary gradients here.
+    <div
+      className="min-h-screen bg-bg-soft text-fg"
+      style={{
+        background:
+          "radial-gradient(1100px 560px at 0% 0%, rgba(24,71,161,0.10), transparent 62%), " +
+          "radial-gradient(1100px 560px at 100% 100%, rgba(225,25,36,0.09), transparent 62%), " +
+          "var(--color-bg-soft)",
+      }}
+    >
       {/* Mobile drawer backdrop */}
       {open && (
         <button

@@ -158,10 +158,10 @@ export default function AdminSidebar({
                     <Link
                       href={entry.href}
                       onClick={onClose}
-                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 ease-out ${
                         isActive(entry.href)
                           ? "bg-brand-blue text-white shadow-[var(--shadow-brand)]"
-                          : "text-fg-muted hover:bg-bg-soft hover:text-fg"
+                          : "text-fg-muted hover:translate-x-1 hover:bg-brand-blue-tint hover:text-brand-blue"
                       }`}
                     >
                       <entry.icon className="h-[18px] w-[18px] shrink-0" />
@@ -179,7 +179,7 @@ export default function AdminSidebar({
           <Link
             href="/dashboard/changelog"
             onClick={onClose}
-            className="flex items-center justify-between rounded-xl px-3 py-2 text-[11px] font-medium text-fg-muted transition-colors hover:bg-bg-soft hover:text-fg"
+            className="flex items-center justify-between rounded-xl px-3 py-2 text-[11px] font-medium text-fg-muted transition-all duration-300 ease-out hover:bg-brand-blue-tint hover:text-brand-blue"
           >
             <span>What&apos;s new</span>
             <span className="rounded-md bg-bg-soft px-2 py-0.5 font-bold text-fg">v{CURRENT_VERSION}</span>
@@ -206,8 +206,8 @@ function GroupContent({
     <>
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-          childActive ? "text-fg" : "text-fg-muted hover:bg-bg-soft hover:text-fg"
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 ease-out ${
+          childActive ? "text-fg" : "text-fg-muted hover:translate-x-1 hover:bg-brand-blue-tint hover:text-brand-blue"
         }`}
       >
         <entry.icon className="h-[18px] w-[18px] shrink-0" />
@@ -221,10 +221,10 @@ function GroupContent({
               <Link
                 href={c.href}
                 onClick={onNavigate}
-                className={`flex items-center gap-2.5 rounded-lg py-2 pl-4 pr-3 text-[13px] transition-colors ${
+                className={`flex items-center gap-2.5 rounded-lg py-2 pl-4 pr-3 text-[13px] transition-all duration-300 ease-out ${
                   isActive(c.href)
                     ? "bg-brand-blue-tint font-semibold text-brand-blue-dark"
-                    : "text-fg-muted hover:bg-bg-soft hover:text-fg"
+                    : "text-fg-muted hover:translate-x-1 hover:bg-brand-blue-tint hover:text-brand-blue"
                 }`}
               >
                 <c.icon className="h-4 w-4 shrink-0" />
