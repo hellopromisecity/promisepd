@@ -204,7 +204,7 @@ export const DIVISIONS: Division[] = [
         title: "১০,০০০ টাকা থেকে শুরু",
         description:
           "কম পরিমাণ থেকেই সঞ্চয় শুরু করতে পারবেন — যেকোনো অঙ্ক।",
-        icon: "PiggyBank",
+        icon: "Coins",
         points: ["যেকোনো অঙ্ক জমা", "সহজে অ্যাকাউন্ট খোলা"],
       },
       {

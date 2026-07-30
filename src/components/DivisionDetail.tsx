@@ -19,7 +19,7 @@ import {
   Wrench,
   Ruler,
   Award,
-  PiggyBank,
+  Coins,
   Wallet,
   TrendingUp,
   Eye,
@@ -50,7 +50,7 @@ const ICONS: Record<string, LucideIcon> = { Building2, Hammer, Landmark, Plane, 
 
 const FEATURE_ICONS: Record<string, LucideIcon> = {
   Building2, MapPin, CreditCard, ShieldCheck, Home, Store, Wrench, Ruler,
-  Award, PiggyBank, Wallet, TrendingUp, Eye, Zap, Moon, Star, FileCheck,
+  Award, Coins, Wallet, TrendingUp, Eye, Zap, Moon, Star, FileCheck,
   BedDouble, Users, Headphones, Sofa, Briefcase, Box, LayoutGrid, Armchair, Palette,
 };
 

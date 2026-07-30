@@ -40,6 +40,10 @@ for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const APPLY = process.argv.includes("--confirm");
+// 2026-07-30 (user decision): same-name-ambiguous book persons no longer wait
+// for a manual link — with this flag each gets their OWN fresh account (they
+// stay separate people; merge later via Link if the boss ever says they're one).
+const CREATE_AMBIGUOUS = process.argv.includes("--create-ambiguous");
 const admin = createClient(URL, SERVICE, { auth: { autoRefreshToken: false, persistSession: false } });
 
 const DEFAULT_PASSWORD = "258025"; // ≥6 chars (login form + Supabase minimum)
@@ -193,7 +197,13 @@ for (const p of persons) {
     const names = [...new Set(p.rows.map((r) => normName(r.name)).filter(Boolean))];
     const hits = [...new Set(names.flatMap((nm) => accountsByName.get(nm) ?? []))];
     if (hits.length === 1) { acct = hits[0]; viaName = true; }
-    else if (hits.length > 1) { plan.ambiguous.push({ ...p, hits: hits.map((h) => h.uid) }); continue; }
+    else if (hits.length > 1) {
+      if (CREATE_AMBIGUOUS) {
+        if (firstMobile(p.mobile).length >= 8) plan.create.push(p);
+        else plan.createNoLogin.push(p);
+      } else plan.ambiguous.push({ ...p, hits: hits.map((h) => h.uid) });
+      continue;
+    }
   }
   if (acct) {
     const has = (txnsByUid.get(acct.uid) ?? []).length > 0;

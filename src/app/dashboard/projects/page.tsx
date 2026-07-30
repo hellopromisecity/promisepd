@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, Landmark, Users, Wallet, TrendingUp, PiggyBank, ArrowRight, Sparkles } from "lucide-react";
+import { Building2, Landmark, Users, Wallet, TrendingUp, Coins, ArrowRight, Sparkles } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { PageHeader, StatCard, EmptyState } from "@/components/admin/ui";
 import { getAdmin } from "@/lib/admin-guard";
@@ -60,7 +60,7 @@ export default async function ProjectsHubPage() {
             <StatCard label="Total collected" value={fmt(allCust.totals.collected)} sub={`across ${projects.length} projects`} icon={Wallet} tone="success" />
             <StatCard label="Customers" value={allCust.totals.memberships.toLocaleString("en-IN")} sub={`${allCust.totals.uniqueCount.toLocaleString("en-IN")} unique people`} icon={Users} tone="info" />
             <StatCard label="Payments" value={t.payments.toLocaleString("en-IN")} sub="receipts logged" icon={TrendingUp} tone="warning" />
-            <StatCard label="Avg / payer" value={fmt(allCust.totals.payers ? allCust.totals.collected / allCust.totals.payers : 0)} sub={`${allCust.totals.payers.toLocaleString("en-IN")} paying people`} icon={PiggyBank} tone="neutral" />
+            <StatCard label="Avg / payer" value={fmt(allCust.totals.payers ? allCust.totals.collected / allCust.totals.payers : 0)} sub={`${allCust.totals.payers.toLocaleString("en-IN")} paying people`} icon={Coins} tone="neutral" />
           </div>
 
           <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard unique={allCust.totals.uniqueCount} memberships={allCust.totals.memberships} raised={allCust.totals.collected} />} />

@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.5",
+    date: "2026-07-30",
+    title: "Every customer is an app user now — and the piggy bank is gone",
+    changes: [
+      { kind: "changed", text: "The piggy-bank icon is retired everywhere — the app's profit line, the dashboard's Avg/payer cards and the savings page on the website now carry a coins icon instead." },
+      { kind: "new", text: "The last 11 book customers without an app account got their own accounts (default password, book payments and project cards mirrored in) — every one of our customers is an app user now, whether they log in or not. The “No app account” filter left All Customers because the category no longer exists." },
+    ],
+  },
+  {
     version: "2.2.4",
     date: "2026-07-30",
     title: "The investor app tells the truth about profit",

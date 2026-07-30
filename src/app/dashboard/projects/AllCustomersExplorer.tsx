@@ -28,7 +28,7 @@ const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleStrin
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
-type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying" | "book";
+type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying";
 
 export default function AllCustomersExplorer({
   people, archived, projects, health, top, totals, investorTypes, investorProjects,
@@ -67,7 +67,6 @@ export default function AllCustomersExplorer({
       const app = !!p.app;
       if (status === "verified" && !(app && p.is_verified)) return false;
       if (status === "unverified" && !(app && !p.is_verified)) return false;
-      if (status === "book" && app) return false; // no app account yet (awaiting link)
       if (status === "paying" && !(p.totalPaid > 0)) return false;
       if (status === "nonpaying" && p.totalPaid > 0) return false;
       if (!term) return true;
@@ -236,7 +235,6 @@ export default function AllCustomersExplorer({
           <option value="nonpaying">Non-paying ({totals.uniqueCount - totals.payers})</option>
           <option value="verified">Verified ({health.verified})</option>
           <option value="unverified">Unverified ({health.unverified})</option>
-          <option value="book">No app account ({Math.max(0, totals.uniqueCount - health.total)})</option>
         </select>
         <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / page</option>)}

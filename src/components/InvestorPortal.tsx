@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Wallet,
   TrendingUp,
-  PiggyBank,
+  Coins,
   Settings,
   LogOut,
   Building2,
@@ -152,7 +152,7 @@ export default function InvestorPortal({ data, member, greeting, subtitle }: { d
             <p className="mt-0.5 text-lg font-extrabold tabular-nums text-fg">{tk(data.balance.total_investment)}</p>
           </div>
           <div>
-            <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-fg-faint"><PiggyBank className="h-3.5 w-3.5" /> {L.profit}</p>
+            <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-fg-faint"><Coins className="h-3.5 w-3.5" /> {L.profit}</p>
             <p className="mt-0.5 text-lg font-extrabold tabular-nums text-emerald-600">{tk(data.balance.total_profit)}</p>
           </div>
         </div>
