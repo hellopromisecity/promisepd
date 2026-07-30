@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.4",
+    date: "2026-07-30",
+    title: "The investor app tells the truth about profit",
+    changes: [
+      { kind: "fixed", text: "Some accounts carried phantom “মুনাফা” from the old system — a stale imported balance could show lakhs of profit on real-estate shares that never earn any. The app's totals now sum live from the member's own ledger, so মোট ব্যালেন্স / বিনিয়োগ / মুনাফা are always the real figures." },
+      { kind: "new", text: "Deposit-scheme members now see their project-wise profit exactly as Projectify calculates it — the recorded dividend plus the live accrued Mudaraba profit, the same taka the office dashboard shows." },
+      { kind: "changed", text: "Profit is a deposit-scheme concept: real-estate project cards no longer show a profit line at all." },
+    ],
+  },
+  {
     version: "2.2.3",
     date: "2026-07-29",
     title: "The bell rings — plus a sidebar and backdrop with brand feel",

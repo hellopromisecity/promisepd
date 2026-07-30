@@ -6,6 +6,7 @@
 
 import { cache } from "react";
 import { getAdmin } from "@/lib/admin-guard";
+import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
 
 export type InvestorBalance = {
   total_investment: number;
@@ -285,7 +286,11 @@ export type PortalMyProject = {
   project_name: string;
   status: string;
   invested: number; // sum of the member's non-profit "+" transactions for this project
-  profit: number; // profit-type txns for this project
+  /** Deposit schemes only: recorded dividend + live accrued profit from the
+   *  book (the same figure Projectify's All Customers shows). Real-estate
+   *  projects never carry profit — always 0 there. */
+  profit: number;
+  is_deposit: boolean; // profit is only a concept on deposit schemes
   goal: number; // per-investor target (custom share price, else project share)
   progress: number; // 0–100
   start_date: string | null;
@@ -469,45 +474,92 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
 
   const txRows = (txRes.data ?? []) as Record<string, unknown>[];
 
-  // Per-project "Invested" + "Profit" are summed from the member's OWN
-  // transactions, grouped by project — exactly like the legacy admin app.
-  // We deliberately do NOT use the stored investments.total_paid column: in the
-  // ported data it's a stale denormalised cache that omits whole payment types
-  // (e.g. a member's "Land Share" payments), so it can badly understate what
-  // was actually paid into a project. Invested = the member's "+" payments of
-  // non-profit types; Profit = their profit / profit_share credits.
+  // Per-project "Invested" is summed from the member's OWN transactions,
+  // grouped by project — exactly like the legacy admin app. We deliberately
+  // do NOT use the stored investments.total_paid column: in the ported data
+  // it's a stale denormalised cache that omits whole payment types (e.g. a
+  // member's "Land Share" payments), so it can badly understate what was
+  // actually paid into a project.
   const investedByProject = new Map<string, number>();
-  const profitByProject = new Map<string, number>();
+  const profitTxnsByProject = new Map<string, number>();
+  const withdrawnByProject = new Map<string, number>();
   for (const t of txRows) {
     if (!t.project_id) continue;
     const k = String(t.project_id);
     const amt = Number(t.amount) || 0;
     const ty = String(t.type);
     if (PROFIT_TYPES.has(ty)) {
-      profitByProject.set(k, (profitByProject.get(k) ?? 0) + amt);
+      profitTxnsByProject.set(k, (profitTxnsByProject.get(k) ?? 0) + amt);
     } else if ((op.get(ty) ?? "+") === "+") {
       investedByProject.set(k, (investedByProject.get(k) ?? 0) + amt);
+    } else {
+      withdrawnByProject.set(k, (withdrawnByProject.get(k) ?? 0) + amt);
     }
   }
+
+  // Profit is a DEPOSIT-SCHEME concept only (Mudaraba dividend) — real-estate
+  // shares never earn a "মুনাফা" line. For each deposit scheme the member is
+  // in, the profit shown is the same figure Projectify's All Customers shows:
+  // the book row's recorded dividend + the live accrued dividend from the
+  // profit engine. (The old system left stray profit numbers on real-estate
+  // accounts; the ledger + book are the truth now.)
+  const isDepositName = (name: string) => /deposit/i.test(name);
+  const foldProj = (s: string) => s.toLowerCase().replace(/investment|group/g, "").replace(/[^a-z0-9]+/g, "");
+  const bookProfitByFold = new Map<string, number>();
+  try {
+    const { data: hubRows } = await admin
+      .from("hub_customers")
+      .select("id, project_key, project_name, project_type, dividend, deleted_at")
+      .eq("investor_uid", uid);
+    type HubDep = { id: string; project_key: string; project_name: string; project_type: string; dividend: number | null; deleted_at: string | null };
+    const deps = ((hubRows ?? []) as HubDep[]).filter((r) => r.project_type === "deposit" && !r.deleted_at);
+    for (const r of deps) {
+      let accrued = 0;
+      try {
+        const cfg = await getProfitConfig(r.project_key);
+        if (cfg.enabled) accrued = (await accruedProfitByCustomer([r.id], cfg)).get(r.id) ?? 0;
+      } catch { /* scheme without a configured rate → recorded dividend only */ }
+      const k = foldProj(r.project_name);
+      bookProfitByFold.set(k, (bookProfitByFold.get(k) ?? 0) + (Number(r.dividend) || 0) + accrued);
+    }
+  } catch { /* no book link → fall back to recorded profit txns below */ }
 
   const myProjects: PortalMyProject[] = ((invRes.data ?? []) as Record<string, unknown>[]).map((v) => {
     const pid = String(v.project_id);
     const proj = byId.get(pid);
+    const name = proj?.project_name ?? pid;
+    const isDep = isDepositName(name);
     const invested = investedByProject.get(pid) ?? 0;
+    const profit = isDep ? bookProfitByFold.get(foldProj(name)) ?? profitTxnsByProject.get(pid) ?? 0 : 0;
     const goal = Number(v.custom_share_price) || Number(proj?.per_user_share_amount) || 0;
     const progress = goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : 0;
     return {
       project_id: pid,
-      project_name: proj?.project_name ?? pid,
+      project_name: name,
       status: proj?.status ?? "—",
       invested,
-      profit: profitByProject.get(pid) ?? 0,
+      profit,
+      is_deposit: isDep,
       goal,
       progress,
       start_date: (v.user_specific_start_date as string | null) ?? proj?.start_date ?? null,
       end_date: (v.user_specific_end_date as string | null) ?? proj?.end_date ?? null,
     };
   });
+
+  // Header totals — summed from the ledger + the deposit profits above, NOT
+  // the stored `balance` JSON (a stale import that carried phantom profit,
+  // e.g. real-estate accounts showing lakhs of "মুনাফা" they never had).
+  let totInvested = 0, totWithdrawn = 0;
+  for (const v of investedByProject.values()) totInvested += v;
+  for (const v of withdrawnByProject.values()) totWithdrawn += v;
+  const totProfit = myProjects.reduce((s, p) => s + p.profit, 0);
+  const ledgerBalance: InvestorBalance = {
+    total_investment: totInvested,
+    total_profit: totProfit,
+    total_withdrawn: totWithdrawn,
+    total_balance: totInvested + totProfit - totWithdrawn,
+  };
 
   const allProjects: PortalProject[] = projects.map((p) => ({
     project_id: p.project_id,
@@ -540,7 +592,7 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
     full_name: acc.full_name ?? "",
     is_active: acc.is_active,
     is_verified: acc.is_verified,
-    balance: bal(acc.balance as InvestorBalance | null),
+    balance: ledgerBalance,
     myProjects,
     allProjects,
     transactions,

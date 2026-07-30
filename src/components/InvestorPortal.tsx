@@ -209,10 +209,13 @@ function MyProjects({ data, L, tk, pct, dOnly, onOpen }: any) {
               <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.invested}</p>
               <p className="font-extrabold tabular-nums text-fg">{tk(p.invested)}</p>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p>
-              <p className="font-extrabold tabular-nums text-emerald-600">{tk(p.profit)}</p>
-            </div>
+            {/* profit exists only on deposit schemes — real-estate cards skip it */}
+            {p.is_deposit && (
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p>
+                <p className="font-extrabold tabular-nums text-emerald-600">{tk(p.profit)}</p>
+              </div>
+            )}
           </div>
           {p.goal > 0 && (
             <div className="mt-2.5">
@@ -290,7 +293,9 @@ function ProjectSheet({ selId, data, L, en, tk, pct, dOnly, onClose }: any) {
               {mine && (
                 <div className="grid grid-cols-2 gap-3 rounded-2xl bg-gradient-to-br from-brand-blue-tint/60 to-bg p-3">
                   <div><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.invested}</p><p className="font-extrabold tabular-nums text-fg">{tk(mine.invested)}</p></div>
-                  <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p><p className="font-extrabold tabular-nums text-emerald-600">{tk(mine.profit)}</p></div>
+                  {mine.is_deposit && (
+                    <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p><p className="font-extrabold tabular-nums text-emerald-600">{tk(mine.profit)}</p></div>
+                  )}
                 </div>
               )}
               {(mine?.goal > 0 || proj.progress > 0) && (
