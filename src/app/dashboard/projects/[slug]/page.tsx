@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, Users, Wallet, TrendingUp, PiggyBank } from "lucide-react";
+import { ArrowLeft, ExternalLink, Users, Wallet, TrendingUp, Coins } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PROJECTS } from "@/lib/site";
@@ -121,7 +121,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <StatCard label="Collected" value={fmt(raised)} icon={Wallet} tone="success" />
         <StatCard label="Customers" value={customers.length.toLocaleString("en-IN")} sub={`${payers} have paid`} icon={Users} tone="info" />
         <StatCard label="Payments" value={payments.toLocaleString("en-IN")} icon={TrendingUp} tone="warning" />
-        <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={PiggyBank} tone="neutral" />
+        <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={Coins} tone="neutral" />
       </div>
 
       <ProjectMetaPanel linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />
