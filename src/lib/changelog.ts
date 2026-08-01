@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.6",
+    date: "2026-07-30",
+    title: "Transactionify: savings and withdrawals, one dropdown apart",
+    changes: [
+      { kind: "new", text: "A money-flow filter next to Add transaction — All Transactions / All Savings / All Withdrawal. It drives the whole page: the cards, the graph, the table AND the CSV/PDF exports, so MD sir can pull exactly the report he needs (files are named savings-… / withdrawals-… accordingly)." },
+      { kind: "fixed", text: "A future-dated scheduled entry (like a fixed-date maturity withdrawal) no longer pins itself to the top of the list — it stays hidden until its day comes, or until you filter a date range that reaches into the future." },
+    ],
+  },
+  {
     version: "2.2.5",
     date: "2026-07-30",
     title: "Every customer is an app user now — and the piggy bank is gone",

@@ -99,6 +99,8 @@ export default function TransactionsExplorer({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
+  // money-flow filter: everything / savings (+) / withdrawals (−)
+  const [flow, setFlow] = useState<"all" | "in" | "out">("all");
 
   // Date filter: a draft (preset + custom) applied via the Apply button.
   const [draftPreset, setDraftPreset] = useState("all");
@@ -119,19 +121,26 @@ export default function TransactionsExplorer({
     setDraftPreset("all"); setDraftFrom(""); setDraftTo(""); setApplied({ from: "", to: "" }); setPage(1);
   }
 
-  // ── filter (search + applied date) ──
+  // ── filter (search + applied date + flow) ──
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
+    const today = dayKey(new Date().toISOString());
     return rows.filter((r) => {
+      // Future-dated entries (e.g. a scheduled maturity withdrawal) would
+      // otherwise pin themselves to the top of every list — hide them unless
+      // the user explicitly filters a range that reaches into the future.
+      if (dayKey(r.date) > today && !(applied.to && applied.to > today)) return false;
       if (applied.from && dayKey(r.date) < applied.from) return false;
       if (applied.to && dayKey(r.date) > applied.to) return false;
+      if (flow === "in" && r.operator === "-") return false;
+      if (flow === "out" && r.operator !== "-") return false;
       if (ql) {
         const hay = `${r.transaction_id} ${r.uid} ${r.userName} ${r.rashid ?? ""} ${r.type} ${r.projectName ?? ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
     });
-  }, [rows, q, applied]);
+  }, [rows, q, applied, flow]);
 
   // ── summary over the filtered set ──
   const stats = useMemo(() => {
@@ -236,7 +245,7 @@ export default function TransactionsExplorer({
     const csv = [head, ...body].map((row) => row.map((c) => { const v = String(c ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `transactions-${rangeLabel}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href = url; a.download = `${flow === "in" ? "savings" : flow === "out" ? "withdrawals" : "transactions"}-${rangeLabel}.csv`; a.click(); URL.revokeObjectURL(url);
   }
   async function exportPDF() {
     const { jsPDF } = await import("jspdf");
@@ -274,7 +283,7 @@ export default function TransactionsExplorer({
     });
     const pages = doc.getNumberOfPages();
     for (let p = 1; p <= pages; p++) { doc.setPage(p); doc.setTextColor(150, 150, 150); doc.setFontSize(8); doc.text(`Generated ${new Date().toLocaleString("en-GB")}  •  Page ${p}/${pages}`, W / 2, H - 14, { align: "center" }); }
-    doc.save(`transactions-${rangeLabel}.pdf`);
+    doc.save(`${flow === "in" ? "savings" : flow === "out" ? "withdrawals" : "transactions"}-${rangeLabel}.pdf`);
   }
 
   const STAT = [
@@ -338,6 +347,16 @@ export default function TransactionsExplorer({
             <Search className="h-4 w-4 shrink-0 text-fg-faint" />
             <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search by ID, user, receipt, project…" className="h-9 w-full bg-transparent text-sm outline-none" />
           </div>
+          {/* money-flow filter — feeds the table, cards, chart AND exports */}
+          <select
+            value={flow}
+            onChange={(e) => { setFlow(e.target.value as "all" | "in" | "out"); setPage(1); }}
+            className={`${inputCls} font-semibold ${flow === "in" ? "text-emerald-600" : flow === "out" ? "text-brand-red" : ""}`}
+          >
+            <option value="all">All Transactions</option>
+            <option value="in">All Savings</option>
+            <option value="out">All Withdrawal</option>
+          </select>
           <TxnForm {...formProps} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
