@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.9",
+    date: "2026-08-05",
+    title: "Marketing: the commission traffic light",
+    changes: [
+      { kind: "changed", text: "In an officer's history (👁), the “মোট জমা” percentage now measures what matters: progress toward the commission payout. A commission becomes withdrawable once the client has deposited 10× its amount (Fuzala Complex ৳15,000 commission → ৳1,50,000 deposited; Fuzala Tower ৳20,000 → ৳2,00,000) — the % climbs to 100 as the deposits come in." },
+      { kind: "new", text: "The chip is a traffic light: RED while the commission is not yet withdrawable, and it turns GREEN automatically the moment the client's deposit crosses the line — one glance tells you which officers can be paid. A complete package for the marketing team." },
+    ],
+  },
+  {
     version: "2.2.8",
     date: "2026-08-05",
     title: "Different number, different person — accounts split automatically",

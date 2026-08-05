@@ -59,7 +59,10 @@ export type OfficerHistoryEntry = {
   date: string; // ISO — sale_date when set, else created_at
   clientInvested: number | null; // client's deposit into THIS sale's project (txn-summed)
   clientGoal: number | null;     // that project's per-investor target (share price)
-  clientPct: number | null;      // clientInvested / clientGoal, 0–100
+  /** Progress toward the officer's commission payout: the commission becomes
+   *  withdrawable once the client has deposited 10× the commission (so the
+   *  commission is 10% of the deposit). 100 = payable; below = not yet. */
+  clientPct: number | null;
 };
 
 const PROFIT_TYPES = new Set(["profit", "profit_share"]);
@@ -170,11 +173,16 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
       const key = `${uid}|${pid}`;
       const invested = investedByUidProj.get(key) ?? 0;
       const goal = goalByUidProj.get(key) ?? 0;
-      return { invested, goal, pct: goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : null };
+      return { invested, goal };
     };
 
     return entries.map((e) => {
       const pp = perProject((e.client_id as string) ?? null, (e.client_name as string) ?? null, (e.item_label as string) ?? null);
+      // Commission maturity: payable once the client's deposit reaches
+      // 10 × this sale's commission (income). % = progress to that line.
+      const income = Number(e.income) || 0;
+      const threshold = income * 10;
+      const pct = pp.invested != null && threshold > 0 ? Math.round((pp.invested / threshold) * 100) : null;
       return {
         id: e.id as string,
         client_name: (e.client_name as string) ?? null,
@@ -188,7 +196,7 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
         date: e.sale_date ? new Date(e.sale_date as string).toISOString() : (e.created_at as string),
         clientInvested: pp.invested,
         clientGoal: pp.goal,
-        clientPct: pp.pct,
+        clientPct: pct,
       };
     });
   } catch {

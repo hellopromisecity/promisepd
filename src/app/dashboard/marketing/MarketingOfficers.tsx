@@ -924,7 +924,21 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                   <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
                   <span className="text-fg-muted">points <b className="text-brand-blue">+{fmtPts(e.points)}</b></span>
                   {e.clientInvested != null && (
-                    <span className="ml-auto rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">মোট জমা {fmtBDT(e.clientInvested)}{e.clientPct != null ? ` · ${e.clientPct}%` : ""}</span>
+                    // Commission maturity: green once the client's deposit hits
+                    // 10× the commission (commission = 10% of deposit) — the
+                    // officer may withdraw. Red until then.
+                    <span
+                      title={e.clientPct == null ? undefined : e.clientPct >= 100 ? "কমিশন উত্তোলনযোগ্য — জমা কমিশনের ১০ গুণ পূর্ণ হয়েছে" : "কমিশন এখনো উত্তোলনযোগ্য নয় — জমা কমিশনের ১০ গুণ হলে সবুজ হবে"}
+                      className={`ml-auto rounded-md px-1.5 py-0.5 font-semibold ${
+                        e.clientPct == null
+                          ? "bg-bg-soft text-fg-muted"
+                          : e.clientPct >= 100
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-brand-red-tint text-brand-red-dark"
+                      }`}
+                    >
+                      মোট জমা {fmtBDT(e.clientInvested)}{e.clientPct != null ? ` · ${Math.min(e.clientPct, 100)}%` : ""}
+                    </span>
                   )}
                 </div>
               </div>
