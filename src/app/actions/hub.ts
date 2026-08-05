@@ -6,7 +6,7 @@ import { getAdmin, logAudit } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
-import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange } from "@/lib/investor-write";
+import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, canonMobile } from "@/lib/investor-write";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
@@ -320,7 +320,7 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
-    const { data } = await HC(admin).select("bio, commission_entry_id").eq("id", id).maybeSingle();
+    const { data } = await HC(admin).select("bio, commission_entry_id, mobile, investor_uid, name, project_name").eq("id", id).maybeSingle();
     const cur = rec(data);
     if (!cur) return { ok: false, error: "Customer not found." };
     const bio = { ...(cur.bio as Record<string, unknown>), shares: input.shares || (cur.bio as Record<string, unknown>)?.shares || null };
@@ -331,8 +331,40 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     }).eq("id", id);
     const entryId = await syncCommission(admin, { project_key: projectKey, name: input.name, file_no: input.file_no || null, joining_date: input.joining_date || null, reference_officer_id: input.reference_officer_id || null, commission_entry_id: (cur.commission_entry_id as string) ?? null, shares: input.shares || (bio.shares as string) || null });
     await HC(admin).update({ commission_entry_id: entryId }).eq("id", id);
+
+    // ── a DIFFERENT number means a DIFFERENT person: auto-split shared accounts ──
+    // Migration-era rows that shared one mobile share one app account. When a
+    // manager gives such a row its OWN number, this row is its own person now:
+    // create/find the account for the new number (default password), move the
+    // row's mirrored app transactions across, and link — so adding or deleting
+    // money for one person can never touch another person's app again.
+    let splitNote = "";
+    const newCanon = canonMobile(input.mobile);
+    const oldUid = (cur.investor_uid as string | null) ?? null;
+    if (oldUid && newCanon && newCanon !== canonMobile(cur.mobile as string | null)) {
+      const { data: accD } = await admin.from("investor_accounts").select("uid, phone_number").eq("uid", oldUid).maybeSingle();
+      const accPhone = canonMobile(rec(accD)?.phone_number as string | null);
+      const { data: sib } = await HC(admin).select("id").eq("investor_uid", oldUid).neq("id", id).limit(1);
+      if (accPhone && accPhone !== newCanon && (sib ?? []).length > 0) {
+        await HC(admin).update({ investor_uid: null }).eq("id", id);
+        const newUid = await ensureInvestorForHub(admin, { id, name: input.name, mobile: input.mobile, investor_uid: null }, { fid: input.file_no || null });
+        if (newUid && newUid !== oldUid) {
+          const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", id).not("mirror_tx", "is", null);
+          const mids = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
+          if (mids.length) await admin.from("investor_transactions").update({ uid: newUid } as never).in("transaction_id", mids);
+          const pid = await projectIdForName(admin, String(cur.project_name ?? ""));
+          if (pid) await ensureMembership(admin, newUid, pid);
+          await logAudit({ action: "link", entity: "hub_customer", entityId: id, detail: `Own number → own account: split from ${oldUid} to ${newUid} (${mids.length} txn(s) moved)` });
+          splitNote = " · own app account set up for the new number";
+        } else if (!newUid) {
+          await HC(admin).update({ investor_uid: oldUid }).eq("id", id); // couldn't build a login — keep the old link
+        }
+      }
+    }
+
     revalidatePath(`/dashboard/projects/${projectKey}`);
-    return { ok: true, message: "Saved." };
+    revalidatePath("/dashboard/projects/all");
+    return { ok: true, message: `Saved.${splitNote}` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 

@@ -34,7 +34,7 @@ const last10 = (m: string | null | undefined) => { const d = (m || "").replace(/
 /** Canonical login mobile from a book mobile field — which may hold SEVERAL
  *  numbers ("01704… 01628…"): take the FIRST BD-shaped token, else fall back
  *  to the digits as an intl number. "" when nothing usable. */
-function canonMobile(raw: string | null | undefined): string {
+export function canonMobile(raw: string | null | undefined): string {
   for (const tok of String(raw || "").split(/[^\d+]+/).filter(Boolean)) {
     const d = tok.replace(/\D/g, "");
     if (d.length === 11 && d.startsWith("01")) return "880" + d.slice(1);

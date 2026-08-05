@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.8",
+    date: "2026-08-05",
+    title: "Different number, different person — accounts split automatically",
+    changes: [
+      { kind: "fixed", text: "Customers who once shared one mobile number shared one app account from the migration — so adding or deleting one person's transaction echoed into the other's app. The affected customers now have their own separate accounts (own number + the default password), and each other's money can never touch again." },
+      { kind: "new", text: "This can't happen again: the moment a manager gives a book customer their OWN number, the platform automatically sets up their own app account, moves their transactions across, and links their project card — no shared ledgers between different people." },
+    ],
+  },
+  {
     version: "2.2.7",
     date: "2026-08-05",
     title: "Archive: delete forever, when you mean it",
