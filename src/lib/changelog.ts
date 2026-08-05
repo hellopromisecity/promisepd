@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.7",
+    date: "2026-08-05",
+    title: "Archive: delete forever, when you mean it",
+    changes: [
+      { kind: "new", text: "Each archived customer now has a red Delete button beside Restore — an INSTANT permanent delete for when you don't want to wait out the 30 days. It wipes the account, their book rows, every payment and transaction, and their app login." },
+      { kind: "changed", text: "Because there is no coming back from it, the confirmation spells it out — no archive, no restore — and still makes you type “delete” before the button arms. Only already-archived customers can be deleted this way; the audit log records who did it." },
+    ],
+  },
+  {
     version: "2.2.6",
     date: "2026-07-30",
     title: "Transactionify: savings and withdrawals, one dropdown apart",

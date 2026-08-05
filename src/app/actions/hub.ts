@@ -215,6 +215,52 @@ export async function archivePerson(uid: string): Promise<Result> {
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
+/** PERMANENTLY erase an ARCHIVED customer — account, book rows, payments,
+ *  transactions, memberships and (member-role) login. No restore after this;
+ *  only rows already in the archive (deleted_at set) can be purged. */
+export async function purgePerson(uid: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!uid) return { ok: false, error: "Missing user." };
+
+    const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, profile_id, deleted_at").eq("uid", uid).maybeSingle();
+    const acc = rec(accD);
+    if (!acc) return { ok: false, error: "Account not found." };
+    if (!acc.deleted_at) return { ok: false, error: "Only archived customers can be deleted permanently — archive them first." };
+
+    // book side: payments, then the customer rows
+    const { data: hubRows } = await HC(admin).select("id").eq("investor_uid", uid);
+    const hubIds = ((hubRows ?? []) as { id: string }[]).map((h) => h.id);
+    if (hubIds.length) {
+      await HP(admin).delete().in("customer_id", hubIds);
+      await HC(admin).delete().in("id", hubIds);
+    }
+
+    // app side: transactions, memberships, then the account itself
+    await admin.from("investor_transactions").delete().eq("uid", uid);
+    await admin.from("investments").delete().eq("uid", uid);
+    const { error } = await IA(admin).delete().eq("uid", uid);
+    if (error) return { ok: false, error: String(error.message) };
+
+    // their login — only ordinary member profiles, never a staff/admin login
+    if (acc.profile_id) {
+      try {
+        const { data: prof } = await admin.from("profiles").select("id, role").eq("id", acc.profile_id).maybeSingle();
+        if (rec(prof)?.role === "member") {
+          await admin.from("profiles").delete().eq("id", acc.profile_id);
+          await admin.auth.admin.deleteUser(acc.profile_id);
+        }
+      } catch { /* best effort — an orphaned login is harmless */ }
+    }
+
+    await logAudit({ action: "delete", entity: "investor_account", entityId: uid, detail: `PERMANENTLY deleted ${acc.full_name ?? uid} from the archive (${hubIds.length} book row(s))` });
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    return { ok: true, message: "Deleted permanently." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
 /** Bring an archived customer back exactly as they were. */
 export async function restorePerson(uid: string): Promise<Result> {
   try {

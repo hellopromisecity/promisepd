@@ -21,7 +21,7 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, restorePerson, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, restorePerson, purgePerson, type CustomerInput } from "@/app/actions/hub";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -403,20 +403,22 @@ function RowMenu({ person }: { person: PersonRow }) {
 
 /** Confirmation that makes you TYPE the action word before Confirm unlocks. */
 function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm }: {
-  kind: "deactivate" | "activate" | "delete"; name: string; pending: boolean; err: string | null;
+  kind: "deactivate" | "activate" | "delete" | "purge"; name: string; pending: boolean; err: string | null;
   onCancel: () => void; onConfirm: () => void;
 }) {
   const [typed, setTyped] = useState("");
-  const word = kind === "delete" ? "delete" : kind === "deactivate" ? "deactivate" : null;
+  const word = kind === "delete" || kind === "purge" ? "delete" : kind === "deactivate" ? "deactivate" : null;
   const ready = !word || typed.trim().toLowerCase() === word;
-  const danger = kind === "delete";
-  const title = kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : "Activate user";
+  const danger = kind === "delete" || kind === "purge";
+  const title = kind === "purge" ? "Delete forever" : kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : "Activate user";
   const message =
-    kind === "delete"
-      ? `“${name}” disappears from every list — All Customers, the project pages and reports. They stay in the Archive for 30 days, restorable in one click.`
-      : kind === "deactivate"
-        ? `“${name}” stays everywhere but their app account is switched off.`
-        : `Switch “${name}”’s app account back on.`;
+    kind === "purge"
+      ? `“${name}” will be erased PERMANENTLY — the account, their book rows, every payment and transaction, and their app login. This is an instant delete: there is NO archive and NO restore after this. Be sure.`
+      : kind === "delete"
+        ? `“${name}” disappears from every list — All Customers, the project pages and reports. They stay in the Archive for 30 days, restorable in one click.`
+        : kind === "deactivate"
+          ? `“${name}” stays everywhere but their app account is switched off.`
+          : `Switch “${name}”’s app account back on.`;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && onCancel()}>
       <div className="w-full max-w-sm animate-[pop_.18s_ease-out] rounded-2xl border border-border bg-bg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -445,12 +447,24 @@ function ArchivePanel({ archived }: { archived: ArchivedRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [purgeTarget, setPurgeTarget] = useState<ArchivedRow | null>(null);
+  const [purgeErr, setPurgeErr] = useState<string | null>(null);
   function restore(uid: string) {
     setBusy(uid);
     start(async () => {
       const r = await restorePerson(uid);
       setBusy(null);
       if (r.ok) router.refresh();
+    });
+  }
+  function purge(uid: string) {
+    setBusy(uid);
+    setPurgeErr(null);
+    start(async () => {
+      const r = await purgePerson(uid);
+      setBusy(null);
+      if (r.ok) { setPurgeTarget(null); router.refresh(); }
+      else setPurgeErr(r.error);
     });
   }
   return (
@@ -475,9 +489,22 @@ function ArchivePanel({ archived }: { archived: ArchivedRow[] }) {
               <button type="button" onClick={() => restore(a.uid)} disabled={pending} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-bg px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50">
                 {busy === a.uid && pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Restore
               </button>
+              <button type="button" onClick={() => { setPurgeErr(null); setPurgeTarget(a); }} disabled={pending} title="Delete instantly — no restore" className="inline-flex items-center gap-1.5 rounded-xl border border-brand-red/40 bg-bg px-3 py-2 text-sm font-semibold text-brand-red-dark transition-colors hover:bg-brand-red-tint disabled:opacity-50">
+                <Trash2 className="h-4 w-4" /> Delete
+              </button>
             </li>
           ))}
         </ul>
+      )}
+      {purgeTarget && (
+        <TypeConfirm
+          kind="purge"
+          name={purgeTarget.name}
+          pending={pending && busy === purgeTarget.uid}
+          err={purgeErr}
+          onCancel={() => { if (!pending) { setPurgeTarget(null); setPurgeErr(null); } }}
+          onConfirm={() => purge(purgeTarget.uid)}
+        />
       )}
     </div>
   );
