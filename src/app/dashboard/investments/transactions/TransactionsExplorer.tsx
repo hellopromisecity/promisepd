@@ -30,6 +30,8 @@ export type Row = {
   transaction_id: string;
   uid: string;
   userName: string;
+  fid: string | null; // the office File ID — what the team actually knows people by
+  phone: string | null;
   type: string;
   operator: string; // + | -
   amount: number;
@@ -135,7 +137,7 @@ export default function TransactionsExplorer({
       if (flow === "in" && r.operator === "-") return false;
       if (flow === "out" && r.operator !== "-") return false;
       if (ql) {
-        const hay = `${r.transaction_id} ${r.uid} ${r.userName} ${r.rashid ?? ""} ${r.type} ${r.projectName ?? ""}`.toLowerCase();
+        const hay = `${r.transaction_id} ${r.uid} ${r.fid ?? ""} ${r.phone ?? ""} ${r.userName} ${r.rashid ?? ""} ${r.type} ${r.projectName ?? ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
@@ -237,9 +239,9 @@ export default function TransactionsExplorer({
   // ── exports (operate on the current filtered + sorted set) ──
   const rangeLabel = applied.from || applied.to ? `${applied.from || "start"}_${applied.to || "now"}` : "all-time";
   function exportCSV() {
-    const head = ["Date", "ID", "Receipt", "User", "UID", "Type", "Direction", "Amount", "Project"];
+    const head = ["Date", "ID", "Receipt", "User", "File ID", "Mobile", "UID", "Type", "Direction", "Amount", "Project"];
     const body = sorted.map((r) => [
-      dayKey(r.date), r.transaction_id, r.rashid ?? "", r.userName, r.uid, r.type,
+      dayKey(r.date), r.transaction_id, r.rashid ?? "", r.userName, r.fid ?? "", r.phone ?? "", r.uid, r.type,
       r.operator === "-" ? "out" : "in", r.amount, r.projectName ?? "",
     ]);
     const csv = [head, ...body].map((row) => row.map((c) => { const v = String(c ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
@@ -417,8 +419,11 @@ export default function TransactionsExplorer({
                         {r.rashid && <p className="text-fg-faint">{r.rashid}</p>}
                       </td>
                       <td className={tdCls}>
-                        <p className="font-mono text-[11px] text-fg-faint">{r.uid}</p>
+                        {/* the office knows people by FILE, not UID — File ID
+                            first (UID only when there's no file), mobile below */}
+                        <p className="font-mono text-[11px] text-fg-faint">{r.fid ? `File ${r.fid}` : r.uid}</p>
                         <p className="font-semibold text-fg">{r.userName || "—"}</p>
+                        {r.phone && <p className="text-[11px] text-fg-muted">{r.phone}</p>}
                       </td>
                       <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>{fmtDate(r.date)}</td>
                       <td className={tdCls}><Badge tone={minus ? "danger" : "success"}>{r.type}</Badge></td>

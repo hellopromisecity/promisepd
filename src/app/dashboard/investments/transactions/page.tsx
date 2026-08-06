@@ -37,11 +37,15 @@ export default async function InvestorTransactionsPage() {
     listProjects(admin),
   ]);
   const op = new Map(types.map((t) => [t.name, t.operator]));
+  const fidByUid = new Map(investors.map((i) => [i.uid, i.fid ?? null]));
+  const phoneByUid = new Map(investors.map((i) => [i.uid, /^(book|del):/i.test(i.phone_number ?? "") ? null : localPhone(i.phone_number)]));
 
   const rows: Row[] = all.map((t) => ({
     transaction_id: t.transaction_id,
     uid: t.uid,
     userName: maps.investorName.get(t.uid) || t.uid,
+    fid: fidByUid.get(t.uid) ?? null,
+    phone: phoneByUid.get(t.uid) ?? null,
     type: t.type,
     operator: op.get(t.type) ?? "+",
     amount: Number(t.amount) || 0,

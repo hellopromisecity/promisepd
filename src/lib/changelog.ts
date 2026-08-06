@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.0",
+    date: "2026-08-06",
+    title: "The book is complete — every customer on every project page",
+    changes: [
+      { kind: "fixed", text: "Some customers with crores in the platform were invisible on their project's page (e.g. a member with ৳38,00,000 in Ahbab Palace-02 who wasn't among its listed customers) — their money lived only on the app side. All 96 such holdings (৳3.5 Cr of deposits) now have proper book rows with their full payment history, receipts and mirror links — every project page lists every one of its customers, no exceptions." },
+      { kind: "changed", text: "Transactionify's User column now leads with the FILE ID (what the office actually knows people by) with the mobile number underneath — UIDs only appear for accounts without a file. Search matches file numbers and mobiles too, and the CSV export carries File ID + Mobile columns." },
+    ],
+  },
+  {
     version: "2.2.11",
     date: "2026-08-06",
     title: "Your price, your progress — and SMS only when you want it",
