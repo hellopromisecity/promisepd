@@ -96,6 +96,8 @@ export type TxnInput = {
   project_id?: string | null;
   rashid_number?: string | null;
   description?: string | null;
+  /** false = don't text the customer for this entry (re-entries etc.). */
+  sendSms?: boolean;
 };
 
 export async function saveInvestorTransaction(input: TxnInput): Promise<ActionResult<{ id: string }>> {
@@ -168,8 +170,9 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     await recomputeBalance(admin, uid);
     if (prevUid && prevUid !== uid) await recomputeBalance(admin, prevUid);
 
-    // New transaction → text the investor (BD numbers only; never throws).
-    if (creating) {
+    // New transaction → text the investor (BD numbers only; never throws) —
+    // unless the manager switched the SMS off for this entry.
+    if (creating && input.sendSms !== false) {
       await sendTransactionSms({
         phone: (inv as { phone_number: string | null }).phone_number,
         operator: (ty as { operator: string }).operator ?? "+",

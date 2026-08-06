@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.11",
+    date: "2026-08-06",
+    title: "Your price, your progress — and SMS only when you want it",
+    changes: [
+      { kind: "new", text: "Every member's app now measures progress against the price THEY bought at — the contract price from their file (e.g. a Fuzala Complex bought at ৳2,65,000 shows % paid of ৳2,65,000, not today's ৳5,00,000). 162 members' goals were set from their files, and editing a customer's Total price updates their app goal instantly." },
+      { kind: "new", text: "Every Add-transaction form now has an SMS switch (on by default): flip it off and the customer isn't texted for that entry — perfect for re-entering a corrected amount without the customer getting two or three confusing messages." },
+      { kind: "fixed", text: "One member's file had its three payments (৳77,000) missing from the import — restored from the office sheet with receipts, mirrored to her app, and her contract price (৳2,65,000) set as her goal." },
+    ],
+  },
+  {
     version: "2.2.10",
     date: "2026-08-06",
     title: "The app shows every project — with the real final balance",

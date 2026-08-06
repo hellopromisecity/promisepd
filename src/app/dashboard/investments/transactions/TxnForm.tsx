@@ -45,11 +45,14 @@ export default function TxnForm({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // manager's choice: text the customer about this entry or stay silent
+  const [sms, setSms] = useState(true);
 
   function submit(fd: FormData) {
     setError(null);
     const input: TxnInput = {
       transaction_id: txn?.transaction_id ?? null,
+      sendSms: sms,
       uid: String(fd.get("uid") ?? ""),
       type: String(fd.get("type") ?? ""),
       amount: String(fd.get("amount") ?? "0"),
@@ -151,6 +154,15 @@ export default function TxnForm({
               </div>
 
               {error && <p className="rounded-lg bg-brand-red-tint px-3 py-2 text-xs font-medium text-brand-red-dark">{error}</p>}
+
+              {!editing && (
+                <button type="button" onClick={() => setSms((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-border bg-bg-soft px-3 py-2.5 transition-colors hover:border-brand-blue/40">
+                  <span className="text-xs font-semibold text-fg-muted">কাস্টমারকে SMS <b className={sms ? "text-emerald-600" : "text-brand-red-dark"}>{sms ? "যাবে" : "যাবে না"}</b></span>
+                  <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${sms ? "bg-emerald-500" : "bg-fg-faint"}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${sms ? "left-[18px]" : "left-0.5"}`} />
+                  </span>
+                </button>
+              )}
 
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setOpen(false)} disabled={pending} className="rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40 disabled:opacity-50">Cancel</button>

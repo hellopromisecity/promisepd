@@ -357,6 +357,9 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   const reload = () => getHubCustomerDetail(customer.id).then((d) => setPayments(d?.payments ?? []));
   useEffect(() => { let a = true; getHubCustomerDetail(customer.id).then((d) => { if (a) setPayments(d?.payments ?? []); }); listTxnTypes().then((t) => { if (a && t.length) setTypes(t); }); return () => { a = false; }; }, [customer.id]);
 
+  // manager's choice: text the customer about this entry or stay silent
+  const [sms, setSms] = useState(true);
+
   function resetForm() { setAmount(""); setReceipt(""); setDesc(""); setEditingId(null); setErr(null); }
 
   function submit() {
@@ -366,7 +369,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
       const payload = { date, amount: parseFloat(amount), type, description: desc, receipt_no: receipt };
       const r = editingId
         ? await updateHubPayment(editingId, project.key, payload)
-        : await addHubPayment(customer.id, project.key, payload);
+        : await addHubPayment(customer.id, project.key, { ...payload, sendSms: sms });
       if (r.ok) { toast(r.message || "Saved.", "success"); resetForm(); await reload(); router.refresh(); } else setErr(r.error);
     });
   }
@@ -430,6 +433,14 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
               <div><label className={labelCls}>Receipt #</label><input className={inputCls} value={receipt} onChange={(e) => setReceipt(e.target.value)} /></div>
             </div>
             <div><label className={labelCls}>Note</label><textarea rows={3} className={`${inputCls} resize-y`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional — long messages wrap here" /></div>
+            {!editingId && (
+              <button type="button" onClick={() => setSms((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-border bg-bg-soft px-3 py-2.5 transition-colors hover:border-brand-blue/40">
+                <span className="text-xs font-semibold text-fg-muted">কাস্টমারকে SMS <b className={sms ? "text-emerald-600" : "text-brand-red-dark"}>{sms ? "যাবে" : "যাবে না"}</b></span>
+                <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${sms ? "bg-emerald-500" : "bg-fg-faint"}`}>
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${sms ? "left-[18px]" : "left-0.5"}`} />
+                </span>
+              </button>
+            )}
             <button onClick={submit} disabled={pending} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {editingId ? "Save changes" : "Add transaction"}
             </button>

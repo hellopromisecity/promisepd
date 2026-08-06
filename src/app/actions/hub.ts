@@ -187,7 +187,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
     );
     if (uid) {
       const pid = await projectIdForName(admin, project.name, uid);
-      if (pid) await ensureMembership(admin, uid, pid);
+      if (pid) await ensureMembership(admin, uid, pid, input.total_price);
     }
     revalidatePath(`/dashboard/projects/${project.key}`);
     revalidatePath("/dashboard/projects/all");
@@ -309,7 +309,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
     const entryId = await syncCommission(admin, { project_key: projectKey, name: acc.full_name as string, file_no: input.file_no || (acc.fid as string) || null, joining_date: input.joining_date || null, reference_officer_id: input.reference_officer_id || null, commission_entry_id: null, shares: input.shares || null });
     if (entryId) await HC(admin).update({ commission_entry_id: entryId }).eq("id", cid);
     const pid = await projectIdForName(admin, meta.name, uid);
-    if (pid) await ensureMembership(admin, uid, pid);
+    if (pid) await ensureMembership(admin, uid, pid, input.total_price);
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");
     return { ok: true, message: `Added to ${meta.name}.` };
@@ -320,7 +320,7 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
-    const { data } = await HC(admin).select("bio, commission_entry_id, mobile, investor_uid, name, project_name").eq("id", id).maybeSingle();
+    const { data } = await HC(admin).select("bio, commission_entry_id, mobile, investor_uid, name, project_name, total_price").eq("id", id).maybeSingle();
     const cur = rec(data);
     if (!cur) return { ok: false, error: "Customer not found." };
     const bio = { ...(cur.bio as Record<string, unknown>), shares: input.shares || (cur.bio as Record<string, unknown>)?.shares || null };
@@ -353,13 +353,20 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
           const mids = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
           if (mids.length) await admin.from("investor_transactions").update({ uid: newUid } as never).in("transaction_id", mids);
           const pid = await projectIdForName(admin, String(cur.project_name ?? ""), newUid);
-          if (pid) await ensureMembership(admin, newUid, pid);
+          if (pid) await ensureMembership(admin, newUid, pid, input.total_price);
           await logAudit({ action: "link", entity: "hub_customer", entityId: id, detail: `Own number → own account: split from ${oldUid} to ${newUid} (${mids.length} txn(s) moved)` });
           splitNote = " · own app account set up for the new number";
         } else if (!newUid) {
           await HC(admin).update({ investor_uid: oldUid }).eq("id", id); // couldn't build a login — keep the old link
         }
       }
+    }
+
+    // keep the member's app goal in step with their CONTRACT price
+    const linkedUid = (await HC(admin).select("investor_uid").eq("id", id).maybeSingle()).data?.investor_uid as string | null;
+    if (linkedUid && Number(input.total_price) > 0 && Number(input.total_price) !== Number(cur.total_price)) {
+      const pid = await projectIdForName(admin, String(cur.project_name ?? ""), linkedUid);
+      if (pid) await ensureMembership(admin, linkedUid, pid, input.total_price);
     }
 
     revalidatePath(`/dashboard/projects/${projectKey}`);
@@ -387,7 +394,7 @@ export async function deleteHubCustomer(id: string, projectKey: string): Promise
 }
 
 // ── payments / transactions ──────────────────────────────────────
-export async function addHubPayment(customerId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string }): Promise<Result> {
+export async function addHubPayment(customerId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string; sendSms?: boolean }): Promise<Result> {
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
@@ -406,8 +413,12 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     const { data: ins, error } = await HP(admin).insert({ customer_id: customerId, seq, date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null }).select("id").single();
     if (error) return { ok: false, error: error.message };
     await recomputeCustomer(admin, customerId);
-    // Text the customer (BD numbers only; never throws) — same gateway as App Users.
-    await sendTransactionSms({ phone: mobile, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
+    // Text the customer (BD numbers only; never throws) — same gateway as App
+    // Users. The manager can switch the SMS off for this entry (e.g. re-adding
+    // a corrected amount — the customer shouldn't be texted twice).
+    if (input.sendSms !== false) {
+      await sendTransactionSms({ phone: mobile, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
+    }
     // Mirror into the buyer's app / investor account so their PWA updates too —
     // auto-creating the account (mobile + default password) if they have none,
     // plus the project membership for the PWA card. Never throws. The payment

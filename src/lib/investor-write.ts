@@ -120,11 +120,19 @@ export async function projectIdForName(admin: Admin, projectName: string, uid?: 
 /** Make sure the investor is a MEMBER of the project (the `investments` row) —
  *  the PWA builds its "My Projects" cards from memberships, not transactions,
  *  so a mirrored payment without one never shows as a project card. */
-export async function ensureMembership(admin: Admin, uid: string, project_id: string): Promise<void> {
+export async function ensureMembership(admin: Admin, uid: string, project_id: string, customPrice?: number | null): Promise<void> {
   try {
-    const { data: existing } = await admin.from("investments").select("id").eq("project_id", project_id).eq("uid", uid).maybeSingle();
-    if (existing) return;
-    await admin.from("investments").insert({ uid, project_id, total_paid: 0, discount: 0 } as any);
+    const price = Number(customPrice) > 0 ? Math.round(Number(customPrice) * 100) / 100 : null;
+    const { data: existing } = await admin.from("investments").select("id, custom_share_price").eq("project_id", project_id).eq("uid", uid).maybeSingle();
+    if (existing) {
+      // the member's CONTRACT price (book total_price) is their app goal —
+      // today's project price never overrides what they actually bought at
+      if (price && Number((existing as any).custom_share_price) !== price) {
+        await admin.from("investments").update({ custom_share_price: price } as any).eq("id", (existing as any).id);
+      }
+      return;
+    }
+    await admin.from("investments").insert({ uid, project_id, total_paid: 0, discount: 0, custom_share_price: price } as any);
   } catch { /* membership is cosmetic — never block the payment */ }
 }
 
