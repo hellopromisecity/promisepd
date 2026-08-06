@@ -186,7 +186,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
       { fid: input.file_no || null, email: input.email || null, password: input.password || null },
     );
     if (uid) {
-      const pid = await projectIdForName(admin, project.name);
+      const pid = await projectIdForName(admin, project.name, uid);
       if (pid) await ensureMembership(admin, uid, pid);
     }
     revalidatePath(`/dashboard/projects/${project.key}`);
@@ -308,7 +308,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
     const cid = rec(data)?.id as string;
     const entryId = await syncCommission(admin, { project_key: projectKey, name: acc.full_name as string, file_no: input.file_no || (acc.fid as string) || null, joining_date: input.joining_date || null, reference_officer_id: input.reference_officer_id || null, commission_entry_id: null, shares: input.shares || null });
     if (entryId) await HC(admin).update({ commission_entry_id: entryId }).eq("id", cid);
-    const pid = await projectIdForName(admin, meta.name);
+    const pid = await projectIdForName(admin, meta.name, uid);
     if (pid) await ensureMembership(admin, uid, pid);
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");
@@ -352,7 +352,7 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
           const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", id).not("mirror_tx", "is", null);
           const mids = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
           if (mids.length) await admin.from("investor_transactions").update({ uid: newUid } as never).in("transaction_id", mids);
-          const pid = await projectIdForName(admin, String(cur.project_name ?? ""));
+          const pid = await projectIdForName(admin, String(cur.project_name ?? ""), newUid);
           if (pid) await ensureMembership(admin, newUid, pid);
           await logAudit({ action: "link", entity: "hub_customer", entityId: id, detail: `Own number → own account: split from ${oldUid} to ${newUid} (${mids.length} txn(s) moved)` });
           splitNote = " · own app account set up for the new number";

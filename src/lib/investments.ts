@@ -290,6 +290,9 @@ export type PortalMyProject = {
    *  book (the same figure Projectify's All Customers shows). Real-estate
    *  projects never carry profit — always 0 there. */
   profit: number;
+  withdrawn: number; // the member's "−" transactions on this project
+  /** Final balance = invested + profit − withdrawn (what's actually left). */
+  balance: number;
   is_deposit: boolean; // profit is only a concept on deposit schemes
   goal: number; // per-investor target (custom share price, else project share)
   progress: number; // 0–100
@@ -531,6 +534,7 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
     const isDep = isDepositName(name);
     const invested = investedByProject.get(pid) ?? 0;
     const profit = isDep ? bookProfitByFold.get(foldProj(name)) ?? profitTxnsByProject.get(pid) ?? 0 : 0;
+    const withdrawn = withdrawnByProject.get(pid) ?? 0;
     const goal = Number(v.custom_share_price) || Number(proj?.per_user_share_amount) || 0;
     const progress = goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : 0;
     return {
@@ -539,6 +543,8 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
       status: proj?.status ?? "—",
       invested,
       profit,
+      withdrawn,
+      balance: invested + profit - withdrawn,
       is_deposit: isDep,
       goal,
       progress,

@@ -96,13 +96,25 @@ export async function recomputeInvestorBalance(admin: Admin, uid: string) {
 /** hub (book) project name → investment_projects.project_id. Matches by the
  *  normalised name with the app→hub fold, so "Special Deposit" finds
  *  "Investment (Special Deposit)" and real-estate names match directly. */
-export async function projectIdForName(admin: Admin, projectName: string): Promise<string | null> {
+export async function projectIdForName(admin: Admin, projectName: string, uid?: string | null): Promise<string | null> {
   const { data } = await admin.from("investment_projects").select("project_id, project_name");
   const want = normProj(projectName);
+  const hits: string[] = [];
   for (const p of (data ?? []) as any[]) {
-    if (normProj(appToHubName(p.project_name)) === want || normProj(p.project_name) === want) return p.project_id;
+    if (normProj(appToHubName(p.project_name)) === want || normProj(p.project_name) === want) hits.push(p.project_id);
   }
-  return null;
+  if (hits.length <= 1) return hits[0] ?? null;
+  // Ambiguous — e.g. the book's ONE "Ahbab Palace-02" is TWO app projects
+  // (1800sft + 1200sft) whose names fold identically. Pick the option this
+  // member already belongs to (membership, else their transactions) so a
+  // 1200sft customer's mirror never lands on the 1800sft ledger.
+  if (uid) {
+    const { data: mem } = await admin.from("investments").select("project_id").eq("uid", uid).in("project_id", hits).limit(1);
+    if (mem?.length) return (mem[0] as any).project_id as string;
+    const { data: tx } = await admin.from("investor_transactions").select("project_id").eq("uid", uid).in("project_id", hits).limit(1);
+    if (tx?.length) return (tx[0] as any).project_id as string;
+  }
+  return hits[0];
 }
 
 /** Make sure the investor is a MEMBER of the project (the `investments` row) —
@@ -242,7 +254,7 @@ export async function mirrorBookPayment(
     if (!uid) return null;
     const [{ data: types }, project_id] = await Promise.all([
       admin.from("investment_types").select("name, operator"),
-      projectIdForName(admin, hub.project_name),
+      projectIdForName(admin, hub.project_name, uid),
     ]);
     const id = await insertMirror(admin, uid, project_id, { kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null }, (types ?? []) as any[]);
     if (project_id) await ensureMembership(admin, uid, project_id);
@@ -267,7 +279,7 @@ export async function syncMirrorOnPaymentChange(
   try {
     const uid = await resolveInvestorUid(admin, hub);
     if (!uid) return null;
-    const project_id = await projectIdForName(admin, hub.project_name);
+    const project_id = await projectIdForName(admin, hub.project_name, uid);
 
     let hit: { transaction_id: string; date: unknown } | null = null;
     if (mirrorTx) {
@@ -410,7 +422,7 @@ export async function backfillHubToInvestor(admin: Admin, hubCustomerId: string,
     admin.from("hub_customer_payments").select("date, amount, kind, description").eq("customer_id", hubCustomerId).order("seq", { ascending: true }),
     admin.from("investment_types").select("name, operator"),
     admin.from("investor_transactions").select("amount, date, project_id").eq("uid", uid),
-    projectIdForName(admin, projectName),
+    projectIdForName(admin, projectName, uid),
   ]);
   const seen = new Set(((existing ?? []) as any[]).map((t) => `${t.project_id}|${Math.round(Number(t.amount) || 0)}|${bdDay(t.date)}`));
   let added = 0;

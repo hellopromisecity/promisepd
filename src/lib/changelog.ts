@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.10",
+    date: "2026-08-06",
+    title: "The app shows every project — with the real final balance",
+    changes: [
+      { kind: "fixed", text: "One member's Ahbab Palace-02 money showed twice in the app: the book holds ONE Ahbab project but the app has two options (1800sft & 1200sft) with fold-identical names, and yesterday's ledger rebuild mirrored onto the wrong one. Repaired — and project matching is now member-aware, so a mirror always lands on the option that member actually belongs to." },
+      { kind: "fixed", text: "46 project cards were invisible in members' apps (money present, membership row missing — e.g. a Fuzala Complex holding that never showed). Every project a member has money in now has its card." },
+      { kind: "new", text: "Deposit cards in the app now show three figures: বিনিয়োগ · মুনাফা · ব্যালেন্স — the final balance is invested + profit − withdrawn, so a member who withdrew sees exactly what remains (e.g. ৳35,000 deposited, ৳650 profit, ৳5,650 withdrawn → balance ৳30,000)." },
+    ],
+  },
+  {
     version: "2.2.9",
     date: "2026-08-05",
     title: "Marketing: the commission traffic light",

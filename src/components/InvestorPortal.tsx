@@ -76,6 +76,8 @@ export default function InvestorPortal({ data, member, greeting, subtitle }: { d
     all: en ? "All Projects" : "সব প্রকল্প",
     txn: en ? "Transactions" : "লেনদেন",
     invested: en ? "Invested" : "বিনিয়োগ",
+    profitShort: en ? "Profit" : "মুনাফা",
+    balShort: en ? "Balance" : "ব্যালেন্স",
     goal: en ? "Goal" : "লক্ষ্য",
     sharePrice: en ? "Share Price" : "শেয়ার মূল্য",
     start: en ? "Start" : "শুরু",
@@ -204,17 +206,24 @@ function MyProjects({ data, L, tk, pct, dOnly, onOpen }: any) {
               <span>{L.end}: {dOnly(p.end_date)}</span>
             </div>
           )}
-          <div className="mt-3 flex items-end justify-between">
+          <div className="mt-3 flex items-end justify-between gap-2">
             <div>
               <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.invested}</p>
               <p className="font-extrabold tabular-nums text-fg">{tk(p.invested)}</p>
             </div>
-            {/* profit exists only on deposit schemes — real-estate cards skip it */}
+            {/* profit + FINAL balance exist only on deposit schemes — a
+                withdrawal (principal or profit) lowers the balance live */}
             {p.is_deposit && (
-              <div className="text-right">
-                <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p>
-                <p className="font-extrabold tabular-nums text-emerald-600">{tk(p.profit)}</p>
-              </div>
+              <>
+                <div className="text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profitShort}</p>
+                  <p className="font-extrabold tabular-nums text-emerald-600">{tk(p.profit)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.balShort}</p>
+                  <p className="font-extrabold tabular-nums text-brand-blue">{tk(p.balance)}</p>
+                </div>
+              </>
             )}
           </div>
           {p.goal > 0 && (
@@ -291,10 +300,13 @@ function ProjectSheet({ selId, data, L, en, tk, pct, dOnly, onClose }: any) {
               <div className="flex items-center gap-2"><StatusPill status={proj.status} /><span className="font-mono text-[11px] text-fg-faint">{proj.project_id}</span></div>
               {proj.details && <p className="whitespace-pre-line text-sm leading-relaxed text-fg-muted">{proj.details}</p>}
               {mine && (
-                <div className="grid grid-cols-2 gap-3 rounded-2xl bg-gradient-to-br from-brand-blue-tint/60 to-bg p-3">
+                <div className={`grid gap-3 rounded-2xl bg-gradient-to-br from-brand-blue-tint/60 to-bg p-3 ${mine.is_deposit ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.invested}</p><p className="font-extrabold tabular-nums text-fg">{tk(mine.invested)}</p></div>
                   {mine.is_deposit && (
-                    <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profit}</p><p className="font-extrabold tabular-nums text-emerald-600">{tk(mine.profit)}</p></div>
+                    <>
+                      <div className="text-center"><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.profitShort}</p><p className="font-extrabold tabular-nums text-emerald-600">{tk(mine.profit)}</p></div>
+                      <div className="text-right"><p className="text-[10px] uppercase tracking-wide text-fg-faint">{L.balShort}</p><p className="font-extrabold tabular-nums text-brand-blue">{tk(mine.balance)}</p></div>
+                    </>
                   )}
                 </div>
               )}
