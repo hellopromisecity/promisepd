@@ -101,11 +101,20 @@ async function recomputeOfficer(admin: Admin, officerId: string) {
 }
 
 async function recomputeCustomer(admin: Admin, customerId: string) {
-  const { data } = await HP(admin).select("amount, kind").eq("customer_id", customerId);
+  const [{ data }, { data: rowD }] = await Promise.all([
+    HP(admin).select("amount, kind").eq("customer_id", customerId),
+    HC(admin).select("total_price").eq("id", customerId).maybeSingle(),
+  ]);
   const rows = (data ?? []) as Record<string, unknown>[];
   let paid = 0, dividend = 0, withdrawn = 0;
   for (const p of rows) { const a = Number(p.amount) || 0; const k = p.kind as string; if (k === "dividend") dividend += a; else if (k === "withdrawal") withdrawn += a; else paid += a; }
-  await HC(admin).update({ total_paid: r2(paid), dividend: r2(dividend), withdrawn: r2(withdrawn), payments_count: rows.length }).eq("id", customerId);
+  // Remaining is LIVE, never a stale import value: contract price − paid
+  // (0 when no price is set — the list shows "—" then).
+  const price = Number(rec(rowD)?.total_price) || 0;
+  await HC(admin).update({
+    total_paid: r2(paid), dividend: r2(dividend), withdrawn: r2(withdrawn), payments_count: rows.length,
+    total_remaining: price > 0 ? r2(price - paid) : 0,
+  }).eq("id", customerId);
 }
 
 /** Create / update / remove the referral commission entry so the marketing
@@ -368,6 +377,8 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
       const pid = await projectIdForName(admin, String(cur.project_name ?? ""), linkedUid);
       if (pid) await ensureMembership(admin, linkedUid, pid, input.total_price);
     }
+    // a changed price changes the Remaining — recompute so the list is live
+    await recomputeCustomer(admin, id);
 
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");

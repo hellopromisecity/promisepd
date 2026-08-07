@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.1",
+    date: "2026-08-07",
+    title: "Remaining that's actually right — for every price, every customer",
+    changes: [
+      { kind: "fixed", text: "The Remaining column was a frozen leftover from the old sheets — it never moved when a payment came in or a price was edited (a member sold 2 shares at ৳5,70,000 with ৳5,10,000 paid showed ৳-2,20,000 instead of ৳60,000). It is now computed live — contract price − paid — and recomputed on every payment, edit and price change. 684 customers' stale figures were corrected in one sweep." },
+      { kind: "improved", text: "Because we sell at different prices to different customers, the whole chain now follows each person's OWN price: the project page Remaining, their app goal and % paid all track the Total price on their file — change it once, everything updates." },
+    ],
+  },
+  {
     version: "2.3.0",
     date: "2026-08-06",
     title: "The book is complete — every customer on every project page",
