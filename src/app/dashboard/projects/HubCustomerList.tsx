@@ -51,7 +51,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
       else if (sortKey === "withdrawn") d = a.withdrawn - b.withdrawn;
       else if (sortKey === "name") d = a.name.localeCompare(b.name);
       else if (sortKey === "joining") d = (a.joining_date ?? "").localeCompare(b.joining_date ?? "");
-      else if (sortKey === "profit") d = (profits?.[a.id] ?? 0) - (profits?.[b.id] ?? 0);
+      else if (sortKey === "profit") d = (a.dividend + (profits?.[a.id] ?? 0)) - (b.dividend + (profits?.[b.id] ?? 0));
       return asc ? d : -d;
     });
   }, [customers, q, sortKey, asc, isAll, projFilter, profits]);
@@ -70,7 +70,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
     rows.forEach((c, i) => {
       const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
       const money = isDeposit
-        ? [c.total_paid, c.withdrawn, Math.round(profits?.[c.id] || 0), depRemain(c) + Math.round(profits?.[c.id] || 0)]
+        ? [c.total_paid, c.withdrawn, Math.round(c.dividend + (profits?.[c.id] || 0)), depRemain(c) + Math.round(profits?.[c.id] || 0)]
         : [c.total_paid, c.total_remaining, c.joining_date ?? ""];
       lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
@@ -145,7 +145,9 @@ export default function HubCustomerList({ customers, project, projects, profits 
                 {isDeposit ? (
                   <>
                     <td className={`${tdCls} pt-4 text-right tabular-nums ${c.withdrawn ? "text-brand-red" : "text-fg-faint"}`}>{c.withdrawn ? fmt(c.withdrawn) : "—"}</td>
-                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-emerald-600`}>{profits?.[c.id] ? fmt(profits[c.id]) : "—"}</td>
+                    {/* TOTAL profit = recorded dividend + this cycle's accrued —
+                        the same figure All Customers shows for this person */}
+                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-emerald-600`}>{c.dividend + (profits?.[c.id] ?? 0) ? fmt(c.dividend + (profits?.[c.id] ?? 0)) : "—"}</td>
                     {/* Final balance = paid + dividend − withdrawn + accrued profit (what's actually theirs now). */}
                     <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c) + (profits?.[c.id] ?? 0))}</td>
                   </>

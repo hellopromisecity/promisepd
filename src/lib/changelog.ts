@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.4",
+    date: "2026-08-11",
+    title: "One profit figure everywhere",
+    changes: [
+      { kind: "fixed", text: "A deposit scheme's Profit column showed only THIS cycle's accrued dividend, while All Customers showed the member's total (earlier recorded dividend + accrued) — the same person read ৳3,31,067 on one page and ৳6,34,348 on the other. The scheme page (display, sorting and CSV export) now shows the total too, so every page tells the same profit story. Balances were always identical — only the profit label differed." },
+    ],
+  },
+  {
     version: "2.3.3",
     date: "2026-08-11",
     title: "Transaction history you can sort",
