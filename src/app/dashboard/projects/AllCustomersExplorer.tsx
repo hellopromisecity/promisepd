@@ -547,7 +547,11 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
     setErr(null); setMsg(null);
     const input: InvestorInput = { full_name: name, fid, email, is_active: active, is_verified: verified };
     const digitsOf = (s: string) => (s || "").replace(/\D/g, "");
-    const mobileChanged = mobileVal.trim() !== "" && digitsOf(mobileVal) !== digitsOf(localPhone(person.mobile) || "");
+    // The row can DISPLAY the book number while the account itself still holds
+    // a migration placeholder (book:U…) with no login — treat that as a change
+    // so the number is actually claimed and the login gets created.
+    const accountPhonePlaceholder = /^(book|del):/i.test(person.app?.phone_number ?? "");
+    const mobileChanged = mobileVal.trim() !== "" && (accountPhonePlaceholder || digitsOf(mobileVal) !== digitsOf(localPhone(person.mobile) || ""));
     start(async () => {
       // number first — it's the login key, and everything (auth, profile,
       // account, linked book rows → SMS) moves with it

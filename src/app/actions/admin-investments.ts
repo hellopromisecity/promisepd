@@ -343,10 +343,43 @@ export async function resetMemberPassword(uid: string, password: string): Promis
     if (!admin) throw new Error("Data unavailable");
     if (!uid) throw new ValidationError("Missing investor.");
     if (!password || password.trim().length < 6) throw new ValidationError("Password must be at least 6 characters.");
-    const { data } = await admin.from("investor_accounts").select("uid, full_name, profile_id").eq("uid", uid).maybeSingle();
-    const acc = data as { uid: string; full_name: string | null; profile_id: string | null } | null;
+    const { data } = await admin.from("investor_accounts").select("uid, full_name, phone_number, profile_id").eq("uid", uid).maybeSingle();
+    const acc = data as { uid: string; full_name: string | null; phone_number: string | null; profile_id: string | null } | null;
     if (!acc) throw new ValidationError("That app user no longer exists.");
-    if (!acc.profile_id) throw new ValidationError("No login yet — add a mobile number first.");
+
+    // The admin-set password must ALWAYS take effect. If the account never
+    // got a login (migration placeholder phones), build one right here from
+    // their number — account phone first, else their book row's mobile.
+    if (!acc.profile_id) {
+      let mobile = /^(book|del):/i.test(acc.phone_number ?? "") ? "" : canonMobile(acc.phone_number ?? "");
+      if (mobile.length < 8) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: hubs } = await (admin.from("hub_customers") as any).select("mobile, deleted_at").eq("investor_uid", uid);
+        for (const h of (hubs ?? []) as { mobile: string | null; deleted_at: string | null }[]) {
+          if (h.deleted_at) continue;
+          const m = canonMobile(h.mobile ?? "");
+          if (m.length >= 8) { mobile = m; break; }
+        }
+      }
+      if (mobile.length < 8) throw new ValidationError("No login yet and no usable mobile on file — add a mobile number first.");
+      const email = `${mobile}@${AUTH_EMAIL_DOMAIN}`;
+      const { data: created, error: cErr } = await admin.auth.admin.createUser({
+        email, password: password.trim(), email_confirm: true, user_metadata: { name: acc.full_name, mobile },
+      });
+      if (cErr) {
+        if (!/already|registered|exists/i.test(cErr.message)) throw new Error(cErr.message);
+        throw new ValidationError("A login already exists with this number — free it first.");
+      }
+      const profileId = created.user.id;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin.from("profiles") as any).upsert({ id: profileId, name: acc.full_name, mobile, role: "member" }, { onConflict: "id" });
+      // claim the number on the account too (unless someone else holds it)
+      const { data: clash } = await admin.from("investor_accounts").select("uid").eq("phone_number", "+" + mobile).neq("uid", uid).maybeSingle();
+      await admin.from("investor_accounts").update(clash ? { profile_id: profileId } : { profile_id: profileId, phone_number: "+" + mobile }).eq("uid", uid);
+      await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Login created (${mobile}) + password set for ${acc.full_name ?? uid}` });
+      return { message: "Login created — they can sign in with this number and password now." };
+    }
+
     const { error } = await admin.auth.admin.updateUserById(acc.profile_id, { password: password.trim() });
     if (error) throw new Error(error.message);
     await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Reset app password for ${acc.full_name ?? uid}` });

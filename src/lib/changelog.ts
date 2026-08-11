@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.2",
+    date: "2026-08-07",
+    title: "The password you set is the password that works — always",
+    changes: [
+      { kind: "fixed", text: "Setting a password from Edit customer could fail with “No login yet” for members whose accounts came from the books without a number — even when their file HAD a mobile. Now the panel builds the login on the spot (their number + your password), overriding anything old — the customer signs in immediately and can change it later in settings." },
+      { kind: "improved", text: "Every account that had a usable number but no login got one in a sweep (default password), so managers can reset passwords for anyone. Accounts with no number anywhere get their login the moment a number or password is set — no dead ends left." },
+    ],
+  },
+  {
     version: "2.3.1",
     date: "2026-08-07",
     title: "Remaining that's actually right — for every price, every customer",
