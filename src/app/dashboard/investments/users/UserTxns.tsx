@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Wallet, X, Loader2, Plus, Pencil, Trash2, Check } from "lucide-react";
+import { Wallet, X, Loader2, Plus, Pencil, Trash2, Check, ArrowDown, ArrowUp } from "lucide-react";
 import { saveInvestorTransaction, deleteInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
 import { taka, fmtDate, dateInput, initial, avatarTint, type AppUser, type TypeOpt, type ProjectOpt, type UserTxn } from "./shared";
 
@@ -25,6 +25,21 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
   const [formKey, setFormKey] = useState(0);
   // manager's choice: text the customer about this entry or stay silent
   const [sms, setSms] = useState(true);
+  // history sorting — date (default, latest first) or amount; click toggles
+  const [sortKey, setSortKey] = useState<"date" | "amount">("date");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const sortedTxns = useMemo(() => {
+    const dir = sortDir === "desc" ? -1 : 1;
+    return [...user.txns].sort((a, b) =>
+      sortKey === "amount"
+        ? ((Number(a.amount) || 0) - (Number(b.amount) || 0)) * dir
+        : (new Date(a.date).getTime() - new Date(b.date).getTime()) * dir,
+    );
+  }, [user.txns, sortKey, sortDir]);
+  function toggleSort(key: "date" | "amount") {
+    if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortKey(key); setSortDir("desc"); } // date → latest first · amount → biggest first
+  }
 
   function submit(fd: FormData) {
     setError(null);
@@ -151,16 +166,36 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
 
               {/* history */}
               <div className="flex min-h-0 flex-col">
-                <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-                  <p className="text-sm font-bold text-fg">Transaction history</p>
-                  <span className="rounded-full bg-bg-soft px-2 py-0.5 text-xs font-semibold text-fg-muted">{user.txns.length}</span>
+                <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-fg">Transaction history</p>
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("date")}
+                      title={sortKey === "date" && sortDir === "desc" ? "Latest → oldest (click for oldest first)" : "Oldest → latest (click for latest first)"}
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${sortKey === "date" ? "bg-brand-blue-tint text-brand-blue" : "text-fg-muted hover:bg-bg-soft"}`}
+                    >
+                      Date {sortKey === "date" && sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("amount")}
+                      title={sortKey === "amount" ? (sortDir === "desc" ? "Biggest → smallest (click for smallest first)" : "Smallest → biggest (click for biggest first)") : "Sort by amount (biggest first)"}
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${sortKey === "amount" ? "bg-brand-blue-tint text-brand-blue" : "text-fg-muted hover:bg-bg-soft"}`}
+                    >
+                      Amount {sortKey === "amount" && sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                    </button>
+                    <span className="rounded-full bg-bg-soft px-2 py-0.5 text-xs font-semibold text-fg-muted">{user.txns.length}</span>
+                  </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {user.txns.length === 0 ? (
                     <p className="p-8 text-center text-sm text-fg-muted">No transactions yet.</p>
                   ) : (
                     <ul className="divide-y divide-border/60">
-                      {user.txns.map((t) => {
+                      {sortedTxns.map((t) => {
                         const out = t.operator === "-";
                         return (
                           <li key={t.transaction_id} className="group px-4 py-2.5 transition-colors hover:bg-bg-soft/60">

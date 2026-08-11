@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.3",
+    date: "2026-08-11",
+    title: "Transaction history you can sort",
+    changes: [
+      { kind: "new", text: "The Transaction history in a customer's transactions box now sorts with one click: a Date toggle (latest → oldest by default, click again for oldest first) and an Amount toggle (biggest → smallest first, click again to flip) — handy for spotting the largest payments or reading a ledger from the beginning." },
+    ],
+  },
+  {
     version: "2.3.2",
     date: "2026-08-07",
     title: "The password you set is the password that works — always",
