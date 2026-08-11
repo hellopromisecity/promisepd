@@ -347,7 +347,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       {/* hero KPIs — the same four cards as Projectify's All Customers
           (its 5th, App accounts, stays there) */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi i={0} on={on} value={d.invested} format={compact} label="Total collected" sub={`${d.paying} paying · ${Math.max(0, d.investors - d.paying)} non-paying`} icon={TrendingUp} tone="emerald" href="/dashboard/projects" />
+        <Kpi i={0} on={on} value={d.aum} format={compact} label="Final balance" sub={`${compact(d.invested)} collected · ${d.paying} paying`} icon={TrendingUp} tone="emerald" href="/dashboard/projects" />
         <Kpi i={1} on={on} value={d.raised} format={(v) => Math.round(v).toLocaleString("en-US")} label="Customers" sub="per project — one person can be several" icon={Users} tone="blue" href="/dashboard/projects" />
         <Kpi i={2} on={on} value={d.investors} format={(v) => Math.round(v).toLocaleString("en-US")} label="Unique people" sub="one row per account" icon={UserRound} tone="violet" href="/dashboard/projects" />
         <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub="real estate + deposit" icon={Building2} tone="amber" href="/dashboard/projects" />

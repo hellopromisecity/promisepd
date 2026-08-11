@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.6",
+    date: "2026-08-11",
+    title: "Final balance leads — the money that's actually in the company",
+    changes: [
+      { kind: "changed", text: "The headline card on All Customers, Projectify and every project page now shows the FINAL BALANCE — what the company actually holds right now (deposits net of withdrawals, dividends and accrued profit included) — instead of the lifetime Total collected, which still shows underneath. The dashboard's first card follows along, as always." },
+      { kind: "changed", text: "In every customer table the Balance / Remain column moved to the FRONT — the first money you read on a row is what it's worth today, then Paid, then the rest. Project pages now open sorted by it too, and CSV/PDF exports follow the same order." },
+    ],
+  },
+  {
     version: "2.3.5",
     date: "2026-08-11",
     title: "One profit figure everywhere — this cycle's dividend",

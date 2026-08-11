@@ -57,13 +57,13 @@ export default async function ProjectsHubPage() {
           {/* Company-wide stats come from the unified directory (book + app),
               so they always match the All-Customers page inside. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Total collected" value={fmt(allCust.totals.collected)} sub={`across ${projects.length} projects`} icon={Wallet} tone="success" />
+            <StatCard label="Final balance" value={fmt(allCust.totals.finalBalance)} sub={`${fmt(allCust.totals.collected)} collected · ${projects.length} projects`} icon={Wallet} tone="success" />
             <StatCard label="Customers" value={allCust.totals.memberships.toLocaleString("en-IN")} sub={`${allCust.totals.uniqueCount.toLocaleString("en-IN")} unique people`} icon={Users} tone="info" />
             <StatCard label="Payments" value={t.payments.toLocaleString("en-IN")} sub="receipts logged" icon={TrendingUp} tone="warning" />
             <StatCard label="Avg / payer" value={fmt(allCust.totals.payers ? allCust.totals.collected / allCust.totals.payers : 0)} sub={`${allCust.totals.payers.toLocaleString("en-IN")} paying people`} icon={Coins} tone="neutral" />
           </div>
 
-          <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard unique={allCust.totals.uniqueCount} memberships={allCust.totals.memberships} raised={allCust.totals.collected} />} />
+          <ProjectGroup title="Real Estate" icon={Building2} projects={realEstate} lead={<AllCustomersCard unique={allCust.totals.uniqueCount} memberships={allCust.totals.memberships} raised={allCust.totals.finalBalance} />} />
           <ProjectGroup title="Deposit Schemes" icon={Landmark} projects={deposits} />
           {appOnly.length > 0 && (
             <section>
@@ -111,7 +111,7 @@ function AllCustomersCard({ unique, memberships, raised }: { unique: number; mem
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-blue text-white transition-transform duration-300 group-hover:scale-110"><Users className="h-5 w-5" /></span>
       </div>
       <p className="mt-4 text-2xl font-extrabold tabular-nums text-brand-blue">{unique.toLocaleString("en-IN")}</p>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">unique people · {memberships.toLocaleString("en-IN")} customers · {fmt(raised)}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">unique people · {memberships.toLocaleString("en-IN")} customers · {fmt(raised)} balance</p>
       <div className="mt-3 flex items-center justify-end text-xs">
         <span className="inline-flex items-center gap-1 font-semibold text-brand-blue">Open <ArrowRight className="h-3.5 w-3.5" /></span>
       </div>

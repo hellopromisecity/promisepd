@@ -87,6 +87,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     );
   }
 
+  // Final balance = what the company actually holds for this project right
+  // now: deposits net of withdrawals (recorded dividends + live accrued
+  // included — matches the T. Remain column's total); real estate = collected.
+  const accruedSum = profits ? Object.values(profits).reduce((s, v) => s + v, 0) : 0;
+  const held = isDeposit
+    ? customers.reduce((s, c) => s + c.total_paid + c.dividend - c.withdrawn, 0) + accruedSum
+    : raised;
+
   // Real-estate projects also expose the public-site availability editor.
   const staticProject = PROJECTS.find((p) => p.slug === slug);
   let override: OverrideRow | null = null;
@@ -118,7 +126,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Collected" value={fmt(raised)} icon={Wallet} tone="success" />
+        <StatCard label="Final balance" value={fmt(held)} sub={isDeposit ? `${fmt(raised)} collected` : "all collected held"} icon={Wallet} tone="success" />
         <StatCard label="Customers" value={customers.length.toLocaleString("en-IN")} sub={`${payers} have paid`} icon={Users} tone="info" />
         <StatCard label="Payments" value={payments.toLocaleString("en-IN")} icon={TrendingUp} tone="warning" />
         <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={Coins} tone="neutral" />

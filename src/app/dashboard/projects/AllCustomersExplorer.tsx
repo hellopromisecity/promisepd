@@ -38,7 +38,7 @@ export default function AllCustomersExplorer({
   projects: HubProject[];
   health: AppHealth;
   top: { name: string; balance: number }[];
-  totals: { collected: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number };
+  totals: { collected: number; finalBalance: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
 }) {
@@ -106,10 +106,10 @@ export default function AllCustomersExplorer({
   const setSort = (k: SortKey) => { if (sortKey === k) setAsc((v) => !v); else { setSortKey(k); setAsc(false); } };
 
   function exportCsv() {
-    const head = ["#", "Name", "Mobile", "File ID", "App UID", "Projects", "Paid", "Profit", "Balance", "Joined"];
+    const head = ["#", "Name", "Mobile", "File ID", "App UID", "Projects", "Balance", "Paid", "Profit", "Joined"];
     const lines = [head.join(",")];
     sorted.forEach((p, i) => {
-      const cells = [i + 1, p.name, localPhone(p.mobile), p.fid ?? "", p.uid ?? "", p.projectNames.join(" | "), Math.round(p.totalPaid), Math.round(p.totalProfit), Math.round(p.totalBalance), p.joined ?? ""];
+      const cells = [i + 1, p.name, localPhone(p.mobile), p.fid ?? "", p.uid ?? "", p.projectNames.join(" | "), Math.round(p.totalBalance), Math.round(p.totalPaid), Math.round(p.totalProfit), p.joined ?? ""];
       lines.push(cells.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -126,16 +126,16 @@ export default function AllCustomersExplorer({
       { k: "name", t: "Name", x: 40, w: 175 },
       { k: "phone", t: "Mobile", x: 215, w: 100 },
       { k: "proj", t: "Projects", x: 315, w: 130 },
-      { k: "paid", t: "Paid", x: 445, w: 95, r: true },
-      { k: "profit", t: "Profit", x: 540, w: 90, r: true },
-      { k: "bal", t: "Balance", x: 630, w: 100, r: true },
+      { k: "bal", t: "Balance", x: 445, w: 95, r: true },
+      { k: "paid", t: "Paid", x: 540, w: 90, r: true },
+      { k: "profit", t: "Profit", x: 630, w: 100, r: true },
     ];
     const drawHeader = () => {
       doc.setFillColor(24, 71, 161); doc.rect(0, 0, W, 50, "F");
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(15);
       doc.text("Promise City — All Customers", 40, 32);
       doc.setFontSize(9); doc.setFont("helvetica", "normal");
-      doc.text(`${total} customers  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
+      doc.text(`${total} customers  •  balance ${pdfMoney(totals.finalBalance)}  •  collected ${pdfMoney(totals.collected)}`, W - 40, 32, { align: "right" });
       doc.setFillColor(238, 241, 246); doc.rect(0, 56, W, 20, "F");
       doc.setTextColor(60, 60, 60); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
       for (const c of cols) doc.text(c.t, c.r ? c.x + c.w - 4 : c.x, 70, { align: c.r ? "right" : "left" });
@@ -169,7 +169,7 @@ export default function AllCustomersExplorer({
     <div className="space-y-5">
       {/* primary stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard label="Total collected" value={compact(totals.collected)} sub={`${totals.payers.toLocaleString("en-IN")} paying · ${(totals.uniqueCount - totals.payers).toLocaleString("en-IN")} non-paying`} icon={Wallet} tone="success" />
+        <StatCard label="Final balance" value={compact(totals.finalBalance)} sub={`${compact(totals.collected)} collected · ${totals.payers.toLocaleString("en-IN")} paying`} icon={Wallet} tone="success" />
         <StatCard label="Customers" value={totals.memberships.toLocaleString("en-IN")} sub="per project — one person can be several" icon={Users} tone="info" />
         <StatCard label="Unique people" value={totals.uniqueCount.toLocaleString("en-IN")} sub="one row per account" icon={UserRound} tone="info" />
         <StatCard label="App accounts" value={totals.appAccounts.toLocaleString("en-IN")} sub={`${health.verified} verified`} icon={Smartphone} tone="warning" />
@@ -255,9 +255,9 @@ export default function AllCustomersExplorer({
                 <th className="w-10 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">#</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="name" label="Customer" /></th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Projects</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="balance" label="Balance" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="paid" label="Paid" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="profit" label="Profit" right /></th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="balance" label="Balance" right /></th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Status</th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="joined" label="Joined" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted">Actions</th>
@@ -289,9 +289,9 @@ export default function AllCustomersExplorer({
                         {p.projectNames.length <= 1 ? (p.projectNames[0] ?? "—") : <>{p.projectNames[0]} <span className="rounded-full bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">+{p.projectNames.length - 1}</span></>}
                       </button>
                     </td>
-                    <td className="px-3 py-3 text-right font-bold tabular-nums text-brand-blue">{fmt(p.totalPaid)}</td>
+                    <td className={`px-3 py-3 text-right font-bold tabular-nums ${p.totalBalance < 0 ? "text-brand-red-dark" : "text-fg"}`}>{fmt(p.totalBalance)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-brand-blue">{fmt(p.totalPaid)}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{p.totalProfit ? fmt(p.totalProfit) : "—"}</td>
-                    <td className={`px-3 py-3 text-right font-semibold tabular-nums ${p.totalBalance < 0 ? "text-brand-red-dark" : "text-fg"}`}>{fmt(p.totalBalance)}</td>
                     <td className="px-3 py-3">
                       {isApp ? (
                         <div className="flex flex-col gap-1">

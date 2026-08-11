@@ -29,7 +29,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
   const isAll = !!projects;
   const [q, setQ] = useState("");
   const [projFilter, setProjFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey>("paid");
+  const [sortKey, setSortKey] = useState<SortKey>("remaining");
   const [asc, setAsc] = useState(false);
   const [view, setView] = useState<HubCustomer | null>(null);
   const [edit, setEdit] = useState<HubCustomer | null>(null);
@@ -64,14 +64,14 @@ export default function HubCustomerList({ customers, project, projects, profits 
   function exportCsv() {
     const base = ["#", "Name", "File", "Mobile", "District", "Reference"];
     const head = isDeposit
-      ? [...base, "Total paid", "Total withdrawn", "Profit", "Remaining balance"]
-      : [...base, "Paid", "Remaining", "Joining"];
+      ? [...base, "Remaining balance", "Total paid", "Total withdrawn", "Profit"]
+      : [...base, "Remaining", "Paid", "Joining"];
     const lines = [head.join(",")];
     rows.forEach((c, i) => {
       const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
       const money = isDeposit
-        ? [c.total_paid, c.withdrawn, Math.round(profits?.[c.id] || 0), depRemain(c) + Math.round(profits?.[c.id] || 0)]
-        : [c.total_paid, c.total_remaining, c.joining_date ?? ""];
+        ? [depRemain(c) + Math.round(profits?.[c.id] || 0), c.total_paid, c.withdrawn, Math.round(profits?.[c.id] || 0)]
+        : [c.total_remaining, c.total_paid, c.joining_date ?? ""];
       lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -110,18 +110,16 @@ export default function HubCustomerList({ customers, project, projects, profits 
               <th className={`${thCls} w-10`}>#</th>
               <th className={thCls}><SortH k="name" label="Customer" /></th>
               {isAll && <th className={thCls}>Project</th>}
+              {/* Final/Remain balance leads — the figure that matters most */}
+              <th className={`${thCls} text-right`}><SortH k="remaining" label={isDeposit ? "T. Remain" : "Remaining"} right /></th>
               <th className={`${thCls} text-right`}><SortH k="paid" label={isDeposit ? "T. Paid" : "Paid"} right /></th>
               {isDeposit ? (
                 <>
                   <th className={`${thCls} text-right`}><SortH k="withdrawn" label="T. Withdrawn" right /></th>
                   <th className={`${thCls} text-right`}><SortH k="profit" label="Profit" right /></th>
-                  <th className={`${thCls} text-right`}><SortH k="remaining" label="T. Remain" right /></th>
                 </>
               ) : (
-                <>
-                  <th className={`${thCls} text-right`}><SortH k="remaining" label="Remaining" right /></th>
-                  <th className={`${thCls} text-right`}><SortH k="joining" label="Joined" right /></th>
-                </>
+                <th className={`${thCls} text-right`}><SortH k="joining" label="Joined" right /></th>
               )}
               <th className={`${thCls} text-right`}>Actions</th>
             </tr>
@@ -141,21 +139,23 @@ export default function HubCustomerList({ customers, project, projects, profits 
                   </div>
                 </td>
                 {isAll && <td className={`${tdCls} pt-4 text-fg-muted`}>{c.project_name}</td>}
-                <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-brand-blue`}>{fmt(c.total_paid)}</td>
+                {/* Final balance = paid + dividend − withdrawn + accrued (deposit)
+                    or price − paid (real estate) — leads every table now. */}
+                {isDeposit ? (
+                  <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c) + (profits?.[c.id] ?? 0))}</td>
+                ) : (
+                  <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{c.total_remaining ? fmt(c.total_remaining) : "—"}</td>
+                )}
+                <td className={`${tdCls} pt-4 text-right tabular-nums text-brand-blue`}>{fmt(c.total_paid)}</td>
                 {isDeposit ? (
                   <>
                     <td className={`${tdCls} pt-4 text-right tabular-nums ${c.withdrawn ? "text-brand-red" : "text-fg-faint"}`}>{c.withdrawn ? fmt(c.withdrawn) : "—"}</td>
                     {/* Profit = THIS cycle's accrued dividend (the announced
                         figure). Past credited dividends live inside Remain. */}
                     <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-emerald-600`}>{profits?.[c.id] ? fmt(profits[c.id]) : "—"}</td>
-                    {/* Final balance = paid + dividend − withdrawn + accrued profit (what's actually theirs now). */}
-                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c) + (profits?.[c.id] ?? 0))}</td>
                   </>
                 ) : (
-                  <>
-                    <td className={`${tdCls} pt-4 text-right tabular-nums text-fg-muted`}>{c.total_remaining ? fmt(c.total_remaining) : "—"}</td>
-                    <td className={`${tdCls} pt-4 text-right text-fg-muted`}>{fmtDate(c.joining_date)}</td>
-                  </>
+                  <td className={`${tdCls} pt-4 text-right text-fg-muted`}>{fmtDate(c.joining_date)}</td>
                 )}
                 <td className={`${tdCls} pt-3.5`}>
                   <div className="flex items-center justify-end gap-1.5">
