@@ -25,11 +25,19 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.5",
+    date: "2026-08-11",
+    title: "One profit figure everywhere — this cycle's dividend",
+    changes: [
+      { kind: "fixed", text: "The same member's profit read ৳3,31,067 on the deposit scheme page but ৳6,34,348 in All Customers (and the app), because two pages answered two different questions — the scheme page announced this cycle's dividend while All Customers stacked earlier credited dividends on top. Now every page — scheme page, All Customers and the member's app — shows one figure: THIS cycle's accrued dividend. Earlier credited dividends are already part of the member's money, so they stay inside the balance; no balance changed anywhere." },
+    ],
+  },
+  {
     version: "2.3.4",
     date: "2026-08-11",
-    title: "One profit figure everywhere",
+    title: "Profit alignment, take one",
     changes: [
-      { kind: "fixed", text: "A deposit scheme's Profit column showed only THIS cycle's accrued dividend, while All Customers showed the member's total (earlier recorded dividend + accrued) — the same person read ৳3,31,067 on one page and ৳6,34,348 on the other. The scheme page (display, sorting and CSV export) now shows the total too, so every page tells the same profit story. Balances were always identical — only the profit label differed." },
+      { kind: "changed", text: "First pass at unifying the profit figure aligned the deposit scheme page to the larger All-Customers total — superseded within the hour by 2.3.5, which aligns everything to the correct figure: the current cycle's dividend." },
     ],
   },
   {

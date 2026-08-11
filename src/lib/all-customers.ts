@@ -94,7 +94,6 @@ function appToHubName(appName: string): string {
 
 /** A book holding's worth: deposit → paid+dividend−withdrawn; real-estate → paid. */
 const hubBalance = (c: HubCustomer) => (c.project_type === "deposit" ? c.total_paid + c.dividend - c.withdrawn : c.total_paid);
-const hubProfit = (c: HubCustomer) => (c.project_type === "deposit" ? c.dividend : 0);
 
 export async function loadAllCustomers(): Promise<AllCustomersData> {
   const admin = getAdmin();
@@ -193,7 +192,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     const covered = new Set(bookRows.map((r) => r.project_key));
     const holdings: PersonHolding[] = bookRows.map((r) => ({
       id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type,
-      source: "hub" as const, file_no: r.file_no ?? null, paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r),
+      source: "hub" as const, file_no: r.file_no ?? null, paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r),
     }));
     // app-only money (projects with no book row) — the book ledger wins where both exist
     for (const [appProjId, t] of investorProjectTotals(userTxns)) {
@@ -238,10 +237,10 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     if (!p.mobile && r.mobile) p.mobile = r.mobile;
     if (r.joining_date && (!p.joined || r.joining_date < p.joined)) p.joined = r.joining_date;
     p.totalPaid += r.total_paid;
-    p.totalProfit += hubProfit(r) + hubAcc(r);
+    p.totalProfit += hubAcc(r);
     p.totalBalance += hubBalance(r) + hubAcc(r);
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
-    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", file_no: r.file_no ?? null, paid: r.total_paid, profit: hubProfit(r) + hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
+    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", file_no: r.file_no ?? null, paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
     if (!p.fid && r.file_no) p.fid = r.file_no;
   }
   people.push(...byName.values());

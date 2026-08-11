@@ -286,12 +286,13 @@ export type PortalMyProject = {
   project_name: string;
   status: string;
   invested: number; // sum of the member's non-profit "+" transactions for this project
-  /** Deposit schemes only: recorded dividend + live accrued profit from the
-   *  book (the same figure Projectify's All Customers shows). Real-estate
-   *  projects never carry profit — always 0 there. */
+  /** Deposit schemes only: THIS cycle's accrued dividend from the profit
+   *  engine (the same figure the scheme page and All Customers show).
+   *  Real-estate projects never carry profit — always 0 there. */
   profit: number;
   withdrawn: number; // the member's "−" transactions on this project
-  /** Final balance = invested + profit − withdrawn (what's actually left). */
+  /** What's actually left = invested + recorded dividend + accrued profit
+   *  − withdrawn (past credited dividends count here, not in `profit`). */
   balance: number;
   is_deposit: boolean; // profit is only a concept on deposit schemes
   goal: number; // per-investor target (custom share price, else project share)
@@ -502,13 +503,14 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
 
   // Profit is a DEPOSIT-SCHEME concept only (Mudaraba dividend) — real-estate
   // shares never earn a "মুনাফা" line. For each deposit scheme the member is
-  // in, the profit shown is the same figure Projectify's All Customers shows:
-  // the book row's recorded dividend + the live accrued dividend from the
-  // profit engine. (The old system left stray profit numbers on real-estate
-  // accounts; the ledger + book are the truth now.)
+  // in, the profit shown is THIS cycle's accrued dividend from the profit
+  // engine — the same figure the scheme page and All Customers show. Past
+  // credited dividends (the book row's dividend column) are not re-labelled
+  // as profit; they sit inside the balance only.
   const isDepositName = (name: string) => /deposit/i.test(name);
   const foldProj = (s: string) => s.toLowerCase().replace(/investment|group/g, "").replace(/[^a-z0-9]+/g, "");
-  const bookProfitByFold = new Map<string, number>();
+  const bookAccByFold = new Map<string, number>(); // engine accrued (the "Profit" figure)
+  const bookDivByFold = new Map<string, number>(); // recorded dividend (balance component only)
   try {
     const { data: hubRows } = await admin
       .from("hub_customers")
@@ -521,19 +523,24 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
       try {
         const cfg = await getProfitConfig(r.project_key);
         if (cfg.enabled) accrued = (await accruedProfitByCustomer([r.id], cfg)).get(r.id) ?? 0;
-      } catch { /* scheme without a configured rate → recorded dividend only */ }
+      } catch { /* scheme without a configured rate → no accrued figure */ }
       const k = foldProj(r.project_name);
-      bookProfitByFold.set(k, (bookProfitByFold.get(k) ?? 0) + (Number(r.dividend) || 0) + accrued);
+      bookAccByFold.set(k, (bookAccByFold.get(k) ?? 0) + accrued);
+      bookDivByFold.set(k, (bookDivByFold.get(k) ?? 0) + (Number(r.dividend) || 0));
     }
   } catch { /* no book link → fall back to recorded profit txns below */ }
 
+  let totBookDiv = 0; // recorded dividends folded into balances below
   const myProjects: PortalMyProject[] = ((invRes.data ?? []) as Record<string, unknown>[]).map((v) => {
     const pid = String(v.project_id);
     const proj = byId.get(pid);
     const name = proj?.project_name ?? pid;
     const isDep = isDepositName(name);
     const invested = investedByProject.get(pid) ?? 0;
-    const profit = isDep ? bookProfitByFold.get(foldProj(name)) ?? profitTxnsByProject.get(pid) ?? 0 : 0;
+    const fold = foldProj(name);
+    const profit = isDep ? bookAccByFold.get(fold) ?? profitTxnsByProject.get(pid) ?? 0 : 0;
+    const bookDiv = isDep && bookAccByFold.has(fold) ? bookDivByFold.get(fold) ?? 0 : 0;
+    totBookDiv += bookDiv;
     const withdrawn = withdrawnByProject.get(pid) ?? 0;
     const goal = Number(v.custom_share_price) || Number(proj?.per_user_share_amount) || 0;
     const progress = goal > 0 ? Math.min(100, Math.round((invested / goal) * 100)) : 0;
@@ -544,7 +551,7 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
       invested,
       profit,
       withdrawn,
-      balance: invested + profit - withdrawn,
+      balance: invested + profit + bookDiv - withdrawn,
       is_deposit: isDep,
       goal,
       progress,
@@ -564,7 +571,9 @@ async function buildPortal(admin: Admin, acc: InvestorAcc): Promise<InvestorPort
     total_investment: totInvested,
     total_profit: totProfit,
     total_withdrawn: totWithdrawn,
-    total_balance: totInvested + totProfit - totWithdrawn,
+    // recorded dividends stay part of the money even though the profit
+    // label only announces this cycle's accrued figure
+    total_balance: totInvested + totProfit + totBookDiv - totWithdrawn,
   };
 
   const allProjects: PortalProject[] = projects.map((p) => ({
