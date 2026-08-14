@@ -331,6 +331,11 @@ export const TEAM_EN = {
     "kamrul-hasan": "Founder and Managing Director of Promise Group — a visionary entrepreneur whose forward-looking leadership has made the company a trusted home for thousands of families. With over 15 years of experience, he has set a new benchmark of transparency, quality, and trust in Dhaka's real-estate industry. Placing honesty, commitment, and customer satisfaction above all, he works tirelessly to turn every dream into reality.",
     "md-rashedul-islam": "Responsible for the company's accounts, receipt management, and accurate data entry in the app — making sure every transaction stays transparent and error-free is his foremost task. Diligent in nurturing client relationships, he is the trusted face of dependable communication with our customers.",
     "mustaqeem-billah": "The engineer behind this website and our wider digital ecosystem. If you spot a bug or any issue anywhere on the site, report it to him directly for a swift resolution. For any custom website, software, or digital service, feel free to get in touch.",
+    "md-helal-uddin": "Keeps an experienced eye on the company's overall operations — making sure the day-to-day work of every department runs smoothly and stays on track, so the office remains orderly and moving.",
+    "md-rafi-sarkar": "Every building's architectural design and construction oversight sits under him — from the drawing board to the site, each stage moves under his watch. His job is to deliver every project exactly to plan, with no compromise on quality or safety.",
+    "tarek-ahmed": "Manages our online marketing alongside the daily books — posting official vouchers to the ledger-cash book, entering receipts online, and handling form fill-ups. From checking in with customers at the start of each month to assisting the manager, he is a dependable hand in the office's daily operations.",
+    "abu-bakar": "The heart of the office's cleanliness and hospitality — keeping every room spotless, from reception to the seminar hall, and always warm and ready in looking after clients and guests.",
+    "md-hanif-howlader": "Besides driving, he greets and attends to clients the moment they arrive and lends a hand in the office's everyday work — punctual, sincere, and a trusted member of the Promise family.",
   } as Record<string, string>,
 };
 

@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.7",
+    date: "2026-08-14",
+    title: "The whole team, on the team page",
+    changes: [
+      { kind: "new", text: "The public Team page now introduces the full office family — Md Helal Uddin (Senior Officer, overall operations oversight), Md Rafi Sarkar (Executive Engineer — every building's architect design and construction supervision runs under him), Tarek Ahmed (Online Marketing cum Asst. Officer), Abu Bakar (Office Assistant) and Md Hanif Howlader (Driver) — each with their photo and a short profile in Bengali and English, in proper seniority order." },
+      { kind: "changed", text: "Md. Rashedul Islam's title updated to Manager cum Accountant." },
+      { kind: "improved", text: "All five new headshots went through the WebP pipeline (max 1920px, ~78 quality, metadata stripped) — ~245KB JPEGs became ~75KB WebPs, and the unoptimized originals were removed." },
+    ],
+  },
+  {
     version: "2.3.6",
     date: "2026-08-11",
     title: "Final balance leads — the money that's actually in the company",
