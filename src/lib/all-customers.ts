@@ -92,8 +92,10 @@ function appToHubName(appName: string): string {
   return appName;
 }
 
-/** A book holding's worth: deposit → paid+dividend−withdrawn; real-estate → paid. */
-const hubBalance = (c: HubCustomer) => (c.project_type === "deposit" ? c.total_paid + c.dividend - c.withdrawn : c.total_paid);
+/** A book holding's worth: deposit → paid+dividend−withdrawn; real-estate →
+ *  paid−withdrawn (withdrawals here are rare ledger-backed refunds — the
+ *  2026-08-14 sweep zeroed the 417 imported 90%-of-paid artifacts). */
+const hubBalance = (c: HubCustomer) => (c.project_type === "deposit" ? c.total_paid + c.dividend - c.withdrawn : c.total_paid - c.withdrawn);
 
 export async function loadAllCustomers(): Promise<AllCustomersData> {
   const admin = getAdmin();

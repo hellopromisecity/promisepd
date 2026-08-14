@@ -95,7 +95,7 @@ export const TEAM_MEMBERS: TeamMember[] = [
     slug: "tarek-ahmed",
     name: "তারেক আহমেদ",
     nameEn: "Tarek Ahmed",
-    role: "Online Marketing cum Asst. Officer",
+    role: "Asst. Officer",
     bio: "অনলাইন মার্কেটিং ম্যানেজমেন্টের পাশাপাশি দৈনিক ভাউচার লেজার-ক্যাশ খাতায় তোলা, রশিদ অনলাইনে ইনপুট ও ফরম ফিলআপের দায়িত্বে। মাসের শুরুতে গ্রাহকদের খোঁজখবর নেওয়া থেকে ম্যানেজারের কাজে সহযোগিতা — অফিসের দৈনন্দিন কার্যক্রমের এক নির্ভরযোগ্য সহযোগী।",
     photo: "/tarek.webp",
     accent: "ash",

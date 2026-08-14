@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.8",
+    date: "2026-08-14",
+    title: "Every book payment reaches the app — and refunds count",
+    changes: [
+      { kind: "fixed", text: "A customer whose app account predated the big book-to-app migration kept their old app history only — the migration deliberately skipped mirroring into accounts that already had transactions, so 17 of one member's 18 book payments never reached her app (the app said ৳46,000 while the book said ৳1,55,000). Her full ledger is now mirrored — the Transactions popup and her app show every payment." },
+      { kind: "new", text: "Refunds/withdrawals now work on real-estate files: a ledger-backed withdrawal reduces the member's balance and re-opens their dues (Remaining = price − net paid). Recorded her ৳5,000 deed-fee withdrawal — her balance reads ৳1,50,000 everywhere: project page, All Customers and the app." },
+      { kind: "fixed", text: "A data sweep found 417 real-estate files carrying a phantom \"withdrawn = 90% of paid\" value from an old import, with no ledger backing — all zeroed to match their actual payment ledgers (displays never used them, but now that withdrawals count, they had to be clean). One genuinely refunded file's Remaining was corrected in the same pass." },
+    ],
+  },
+  {
     version: "2.3.7",
     date: "2026-08-14",
     title: "The whole team, on the team page",

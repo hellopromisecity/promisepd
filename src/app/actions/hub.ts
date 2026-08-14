@@ -108,12 +108,13 @@ async function recomputeCustomer(admin: Admin, customerId: string) {
   const rows = (data ?? []) as Record<string, unknown>[];
   let paid = 0, dividend = 0, withdrawn = 0;
   for (const p of rows) { const a = Number(p.amount) || 0; const k = p.kind as string; if (k === "dividend") dividend += a; else if (k === "withdrawal") withdrawn += a; else paid += a; }
-  // Remaining is LIVE, never a stale import value: contract price − paid
-  // (0 when no price is set — the list shows "—" then).
+  // Remaining is LIVE, never a stale import value: contract price − what the
+  // customer has NET paid in (a ledger-backed withdrawal/refund re-opens dues,
+  // e.g. an overpayment handed back for the deed). 0 when no price is set.
   const price = Number(rec(rowD)?.total_price) || 0;
   await HC(admin).update({
     total_paid: r2(paid), dividend: r2(dividend), withdrawn: r2(withdrawn), payments_count: rows.length,
-    total_remaining: price > 0 ? r2(price - paid) : 0,
+    total_remaining: price > 0 ? r2(price - paid + withdrawn) : 0,
   }).eq("id", customerId);
 }
 
