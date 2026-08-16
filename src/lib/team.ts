@@ -97,10 +97,13 @@ export const TEAM_MEMBERS: TeamMember[] = [
     nameEn: "Tarek Ahmed",
     role: "Asst. Manager",
     bio: "অনলাইন মার্কেটিং ম্যানেজমেন্টের পাশাপাশি ম্যানেজারের দৈনন্দিন কার্যক্রমে সার্বিক সহযোগিতা, ক্লায়েন্ট যোগাযোগ ও কাজের সমন্বয়ের দায়িত্ব পালন। ম্যানেজারের প্রয়োজনীয় দায়িত্বগুলোতে সরাসরি সহায়তা ও কার্যক্রম পরিচালনা, অফিসের নিয়মিত কাজ তদারকি এবং গুরুত্বপূর্ণ বিষয়গুলো দক্ষতার সঙ্গে হ্যান্ডেল করা—প্রতিষ্ঠানের দৈনন্দিন কার্যক্রমের একজন নির্ভরযোগ্য সহযোগী।",
+    phone: "+8801908324298",
+    email: "tarekahmed723540@gmail.com",
     // Fresh filename (was tarek.webp) — /public is served immutable, so a
     // replaced headshot must change name or visitors keep the old render.
     photo: "/tarekahmed.webp",
     accent: "ash",
+    socials: { facebook: "https://www.facebook.com/tarek.ahmed.57499" },
   },
   {
     slug: "abu-bakar",
