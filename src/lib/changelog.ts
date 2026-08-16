@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.3",
+    date: "2026-08-16",
+    title: "Foreign numbers can log in — from anywhere",
+    changes: [
+      { kind: "fixed", text: "Members with an international number (Singapore, Saudi, Kuwait, Qatar…) couldn't log in at all — the account was being created with the 00 dialing prefix baked into its login identity while the login form (correctly) dropped it, so the two sides never matched, and even a manager's password reset from Edit user couldn't help. All three places now agree: the 00 is stripped everywhere. Bangladeshi numbers are untouched — that path is byte-for-byte the same." },
+      { kind: "fixed", text: "The 6 affected foreign accounts were repaired in a sweep (passwords untouched). Their owners can now sign in typing their number ANY way — 006566628310, +6566628310, the bare number, even with spaces or dashes — from abroad or from Bangladesh. Verified end-to-end with a live sign-in test." },
+    ],
+  },
+  {
     version: "2.4.2",
     date: "2026-08-16",
     title: "Archive pages you can actually flip through",

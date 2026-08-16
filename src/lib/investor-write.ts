@@ -41,7 +41,11 @@ export function canonMobile(raw: string | null | undefined): string {
     if (d.length === 13 && d.startsWith("8801")) return d;
     if (d.length === 10 && d.startsWith("1")) return "880" + d;
   }
-  const all = String(raw || "").replace(/\D/g, "");
+  // International fallback: the 00 dial-out prefix is NOT part of the number —
+  // strip it so the synthetic auth email matches what the login form derives
+  // ("006566628310" and "+6566628310" both land on 6566628310@…).
+  let all = String(raw || "").replace(/\D/g, "");
+  if (all.startsWith("00")) all = all.slice(2);
   return all.length >= 8 && all.length <= 15 ? all : "";
 }
 /** App project names fold onto the book name ("Investment (Special Deposit)" →

@@ -108,10 +108,14 @@ async function candidateEmails(identifier: string): Promise<string[]> {
   // Accept the digits (tolerating +, 00, spaces, dashes) when it reads like an
   // E.164 number.  De-duped below, so it never double-tries a BD match.
   if (!EMAIL_RE.test(id)) {
-    let intl = id.replace(/^\+/, "");
-    if (intl.replace(/\D/g, "").startsWith("00")) intl = intl.replace(/\D/g, "").slice(2);
-    intl = intl.replace(/\D/g, "");
+    const rawDigits = id.replace(/\D/g, "");
+    let intl = rawDigits;
+    if (intl.startsWith("00")) intl = intl.slice(2);
     if (intl.length >= 8 && intl.length <= 15) out.push(syntheticEmail(intl));
+    // Legacy shape: intl accounts created before the 00-strip fix kept the 00
+    // inside the synthetic email — try that too, so those owners still get in
+    // whether they type 00…, +… or the bare country-coded number.
+    if (rawDigits !== intl && rawDigits.length >= 8 && rawDigits.length <= 15) out.push(syntheticEmail(rawDigits));
   }
 
   const admin = createAdminClient();

@@ -434,10 +434,13 @@ export async function setInvestorActive(uid: string, active: boolean): Promise<A
  *  and opens a fresh investor_account with a zero balance.  The investor can
  *  then sign in with the mobile + password and see their portal at /account. */
 const AUTH_EMAIL_DOMAIN = "users.promisepd.app";
-/** Canonical mobile (digits): BD local 01XXXXXXXXX → 8801XXXXXXXXX; else digits as-is. */
+/** Canonical mobile (digits): BD local 01XXXXXXXXX → 8801XXXXXXXXX; an
+ *  international 00-prefixed number drops the 00 ("006566628310" → "6566628310"),
+ *  matching the login normaliser — else digits as-is. BD numbers unchanged. */
 function canonMobile(raw: string): string {
-  const d = (raw || "").replace(/\D/g, "");
+  let d = (raw || "").replace(/\D/g, "");
   if (d.startsWith("0") && d.length === 11) return "880" + d.slice(1);
+  if (d.startsWith("00")) d = d.slice(2);
   return d;
 }
 
