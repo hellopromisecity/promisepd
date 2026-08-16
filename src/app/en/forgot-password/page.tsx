@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { KeyRound } from "lucide-react";
 import ForgotPassword from "@/components/ForgotPassword";
-import { canEmailArbitraryRecipients } from "@/lib/email";
 
 export const metadata: Metadata = {
   title: "Reset password — PromisePD",
-  description: "Reset your PromisePD password using your mobile number or email.",
+  description: "Reset your PromisePD password with a 6-digit code sent to your email.",
   alternates: { canonical: "/en/forgot-password" },
   robots: { index: false, follow: true },
 };
@@ -24,10 +23,10 @@ export default function ForgotPasswordPageEn() {
             Reset <span className="text-grad">password</span>
           </h1>
           <p className="mt-3 text-sm text-fg-muted sm:text-base">
-            Get a code by phone or email, then set a new password.
+            Get a 6-digit code in your email, then set a new password.
           </p>
         </div>
-        <ForgotPassword locale="en" emailEnabled={canEmailArbitraryRecipients()} />
+        <ForgotPassword locale="en" />
         <p className="mt-6 text-center text-sm text-fg-muted">
           <Link href="/en/login" className="font-semibold text-brand-blue hover:underline">Back to login</Link>
         </p>

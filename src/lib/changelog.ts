@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.4",
+    date: "2026-08-16",
+    title: "Password reset by email — the phone step is gone",
+    changes: [
+      { kind: "changed", text: "Forgot password now runs on EMAIL only: type your email, a 6-digit code lands in your inbox, enter it and set the new password. The old mobile-number reset is retired. The email is matched against both the account profile and the contact email the office sets from Edit user." },
+      { kind: "new", text: "The promisepd.com sending domain was registered with our email service — the moment its DNS records go live, reset codes deliver to ANY inbox from noreply@promisepd.com, switching on automatically with no redeploy. Accounts without an email see clear guidance to add one (app settings or the office)." },
+      { kind: "improved", text: "Reset runs on our own code system (10-minute expiry, 5 wrong-try lock, 60-second resend guard per account) — many customers can reset at the same time without tripping any provider rate limit." },
+    ],
+  },
+  {
     version: "2.4.3",
     date: "2026-08-16",
     title: "Foreign numbers can log in — from anywhere",

@@ -12,7 +12,7 @@
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendResetCodeSms } from "@/lib/sms";
-import { sendResetCodeEmail, canEmailArbitraryRecipients } from "@/lib/email";
+import { sendResetCodeEmail } from "@/lib/email";
 
 export type Channel = "phone" | "email";
 export type ResetResult = { ok: true; message: string } | { ok: false; error: string };
@@ -50,8 +50,25 @@ async function resolveProfile(admin: Admin, channel: Channel, identifier: string
   }
   const email = identifier.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return null;
-  const { data } = await admin.from("profiles").select("id, mobile, email").ilike("email", email).maybeSingle();
-  return data?.id ? { id: data.id as string, mobile: (data.mobile as string) ?? null, email: (data.email as string) ?? null } : null;
+  // 1) profiles.email (staff + members who set it at signup)
+  const { data: profs } = await admin.from("profiles").select("id, mobile, email").ilike("email", email).limit(1);
+  const p = (profs ?? [])[0] as { id: string; mobile: string | null; email: string | null } | undefined;
+  if (p?.id) return { id: p.id, mobile: p.mobile ?? null, email: p.email ?? null };
+  // 2) investor_accounts.email — where the manager's Edit-user form (and most
+  //    book imports) store a member's contact address
+  const { data: accs } = await admin
+    .from("investor_accounts")
+    .select("profile_id, email")
+    .ilike("email", email)
+    .not("profile_id", "is", null)
+    .limit(1);
+  const hit = (accs ?? [])[0] as { profile_id: string | null; email: string | null } | undefined;
+  if (hit?.profile_id) {
+    const { data: p2 } = await admin.from("profiles").select("id, mobile, email").eq("id", hit.profile_id).maybeSingle();
+    const prof2 = p2 as { id?: string; mobile?: string | null; email?: string | null } | null;
+    if (prof2?.id) return { id: prof2.id, mobile: prof2.mobile ?? null, email: prof2.email ?? hit.email ?? null };
+  }
+  return null;
 }
 
 /** Step 1 — send a reset code over the chosen channel. */
@@ -61,10 +78,6 @@ export async function requestPasswordReset(input: { channel: Channel; identifier
   const channel: Channel = input.channel === "email" ? "email" : "phone";
   const identifier = (input.identifier || "").trim();
   if (!identifier) return { ok: false, error: channel === "email" ? "ইমেইল দিন।" : "মোবাইল নম্বর দিন।" };
-
-  if (channel === "email" && !canEmailArbitraryRecipients()) {
-    return { ok: false, error: "ইমেইলে রিসেট এই মুহূর্তে সম্ভব নয় — ফোন নম্বর দিয়ে চেষ্টা করুন।" };
-  }
 
   const prof = await resolveProfile(admin, channel, identifier);
   // Never leak whether the account exists.
@@ -85,15 +98,25 @@ export async function requestPasswordReset(input: { channel: Channel; identifier
   }
 
   const code = sixDigit();
-  await admin.auth.admin.updateUserById(prof.id, {
-    user_metadata: { ...meta, reset_code: sha(code), reset_exp: Date.now() + CODE_TTL_MS, reset_ch: channel, reset_tries: 0, reset_sent: Date.now() },
-  });
 
   if (channel === "phone") {
+    await admin.auth.admin.updateUserById(prof.id, {
+      user_metadata: { ...meta, reset_code: sha(code), reset_exp: Date.now() + CODE_TTL_MS, reset_ch: channel, reset_tries: 0, reset_sent: Date.now() },
+    });
     await sendResetCodeSms("+" + (prof.mobile ?? canonMobile(identifier) ?? ""), code);
     return { ok: true, message: "আপনার ফোনে একটি ৬-সংখ্যার কোড পাঠানো হয়েছে।" };
   }
-  await sendResetCodeEmail(prof.email ?? identifier, code);
+
+  // Email: deliver FIRST, persist after — a failed send (e.g. the sending
+  // domain isn't verified yet) must not burn the cooldown or store a code
+  // the user can never receive.
+  const { sent } = await sendResetCodeEmail(prof.email ?? identifier, code);
+  if (!sent) {
+    return { ok: false, error: "ইমেইল সিস্টেম এই মুহূর্তে চালু হচ্ছে — কিছুক্ষণ পরে আবার চেষ্টা করুন, অথবা অফিসে (+৮৮০ ১৯১০-০৬৫১৩৬) যোগাযোগ করুন।" };
+  }
+  await admin.auth.admin.updateUserById(prof.id, {
+    user_metadata: { ...meta, reset_code: sha(code), reset_exp: Date.now() + CODE_TTL_MS, reset_ch: channel, reset_tries: 0, reset_sent: Date.now() },
+  });
   return { ok: true, message: "আপনার ইমেইলে একটি ৬-সংখ্যার কোড পাঠানো হয়েছে।" };
 }
 

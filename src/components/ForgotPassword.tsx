@@ -1,57 +1,47 @@
 "use client";
 
-/** Forgot-password flow — pick phone or email, get a 6-digit code, then set a
- *  new password.  Phone reset works now (SMS, BD numbers); email reset is
- *  shown only when a verified mail domain is configured (`emailEnabled`). */
+/** Forgot-password flow — EMAIL ONLY (the old phone/SMS channel was retired
+ *  2026-08-16 at the owner's request): type your email, get a 6-digit code in
+ *  the inbox, then set a new password.  Accounts without an email yet add one
+ *  first (app settings, or the office does it from Edit user). */
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Mail, KeyRound, Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2 } from "lucide-react";
-import { requestPasswordReset, confirmPasswordReset, type Channel } from "@/app/actions/password-reset";
+import { Mail, KeyRound, Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2, Info } from "lucide-react";
+import { requestPasswordReset, confirmPasswordReset } from "@/app/actions/password-reset";
 
 type Status = { ok: boolean; text: string } | null;
 
 const T = {
   bn: {
-    sub: "পাসওয়ার্ড ভুলে গেছেন? নিচের যেকোনো উপায়ে নতুন পাসওয়ার্ড সেট করুন।",
-    phone: "ফোন", email: "ইমেইল",
-    phoneLabel: "মোবাইল নম্বর", emailLabel: "ইমেইল ঠিকানা",
-    phonePh: "01XXXXXXXXX", emailPh: "you@example.com",
+    emailLabel: "ইমেইল ঠিকানা", emailPh: "you@example.com",
     sendCode: "কোড পাঠান", sending: "পাঠানো হচ্ছে...",
     codeLabel: "৬-সংখ্যার কোড", codePh: "______",
     newPw: "নতুন পাসওয়ার্ড", newPwPh: "নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)",
     reset: "পাসওয়ার্ড রিসেট করুন", resetting: "রিসেট হচ্ছে...",
-    resend: "আবার কোড পাঠান", back: "ফিরে যান",
+    back: "ফিরে যান",
     show: "দেখান", hide: "লুকান",
     doneTitle: "হয়ে গেছে!", toLogin: "লগইন করুন",
     sentTo: "কোড পাঠানো হয়েছে —",
+    noEmailHint: "অ্যাকাউন্টে এখনো ইমেইল যোগ করা না থাকলে অ্যাপে লগইন করে সেটিংস থেকে ইমেইল যোগ করুন, অথবা অফিসে (+৮৮০ ১৯১০-০৬৫১৩৬) যোগাযোগ করুন — ইমেইল যোগ হয়ে গেলেই এখান থেকে রিসেট করা যাবে।",
   },
   en: {
-    sub: "Forgot your password? Set a new one using either method below.",
-    phone: "Phone", email: "Email",
-    phoneLabel: "Mobile number", emailLabel: "Email address",
-    phonePh: "01XXXXXXXXX", emailPh: "you@example.com",
+    emailLabel: "Email address", emailPh: "you@example.com",
     sendCode: "Send code", sending: "Sending...",
     codeLabel: "6-digit code", codePh: "______",
     newPw: "New password", newPwPh: "New password (min 6 characters)",
     reset: "Reset password", resetting: "Resetting...",
-    resend: "Resend code", back: "Back",
+    back: "Back",
     show: "Show", hide: "Hide",
     doneTitle: "All done!", toLogin: "Log in",
     sentTo: "Code sent to —",
+    noEmailHint: "If your account has no email yet, log in to the app and add one in settings — or ask the office (+880 1910-065136) to add it from Edit user. Once an email is on the account, you can reset from here.",
   },
 } as const;
 
-export default function ForgotPassword({
-  locale = "bn",
-  emailEnabled = false,
-}: {
-  locale?: "bn" | "en";
-  emailEnabled?: boolean;
-}) {
+export default function ForgotPassword({ locale = "bn" }: { locale?: "bn" | "en" }) {
   const t = T[locale];
   const loginHref = locale === "en" ? "/en/login" : "/login";
-  const [channel, setChannel] = useState<Channel>("phone");
   const [identifier, setIdentifier] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -64,7 +54,7 @@ export default function ForgotPassword({
     e.preventDefault();
     setStatus(null);
     start(async () => {
-      const r = await requestPasswordReset({ channel, identifier });
+      const r = await requestPasswordReset({ channel: "email", identifier });
       if (r.ok) {
         setStatus({ ok: true, text: r.message });
         setStep("confirm");
@@ -78,7 +68,7 @@ export default function ForgotPassword({
     e.preventDefault();
     setStatus(null);
     start(async () => {
-      const r = await confirmPasswordReset({ channel, identifier, code, newPassword });
+      const r = await confirmPasswordReset({ channel: "email", identifier, code, newPassword });
       if (r.ok) setStep("done");
       else setStatus({ ok: false, text: r.error });
     });
@@ -109,29 +99,19 @@ export default function ForgotPassword({
     <div className="grad-border p-6 sm:p-7">
       {step === "request" ? (
         <form onSubmit={sendCode} className="space-y-4">
-          {emailEnabled && (
-            <div className="grid grid-cols-2 gap-1 rounded-2xl bg-bg-soft p-1">
-              {(["phone", "email"] as Channel[]).map((c) => (
-                <button key={c} type="button" onClick={() => { setChannel(c); setIdentifier(""); setStatus(null); }}
-                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-semibold transition-colors ${channel === c ? "bg-fg text-bg shadow" : "text-fg-muted hover:text-fg"}`}>
-                  {c === "phone" ? <Phone className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
-                  {c === "phone" ? t.phone : t.email}
-                </button>
-              ))}
-            </div>
-          )}
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-fg">{channel === "phone" ? t.phoneLabel : t.emailLabel}</label>
+            <label className="mb-1.5 block text-sm font-semibold text-fg">{t.emailLabel}</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">
-                {channel === "phone" ? <Phone className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                <Mail className="h-4 w-4" />
               </span>
               <input
-                type={channel === "phone" ? "tel" : "email"}
-                inputMode={channel === "phone" ? "tel" : "email"}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder={channel === "phone" ? t.phonePh : t.emailPh}
+                placeholder={t.emailPh}
                 required
                 className="w-full rounded-xl border border-border bg-bg py-3 pl-9 pr-4 text-sm outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/20"
               />
@@ -142,6 +122,10 @@ export default function ForgotPassword({
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
             {pending ? t.sending : t.sendCode}
           </button>
+          <p className="flex items-start gap-2 rounded-xl bg-bg-soft px-3.5 py-3 text-xs leading-relaxed text-fg-muted">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
+            <span>{t.noEmailHint}</span>
+          </p>
         </form>
       ) : (
         <form onSubmit={doReset} className="space-y-4">

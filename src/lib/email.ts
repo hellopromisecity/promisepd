@@ -79,20 +79,27 @@ export const canEmailArbitraryRecipients = () =>
   !!process.env.CONTACT_FROM_EMAIL &&
   !process.env.CONTACT_FROM_EMAIL.includes("resend.dev");
 
-/** Email a password-reset code.  Sends only when a verified domain is
- *  configured (Resend's shared sender can't reach arbitrary inboxes);
- *  otherwise a silent no-op (the caller steers the user to phone reset).
- *  Returns whether it actually sent. */
+/** Sender for password-reset codes: env override, else the branded domain
+ *  address.  We don't (and can't — the production API key is send-only) ask
+ *  Resend whether promisepd.com is verified; we simply TRY this sender.
+ *  Before the domain's DNS records verify, Resend rejects it and the caller
+ *  tells the user the email system isn't live yet; the moment verification
+ *  lands, the very same send starts succeeding — no redeploy, no env change. */
+const RESET_FROM = () => process.env.CONTACT_FROM_EMAIL || "PromisePD <noreply@promisepd.com>";
+
+/** Email a password-reset code from the branded sender.  Returns whether it
+ *  actually sent — false until the promisepd.com domain verifies at Resend
+ *  (the caller surfaces a friendly "not live yet" message). */
 export async function sendResetCodeEmail(
   email: string,
   code: string,
 ): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || !canEmailArbitraryRecipients()) return { sent: false };
+  if (!apiKey) return { sent: false };
   try {
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
-      from: FROM,
+      from: RESET_FROM(),
       to: email,
       subject: "PromisePD — পাসওয়ার্ড রিসেট কোড",
       html: `<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px">
