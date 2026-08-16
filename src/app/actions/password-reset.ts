@@ -11,7 +11,7 @@
 
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendResetCodeSms, sendBulkSms } from "@/lib/sms";
+import { sendResetCodeSms } from "@/lib/sms";
 import { sendResetCodeEmail } from "@/lib/email";
 
 export type Channel = "phone" | "email";
@@ -216,17 +216,15 @@ export async function confirmPasswordReset(input: {
   if (error) return { ok: false, error: "পাসওয়ার্ড পরিবর্তন করা যায়নি — আবার চেষ্টা করুন।" };
 
   // The code confirmed ownership of the new inbox → NOW attach it to the
-  // account (profile + any of their investor accounts without an email), and
-  // text the login mobile so the real owner hears about it. Best-effort.
+  // account (profile + any of their investor accounts without an email).
+  // No SMS anywhere in this flow (owner's call 2026-08-16): typing the FULL
+  // account mobile in the identify step IS the ownership check.
   if (pendingEmail) {
     try {
       if (!prof.email) await admin.from("profiles").update({ email: pendingEmail }).eq("id", prof.id);
       const { data: accs } = await admin.from("investor_accounts").select("uid, email").eq("profile_id", prof.id);
       for (const a of (accs ?? []) as { uid: string; email: string | null }[]) {
         if (!(a.email ?? "").trim()) await admin.from("investor_accounts").update({ email: pendingEmail }).eq("uid", a.uid);
-      }
-      if (prof.mobile) {
-        await sendBulkSms("+" + prof.mobile, `PromisePD: আপনার অ্যাকাউন্টে ইমেইল (${pendingEmail}) যুক্ত হয়েছে এবং পাসওয়ার্ড পরিবর্তন হয়েছে। আপনি না করে থাকলে দ্রুত অফিসে যোগাযোগ করুন: +8801910065136`, "security");
       }
     } catch { /* the reset itself already succeeded */ }
   }

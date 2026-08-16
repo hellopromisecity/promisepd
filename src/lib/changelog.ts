@@ -30,7 +30,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "No email on the account? Add one right inside the reset",
     changes: [
       { kind: "new", text: "If the email typed at password reset isn't on any account, the form now asks for the member's LOGIN MOBILE NUMBER: the 6-digit code goes to the new email, and the moment it confirms, that email is attached to the account and the new password is set — one flow, no office visit. Works whether an email was set before or not." },
-      { kind: "improved", text: "Safety built in: an account that already carries a different email is never overwritten (the form shows it masked instead), the email only attaches AFTER the code proves inbox ownership, and the account's mobile gets an SMS notice that an email was added and the password changed — so the real owner always knows." },
+      { kind: "improved", text: "Safety built in, with zero SMS: typing the FULL account mobile number is the ownership check, an account that already carries a different email is never overwritten (the form says \"আপনার ইমেইল মিলছে না\"), and the email only attaches AFTER the code proves inbox ownership." },
     ],
   },
   {
