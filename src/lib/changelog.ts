@@ -25,6 +25,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.0",
+    date: "2026-08-16",
+    title: "The Archive — one recycle bin for everything",
+    changes: [
+      { kind: "new", text: "A new Archive section in the sidebar: every deleted thing on the platform now waits in one 30-day recycle bin with three tabs — Users (deleted customers), Projects (a single holding deleted from someone's file) and Transactions (deleted payments). Restore anything in one click; after 30 days it's gone for good, automatically." },
+      { kind: "new", text: "The Archive opens with a live overview — stat cards for what's parked inside (and its money value), a donut of the mix, and a countdown chart showing how much of the bin empties in each coming window, red when something is about to expire." },
+      { kind: "changed", text: "Deleting is now always reversible first: a project-holding delete (from the customer popup or a project page) and a transaction delete both go to the Archive instead of vanishing instantly — with a type-delete-to-confirm warning before anything moves. A holding's app-side money is parked with it, so All Customers, the project pages and the member's app stay exactly in sync through delete and restore." },
+      { kind: "improved", text: "Search, sorting (newest deleted / expiring soonest / biggest amount) and pagination on every archive tab." },
+    ],
+  },
+  {
     version: "2.3.10",
     date: "2026-08-16",
     title: "Delete a holding right from the customer popup",

@@ -8,7 +8,7 @@ import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 import {
   getHubCustomerDetail, listReferenceOfficers, listTxnTypes, createHubCustomer, updateHubCustomer,
-  deleteHubCustomer, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit,
+  archiveHubHolding, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit,
   linkHubToInvestor, searchInvestors, type RefOfficer, type CustomerInput, type TxnType, type InvestorHit,
 } from "@/app/actions/hub";
 import type { HubCustomer, HubPayment } from "@/lib/hub";
@@ -194,9 +194,9 @@ export function DeleteBtn({ customer, project, className }: { customer: HubCusto
       title="Delete"
       className={`${className} hover:border-brand-red/40 hover:text-brand-red disabled:opacity-40`}
       onClick={async () => {
-        const ok = await confirmDialog({ title: "Delete customer", message: `Remove “${customer.name}” from ${project.name}? Any referral commission credited to the marketing officer is reversed too.`, confirmText: "Delete", danger: true });
+        const ok = await confirmDialog({ title: "Delete customer", message: `Remove “${customer.name}” from ${project.name}? The holding moves to Archive → Projects for 30 days — restorable in one click, gone for good after that.`, confirmText: "Delete", danger: true });
         if (!ok) return;
-        start(async () => { const r = await deleteHubCustomer(customer.id, project.key); if (r.ok) { toast(r.message || "Deleted.", "success"); router.refresh(); } else toast(r.error, "error"); });
+        start(async () => { const r = await archiveHubHolding(customer.id, project.key); if (r.ok) { toast(r.message || "Moved to the Archive.", "success"); router.refresh(); } else toast(r.error, "error"); });
       }}
     >
       {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

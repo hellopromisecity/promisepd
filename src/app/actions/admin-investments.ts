@@ -218,10 +218,37 @@ export async function deleteInvestorTransaction(transactionId: string): Promise<
 
     const { data: existing } = await admin
       .from("investor_transactions")
-      .select("uid")
+      .select("*")
       .eq("transaction_id", transactionId)
       .maybeSingle();
     if (!existing) throw new ValidationError("That transaction no longer exists.");
+    const txn = existing as Record<string, unknown>;
+
+    // 30-day recycle bin (0031): snapshot the app txn + its linked book payment
+    // BEFORE deleting — the Archive page can put both back. Best-effort.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyFrom = admin.from as any;
+      const { data: pd } = await anyFrom("hub_customer_payments").select("*").eq("mirror_tx", transactionId).maybeSingle();
+      const payment = (pd ?? null) as Record<string, unknown> | null;
+      let cust: Record<string, unknown> | null = null;
+      if (payment) {
+        const { data: cdd } = await anyFrom("hub_customers").select("name, project_key, project_name").eq("id", payment.customer_id).maybeSingle();
+        cust = (cdd ?? null) as Record<string, unknown> | null;
+      }
+      let name = (cust?.name as string) ?? null;
+      if (!name) {
+        const { data: acc } = await admin.from("investor_accounts").select("full_name").eq("uid", String(txn.uid)).maybeSingle();
+        name = ((acc as { full_name?: string } | null)?.full_name as string) ?? null;
+      }
+      await anyFrom("archived_transactions").insert({
+        customer_name: name, project_key: (cust?.project_key as string) ?? null,
+        project_name: (cust?.project_name as string) ?? null, kind: (payment?.kind as string) ?? "app",
+        amount: Number(txn.amount) || 0, txn_date: (txn.date as string) ?? null,
+        customer_id: (payment?.customer_id as string) ?? null, investor_uid: (txn.uid as string) ?? null,
+        payment, mirror: txn,
+      });
+    } catch { /* pre-0031 — no recycle bin yet */ }
 
     const { error } = await admin.from("investor_transactions").delete().eq("transaction_id", transactionId);
     if (error) throw new Error(error.message);

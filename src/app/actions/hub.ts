@@ -6,7 +6,7 @@ import { getAdmin, logAudit } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
-import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, canonMobile } from "@/lib/investor-write";
+import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile } from "@/lib/investor-write";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
@@ -21,6 +21,21 @@ const HP = (a: Admin) => (a.from as any)("hub_customer_payments");
 // deleted_at (0030) isn't in the generated types yet → loosen this one too.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const IA = (a: Admin) => (a.from as any)("investor_accounts");
+// archived_transactions (0031) — the transactions recycle bin.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AT = (a: Admin) => (a.from as any)("archived_transactions");
+
+/** Snapshot a payment + its mirrored app transaction into the transaction
+ *  archive BEFORE the live rows are deleted. Best-effort: pre-0031 (table
+ *  missing) the delete simply behaves as before — no archive copy. */
+async function snapshotDeletedTxn(admin: Admin, snap: {
+  customer_name: string | null; project_key: string | null; project_name: string | null;
+  kind: string | null; amount: number; txn_date: string | null;
+  customer_id: string | null; investor_uid: string | null;
+  payment: Record<string, unknown> | null; mirror: Record<string, unknown> | null;
+}): Promise<void> {
+  try { await AT(admin).insert(snap); } catch { /* pre-0031 — no recycle bin yet */ }
+}
 
 async function guard(): Promise<Admin | null> {
   const me = await getCurrentUser();
@@ -233,42 +248,50 @@ export async function purgePerson(uid: string): Promise<Result> {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!uid) return { ok: false, error: "Missing user." };
-
-    const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, profile_id, deleted_at").eq("uid", uid).maybeSingle();
-    const acc = rec(accD);
-    if (!acc) return { ok: false, error: "Account not found." };
-    if (!acc.deleted_at) return { ok: false, error: "Only archived customers can be deleted permanently — archive them first." };
-
-    // book side: payments, then the customer rows
-    const { data: hubRows } = await HC(admin).select("id").eq("investor_uid", uid);
-    const hubIds = ((hubRows ?? []) as { id: string }[]).map((h) => h.id);
-    if (hubIds.length) {
-      await HP(admin).delete().in("customer_id", hubIds);
-      await HC(admin).delete().in("id", hubIds);
-    }
-
-    // app side: transactions, memberships, then the account itself
-    await admin.from("investor_transactions").delete().eq("uid", uid);
-    await admin.from("investments").delete().eq("uid", uid);
-    const { error } = await IA(admin).delete().eq("uid", uid);
-    if (error) return { ok: false, error: String(error.message) };
-
-    // their login — only ordinary member profiles, never a staff/admin login
-    if (acc.profile_id) {
-      try {
-        const { data: prof } = await admin.from("profiles").select("id, role").eq("id", acc.profile_id).maybeSingle();
-        if (rec(prof)?.role === "member") {
-          await admin.from("profiles").delete().eq("id", acc.profile_id);
-          await admin.auth.admin.deleteUser(acc.profile_id);
-        }
-      } catch { /* best effort — an orphaned login is harmless */ }
-    }
-
-    await logAudit({ action: "delete", entity: "investor_account", entityId: uid, detail: `PERMANENTLY deleted ${acc.full_name ?? uid} from the archive (${hubIds.length} book row(s))` });
+    const r = await purgePersonCore(admin, uid);
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
-    return { ok: true, message: "Deleted permanently." };
+    revalidatePath("/dashboard/archive");
+    return r;
   } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** The purge itself, guard-free — shared by the action above and the Archive
+ *  page's lazy 30-day auto-purge. Only ever runs on ARCHIVED accounts.
+ *  NOT exported: "use server" would turn it into a client-callable action. */
+async function purgePersonCore(admin: Admin, uid: string): Promise<Result> {
+  const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, profile_id, deleted_at").eq("uid", uid).maybeSingle();
+  const acc = rec(accD);
+  if (!acc) return { ok: false, error: "Account not found." };
+  if (!acc.deleted_at) return { ok: false, error: "Only archived customers can be deleted permanently — archive them first." };
+
+  // book side: payments, then the customer rows
+  const { data: hubRows } = await HC(admin).select("id").eq("investor_uid", uid);
+  const hubIds = ((hubRows ?? []) as { id: string }[]).map((h) => h.id);
+  if (hubIds.length) {
+    await HP(admin).delete().in("customer_id", hubIds);
+    await HC(admin).delete().in("id", hubIds);
+  }
+
+  // app side: transactions, memberships, then the account itself
+  await admin.from("investor_transactions").delete().eq("uid", uid);
+  await admin.from("investments").delete().eq("uid", uid);
+  const { error } = await IA(admin).delete().eq("uid", uid);
+  if (error) return { ok: false, error: String(error.message) };
+
+  // their login — only ordinary member profiles, never a staff/admin login
+  if (acc.profile_id) {
+    try {
+      const { data: prof } = await admin.from("profiles").select("id, role").eq("id", acc.profile_id).maybeSingle();
+      if (rec(prof)?.role === "member") {
+        await admin.from("profiles").delete().eq("id", acc.profile_id);
+        await admin.auth.admin.deleteUser(acc.profile_id);
+      }
+    } catch { /* best effort — an orphaned login is harmless */ }
+  }
+
+  await logAudit({ action: "delete", entity: "investor_account", entityId: uid, detail: `PERMANENTLY deleted ${acc.full_name ?? uid} from the archive (${hubIds.length} book row(s))` });
+  return { ok: true, message: "Deleted permanently." };
 }
 
 /** Bring an archived customer back exactly as they were. */
@@ -282,8 +305,234 @@ export async function restorePerson(uid: string): Promise<Result> {
     await HC(admin).update({ deleted_at: null }).eq("investor_uid", uid);
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/archive");
     return { ok: true, message: "Restored — back in every list." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── single-HOLDING archive: one book row waits 30 days, restorable ──
+
+/** Fresh TX id, paged past the 1000-row cap (collision-safe). */
+async function nextTxId(admin: Admin): Promise<string> {
+  let max = 100000;
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin.from("investor_transactions").select("transaction_id").range(from, from + 999);
+    for (const r of (data ?? []) as { transaction_id: string }[]) { const m = /^TX(\d+)$/.exec(r.transaction_id); if (m) max = Math.max(max, Number(m[1])); }
+    if (((data ?? []) as unknown[]).length < 1000) break;
+  }
+  return `TX${max + 1}`;
+}
+
+/** "Delete" ONE holding (this customer's book row in one project): soft-delete
+ *  it into the Archive → Projects tab, restorable for 30 days. Its mirrored
+ *  app transactions are parked inside the row (bio.archived_mirrors) and
+ *  removed from the live ledger — otherwise they'd resurface as app-only
+ *  money in All Customers and the member's PWA. */
+export async function archiveHubHolding(id: string, projectKey: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const { data } = await HC(admin).select("id, name, project_name, investor_uid, bio, deleted_at").eq("id", id).maybeSingle();
+    const row = rec(data);
+    if (!row) return { ok: false, error: "Holding not found." };
+    if (row.deleted_at) return { ok: true, message: "Already archived." };
+
+    const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", id);
+    const mirrorIds = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
+    let mirrors: Record<string, unknown>[] = [];
+    if (mirrorIds.length) {
+      const { data: txs } = await admin.from("investor_transactions").select("*").in("transaction_id", mirrorIds);
+      mirrors = (txs ?? []) as Record<string, unknown>[];
+    }
+    const bio = { ...(rec(row.bio) ?? {}), archived_mirrors: mirrors };
+    const { error } = await HC(admin).update({ deleted_at: new Date().toISOString(), bio }).eq("id", id);
+    if (error) return { ok: false, error: /deleted_at|column/i.test(String(error.message)) ? "Archive needs migration 0030 — run the SQL first." : String(error.message) };
+    if (mirrorIds.length) await admin.from("investor_transactions").delete().in("transaction_id", mirrorIds);
+    if (row.investor_uid) await recomputeInvestorBalance(admin, row.investor_uid as string);
+
+    await logAudit({ action: "delete", entity: "hub_customer", entityId: id, detail: `Archived ${row.name}'s ${row.project_name} holding (restorable 30 days)` });
+    revalidatePath(`/dashboard/projects/${projectKey}`);
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/archive");
+    return { ok: true, message: "Holding moved to the Archive — restorable for 30 days." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** Bring an archived holding back: the row returns to its project page and the
+ *  parked app transactions wake up (same TX ids; a meanwhile-taken id gets a
+ *  fresh one and the payment link is repointed). */
+export async function restoreHubHolding(id: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const { data } = await HC(admin).select("id, name, project_key, project_name, investor_uid, bio, deleted_at").eq("id", id).maybeSingle();
+    const row = rec(data);
+    if (!row) return { ok: false, error: "Holding not found." };
+    if (!row.deleted_at) return { ok: true, message: "Already live." };
+
+    const bio = { ...(rec(row.bio) ?? {}) };
+    const mirrors = (bio.archived_mirrors ?? []) as Record<string, unknown>[];
+    delete bio.archived_mirrors;
+    const { error } = await HC(admin).update({ deleted_at: null, bio }).eq("id", id);
+    if (error) return { ok: false, error: String(error.message) };
+
+    for (const m of mirrors) {
+      const { error: e1 } = await admin.from("investor_transactions").insert(m as never);
+      if (e1 && /duplicate|unique/i.test(e1.message)) {
+        const oldId = String(m.transaction_id);
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const cand = await nextTxId(admin);
+          const { error: e2 } = await admin.from("investor_transactions").insert({ ...m, transaction_id: cand } as never);
+          if (!e2) { await HP(admin).update({ mirror_tx: cand }).eq("mirror_tx", oldId).eq("customer_id", id); break; }
+          if (!/duplicate|unique/i.test(e2.message)) break;
+        }
+      }
+    }
+    if (row.investor_uid) await recomputeInvestorBalance(admin, row.investor_uid as string);
+    await recomputeCustomer(admin, id);
+
+    revalidatePath(`/dashboard/projects/${row.project_key}`);
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/archive");
+    return { ok: true, message: "Holding restored — back on its project page." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** PERMANENTLY erase an ARCHIVED holding (its payments cascade too). */
+export async function purgeHubHolding(id: string, projectKey: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const { data } = await HC(admin).select("id, deleted_at").eq("id", id).maybeSingle();
+    const row = rec(data);
+    if (!row) return { ok: false, error: "Holding not found." };
+    if (!row.deleted_at) return { ok: false, error: "Only archived holdings can be deleted permanently." };
+    await purgeHoldingCore(admin, id);
+    revalidatePath(`/dashboard/projects/${projectKey}`);
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/archive");
+    return { ok: true, message: "Deleted permanently." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── transaction archive (0031): deleted txns wait 30 days too ──
+
+/** Put an archived transaction back — book payment + app mirror re-inserted,
+ *  both sides recomputed, then the archive copy is dropped. */
+export async function restoreArchivedTxn(archiveId: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const { data } = await AT(admin).select("*").eq("id", archiveId).maybeSingle();
+    const row = rec(data);
+    if (!row) return { ok: false, error: "Not in the archive." };
+    const payment = rec(row.payment);
+    const mirror = rec(row.mirror);
+
+    if (payment) {
+      const { data: hcD } = await HC(admin).select("id, deleted_at").eq("id", payment.customer_id).maybeSingle();
+      const holder = rec(hcD);
+      if (!holder) return { ok: false, error: "That customer's holding no longer exists — the transaction can't return." };
+      if (holder.deleted_at) return { ok: false, error: "That holding is archived too — restore it from the Projects tab first." };
+      const { error } = await HP(admin).insert(payment);
+      if (error && !/duplicate|unique/i.test(error.message)) return { ok: false, error: error.message };
+    }
+    if (mirror) {
+      const { error: e1 } = await admin.from("investor_transactions").insert(mirror as never);
+      if (e1 && /duplicate|unique/i.test(e1.message)) {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const cand = await nextTxId(admin);
+          const { error: e2 } = await admin.from("investor_transactions").insert({ ...mirror, transaction_id: cand } as never);
+          if (!e2) { if (payment) await HP(admin).update({ mirror_tx: cand }).eq("id", payment.id); break; }
+          if (!/duplicate|unique/i.test(e2.message)) break;
+        }
+      }
+    }
+    if (payment?.customer_id) await recomputeCustomer(admin, String(payment.customer_id));
+    if (row.investor_uid) await recomputeInvestorBalance(admin, String(row.investor_uid));
+    await AT(admin).delete().eq("id", archiveId);
+
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/archive");
+    revalidatePath("/dashboard/transactionify");
+    return { ok: true, message: "Transaction restored." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** Drop an archived transaction for good (the live rows are already gone). */
+export async function purgeArchivedTxn(archiveId: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    const { error } = await AT(admin).delete().eq("id", archiveId);
+    if (error) return { ok: false, error: String(error.message) };
+    revalidatePath("/dashboard/archive");
+    return { ok: true, message: "Deleted permanently." };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── the Archive page's data (with lazy 30-day auto-purge) ──
+export type ArchiveUserRow = { uid: string; name: string; mobile: string | null; fid: string | null; balance: number; deletedAt: string; daysLeft: number };
+export type ArchivedHoldingRow = { id: string; name: string; mobile: string | null; file_no: string | null; project_key: string; project_name: string; project_type: string; paid: number; value: number; deletedAt: string; daysLeft: number };
+export type ArchivedTxnRow = { id: string; customer_name: string; project_name: string | null; kind: string; amount: number; txnDate: string | null; deletedAt: string; daysLeft: number };
+export type ArchiveData = { users: ArchiveUserRow[]; holdings: ArchivedHoldingRow[]; txns: ArchivedTxnRow[]; txnsReady: boolean };
+
+/** Everything sitting in the archive. Items older than 30 days are purged
+ *  right here (lazy auto-delete — runs every time the Archive page loads). */
+export async function loadArchiveData(): Promise<ArchiveData> {
+  const empty: ArchiveData = { users: [], holdings: [], txns: [], txnsReady: true };
+  try {
+    const admin = await guard();
+    if (!admin) return empty;
+    const DAY = 86400000;
+    const now = Date.now();
+    const cutoff = new Date(now - 30 * DAY).toISOString();
+    const left = (deletedAt: string) => 30 - Math.floor((now - Date.parse(deletedAt)) / DAY);
+
+    // users
+    const { data: accs } = await IA(admin).select("uid, full_name, phone_number, fid, balance, deleted_at").not("deleted_at", "is", null);
+    const users: ArchiveUserRow[] = [];
+    for (const a of (accs ?? []) as Record<string, unknown>[]) {
+      const deletedAt = String(a.deleted_at);
+      if (deletedAt < cutoff) { await purgePersonCore(admin, String(a.uid)); continue; }
+      users.push({ uid: String(a.uid), name: String(a.full_name || "Unnamed"), mobile: (a.phone_number as string) ?? null, fid: (a.fid as string) ?? null, balance: Number((a.balance as { total_balance?: number } | null)?.total_balance) || 0, deletedAt, daysLeft: left(deletedAt) });
+    }
+    const archivedUids = new Set(users.map((u) => u.uid));
+
+    // holdings (individually archived rows; person-archived rows restore with the person)
+    const { data: rows } = await HC(admin).select("id, name, mobile, file_no, project_key, project_name, project_type, total_paid, dividend, withdrawn, investor_uid, deleted_at").not("deleted_at", "is", null);
+    const holdings: ArchivedHoldingRow[] = [];
+    for (const h of (rows ?? []) as Record<string, unknown>[]) {
+      if (h.investor_uid && archivedUids.has(String(h.investor_uid))) continue;
+      const deletedAt = String(h.deleted_at);
+      if (deletedAt < cutoff) { await purgeHoldingCore(admin, String(h.id)); continue; }
+      const paid = Number(h.total_paid) || 0, div = Number(h.dividend) || 0, wd = Number(h.withdrawn) || 0;
+      holdings.push({
+        id: String(h.id), name: String(h.name || "—"), mobile: (h.mobile as string) ?? null, file_no: (h.file_no as string) ?? null,
+        project_key: String(h.project_key), project_name: String(h.project_name), project_type: String(h.project_type),
+        paid, value: h.project_type === "deposit" ? paid + div - wd : paid - wd, deletedAt, daysLeft: left(deletedAt),
+      });
+    }
+
+    // transactions (0031 — absent table just hides the tab's data)
+    let txns: ArchivedTxnRow[] = [];
+    let txnsReady = true;
+    try {
+      await AT(admin).delete().lt("deleted_at", cutoff);
+      const { data: ts, error } = await AT(admin).select("id, customer_name, project_name, kind, amount, txn_date, deleted_at").order("deleted_at", { ascending: false });
+      if (error) throw error;
+      txns = ((ts ?? []) as Record<string, unknown>[]).map((t) => ({
+        id: String(t.id), customer_name: String(t.customer_name || "—"), project_name: (t.project_name as string) ?? null,
+        kind: String(t.kind || "deposit"), amount: Number(t.amount) || 0, txnDate: (t.txn_date as string) ?? null,
+        deletedAt: String(t.deleted_at), daysLeft: left(String(t.deleted_at)),
+      }));
+    } catch { txnsReady = false; }
+
+    return { users, holdings, txns, txnsReady };
+  } catch { return empty; }
 }
 
 /** Put an EXISTING app user into a project — creates their book row (linked to
@@ -391,21 +640,28 @@ export async function deleteHubCustomer(id: string, projectKey: string): Promise
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
-    const { data } = await HC(admin).select("commission_entry_id").eq("id", id).maybeSingle();
-    const cur = rec(data);
-    if (cur?.commission_entry_id) {
-      const { data: e } = await admin.from("marketing_point_entries").select("officer_id").eq("id", cur.commission_entry_id).maybeSingle();
-      await admin.from("marketing_point_entries").delete().eq("id", cur.commission_entry_id);
-      const eo = rec(e)?.officer_id as string | undefined;
-      if (eo) await recomputeOfficer(admin, eo);
-    }
-    await HC(admin).delete().eq("id", id); // cascades payments
+    await purgeHoldingCore(admin, id);
     revalidatePath(`/dashboard/projects/${projectKey}`);
     // the All-Customers popup deletes holdings too — keep that view fresh
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
     return { ok: true, message: "Customer deleted." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** Hard-delete one book row (+ cascaded payments) and reverse its referral
+ *  commission. Shared by deleteHubCustomer, purgeHubHolding and the Archive
+ *  page's lazy auto-purge — NOT exported ("use server" would expose it). */
+async function purgeHoldingCore(admin: Admin, id: string): Promise<void> {
+  const { data } = await HC(admin).select("commission_entry_id").eq("id", id).maybeSingle();
+  const cur = rec(data);
+  if (cur?.commission_entry_id) {
+    const { data: e } = await admin.from("marketing_point_entries").select("officer_id").eq("id", cur.commission_entry_id).maybeSingle();
+    await admin.from("marketing_point_entries").delete().eq("id", cur.commission_entry_id);
+    const eo = rec(e)?.officer_id as string | undefined;
+    if (eo) await recomputeOfficer(admin, eo);
+  }
+  await HC(admin).delete().eq("id", id); // cascades payments
 }
 
 // ── payments / transactions ──────────────────────────────────────
@@ -449,18 +705,34 @@ export async function deleteHubPayment(paymentId: string, projectKey: string): P
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
-    const { data } = await HP(admin).select("customer_id, amount, date").eq("id", paymentId).maybeSingle();
+    const { data } = await HP(admin).select("*").eq("id", paymentId).maybeSingle();
     const p = rec(data);
     if (!p) return { ok: false, error: "Not found." };
     const mirrorTx = await readMirrorTx(admin, paymentId);
+    const { data: cd } = await HC(admin).select("name, mobile, investor_uid, project_key, project_name").eq("id", p.customer_id).maybeSingle();
+    const cust = rec(cd);
+
+    // 30-day recycle bin: snapshot the payment + its app mirror BEFORE deleting
+    let mirrorRow: Record<string, unknown> | null = null;
+    if (mirrorTx) {
+      const { data: mr } = await admin.from("investor_transactions").select("*").eq("transaction_id", mirrorTx).maybeSingle();
+      mirrorRow = rec(mr);
+    }
+    await snapshotDeletedTxn(admin, {
+      customer_name: (cust?.name as string) ?? null, project_key: (cust?.project_key as string) ?? projectKey,
+      project_name: (cust?.project_name as string) ?? null, kind: (p.kind as string) ?? null,
+      amount: Number(p.amount) || 0, txn_date: (p.date as string) ?? null,
+      customer_id: (p.customer_id as string) ?? null, investor_uid: (cust?.investor_uid as string) ?? null,
+      payment: p, mirror: mirrorRow,
+    });
+
     await HP(admin).delete().eq("id", paymentId);
     await recomputeCustomer(admin, p.customer_id as string);
     // keep the app/PWA in step: drop the mirrored transaction too. Never throws.
-    const { data: cd } = await HC(admin).select("mobile, investor_uid, project_name").eq("id", p.customer_id).maybeSingle();
-    const cust = rec(cd);
     if (cust) await syncMirrorOnPaymentChange(admin, { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string }, { amount: Number(p.amount), date: (p.date as string) ?? null }, null, mirrorTx);
     revalidatePath(`/dashboard/projects/${projectKey}`);
-    return { ok: true, message: "Transaction removed." };
+    revalidatePath("/dashboard/archive");
+    return { ok: true, message: "Transaction removed — 30 days in the Archive." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 

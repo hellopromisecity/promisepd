@@ -7,6 +7,7 @@
 import {
   LayoutDashboard,
   ReceiptText,
+  Archive,
   BarChart3,
   Users,
   CalendarCheck,
@@ -68,6 +69,8 @@ export const ADMIN_NAV: NavEntry[] = [
   { label: "SMS", href: "/dashboard/sms", icon: Send, min: "manager" },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "manager" },
   { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "manager" },
+  // Archive — the 30-day recycle bin: deleted users, holdings & transactions.
+  { label: "Archive", href: "/dashboard/archive", icon: Archive, min: "manager" },
   { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "manager" },
 ];
 

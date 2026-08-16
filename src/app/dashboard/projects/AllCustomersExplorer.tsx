@@ -21,8 +21,7 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, restorePerson, purgePerson, deleteHubCustomer, type CustomerInput } from "@/app/actions/hub";
-import { confirmDialog } from "@/components/ui/Dialog";
+import { assignCustomerToProject, archivePerson, restorePerson, purgePerson, archiveHubHolding, type CustomerInput } from "@/app/actions/hub";
 import { toast } from "@/components/ui/Toast";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
@@ -403,24 +402,26 @@ function RowMenu({ person }: { person: PersonRow }) {
   );
 }
 
-/** Confirmation that makes you TYPE the action word before Confirm unlocks. */
-function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm }: {
+/** Confirmation that makes you TYPE the action word before Confirm unlocks.
+ *  Exported — the Archive page reuses it for its purge buttons. `title` /
+ *  `message` override the kind's stock copy (e.g. holding-specific warnings). */
+export function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm, title: titleOverride, message: messageOverride }: {
   kind: "deactivate" | "activate" | "delete" | "purge"; name: string; pending: boolean; err: string | null;
-  onCancel: () => void; onConfirm: () => void;
+  onCancel: () => void; onConfirm: () => void; title?: string; message?: string;
 }) {
   const [typed, setTyped] = useState("");
   const word = kind === "delete" || kind === "purge" ? "delete" : kind === "deactivate" ? "deactivate" : null;
   const ready = !word || typed.trim().toLowerCase() === word;
   const danger = kind === "delete" || kind === "purge";
-  const title = kind === "purge" ? "Delete forever" : kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : "Activate user";
-  const message =
+  const title = titleOverride ?? (kind === "purge" ? "Delete forever" : kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : "Activate user");
+  const message = messageOverride ?? (
     kind === "purge"
       ? `“${name}” will be erased PERMANENTLY — the account, their book rows, every payment and transaction, and their app login. This is an instant delete: there is NO archive and NO restore after this. Be sure.`
       : kind === "delete"
         ? `“${name}” disappears from every list — All Customers, the project pages and reports. They stay in the Archive for 30 days, restorable in one click.`
         : kind === "deactivate"
           ? `“${name}” stays everywhere but their app account is switched off.`
-          : `Switch “${name}”’s app account back on.`;
+          : `Switch “${name}”’s app account back on.`);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && onCancel()}>
       <div className="w-full max-w-sm animate-[pop_.18s_ease-out] rounded-2xl border border-border bg-bg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -667,23 +668,19 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
   const [txnH, setTxnH] = useState<PersonHolding | null>(null);
   const [linkH, setLinkH] = useState<PersonHolding | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [delTarget, setDelTarget] = useState<PersonHolding | null>(null);
+  const [delErr, setDelErr] = useState<string | null>(null);
 
-  // Remove ONE holding (this person's book row in that project) — same action
-  // as the project page's trash: the row + its payment ledger go, any referral
-  // commission is reversed. The person's account and other holdings stay.
+  // Remove ONE holding (this person's book row in that project) — it moves to
+  // Archive → Projects for 30 days, restorable in one click. The person's
+  // account and their other holdings stay untouched.
   async function delHolding(h: PersonHolding) {
-    const ok = await confirmDialog({
-      title: "Delete holding",
-      message: `Remove ${person.name}'s “${h.project_name}” holding (paid ${fmt(h.paid)}) from the book? Its payment ledger goes with it and any referral commission is reversed. The customer's account and other projects stay.`,
-      confirmText: "Delete",
-      danger: true,
-    });
-    if (!ok) return;
     setDeletingId(h.id);
-    const r = await deleteHubCustomer(h.id, h.project_key);
+    setDelErr(null);
+    const r = await archiveHubHolding(h.id, h.project_key);
     setDeletingId(null);
-    if (r.ok) { toast(r.message || "Holding deleted.", "success"); onClose(); router.refresh(); }
-    else toast(r.error, "error");
+    if (r.ok) { toast(r.message || "Moved to the Archive.", "success"); setDelTarget(null); onClose(); router.refresh(); }
+    else setDelErr(r.error);
   }
   // Rebuild a minimal book customer so the shared Transaction / Link modals work
   // (they only need id + project + name; the id drives the payment ledger + link).
@@ -733,7 +730,7 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                         {!person.app && (
                           <button onClick={() => setLinkH(h)} title="Link to app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
                         )}
-                        <button onClick={() => delHolding(h)} disabled={deletingId === h.id} title="Delete this holding" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-red/40 hover:text-brand-red disabled:opacity-40">
+                        <button onClick={() => { setDelErr(null); setDelTarget(h); }} disabled={deletingId === h.id} title="Delete this holding" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-red/40 hover:text-brand-red disabled:opacity-40">
                           {deletingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       </>
@@ -752,6 +749,18 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
       </div>
       {txnH && <TransactionModal customer={asHub(txnH)} project={hp(txnH)} onClose={() => setTxnH(null)} />}
       {linkH && <LinkModal customer={asHub(linkH)} onClose={() => setLinkH(null)} />}
+      {delTarget && (
+        <TypeConfirm
+          kind="delete"
+          name={person.name}
+          title="Delete holding"
+          message={`${person.name}'s “${delTarget.project_name}” holding (paid ${fmt(delTarget.paid)}) leaves the project page, All Customers and their app. It waits in Archive → Projects for 30 days — restorable in one click, gone for good after that. Their account and other projects stay.`}
+          pending={deletingId === delTarget.id}
+          err={delErr}
+          onCancel={() => { if (deletingId !== delTarget.id) { setDelTarget(null); setDelErr(null); } }}
+          onConfirm={() => delHolding(delTarget)}
+        />
+      )}
     </>
   );
 }
