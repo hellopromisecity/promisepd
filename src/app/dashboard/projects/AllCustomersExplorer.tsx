@@ -10,18 +10,18 @@ import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
-  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Archive, RotateCcw, Trash2, UserX, UserCheck,
+  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
 import type { TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
-import type { PersonRow, PersonHolding, AppHealth, ArchivedRow } from "@/lib/all-customers";
+import type { PersonRow, PersonHolding, AppHealth } from "@/lib/all-customers";
 import type { HubCustomer } from "@/lib/hub";
 import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, restorePerson, purgePerson, archiveHubHolding, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, archiveHubHolding, type CustomerInput } from "@/app/actions/hub";
 import { toast } from "@/components/ui/Toast";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
@@ -32,10 +32,9 @@ type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
 type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying";
 
 export default function AllCustomersExplorer({
-  people, archived, projects, health, top, totals, investorTypes, investorProjects,
+  people, projects, health, top, totals, investorTypes, investorProjects,
 }: {
   people: PersonRow[];
-  archived: ArchivedRow[];
   projects: HubProject[];
   health: AppHealth;
   top: { name: string; balance: number }[];
@@ -53,7 +52,6 @@ export default function AllCustomersExplorer({
   const [mounted, setMounted] = useState(false);
   const [detail, setDetail] = useState<PersonRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [showArchive, setShowArchive] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setMounted(true), 40); return () => clearTimeout(t); }, []);
   useEffect(() => { setPage(1); }, [q, status, projFilter, perPage]);
@@ -212,13 +210,7 @@ export default function AllCustomersExplorer({
         <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-brand-blue/30 bg-brand-blue-tint px-3 py-2.5 text-sm font-bold text-brand-blue">
           <Users className="h-4 w-4" /> {total.toLocaleString("en-IN")} <span className="font-medium text-brand-blue/70">of {people.length}</span>
         </span>
-        {/* deleted customers wait here 30 days before they're gone for good */}
-        <button
-          onClick={() => setShowArchive((v) => !v)}
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${showArchive ? "border-amber-400 bg-amber-500/15 text-amber-600" : "border-border bg-bg text-fg-muted hover:border-amber-400/60 hover:text-amber-600"}`}
-        >
-          <Archive className="h-4 w-4" /> Archive ({archived.length})
-        </button>
+        {/* deleted things live in the sidebar's Archive section now */}
         <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, mobile, UID, project…"
@@ -245,9 +237,6 @@ export default function AllCustomersExplorer({
         <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark"><UserPlus className="h-4 w-4" /> Add customer</button>
       </div>
 
-      {showArchive ? (
-        <ArchivePanel archived={archived} />
-      ) : (
       <div className="overflow-hidden rounded-2xl border border-border bg-bg">
         <div className="max-h-[560px] overflow-auto">
           <table className="w-full min-w-[860px] border-collapse text-sm">
@@ -337,7 +326,6 @@ export default function AllCustomersExplorer({
           </div>
         </div>
       </div>
-      )}
 
       {detail && <PersonModal person={detail} onClose={() => setDetail(null)} />}
       {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
@@ -441,74 +429,6 @@ export function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm, tit
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** The 30-day recycle bin — deleted customers wait here with a Restore button. */
-function ArchivePanel({ archived }: { archived: ArchivedRow[] }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  const [purgeTarget, setPurgeTarget] = useState<ArchivedRow | null>(null);
-  const [purgeErr, setPurgeErr] = useState<string | null>(null);
-  function restore(uid: string) {
-    setBusy(uid);
-    start(async () => {
-      const r = await restorePerson(uid);
-      setBusy(null);
-      if (r.ok) router.refresh();
-    });
-  }
-  function purge(uid: string) {
-    setBusy(uid);
-    setPurgeErr(null);
-    start(async () => {
-      const r = await purgePerson(uid);
-      setBusy(null);
-      if (r.ok) { setPurgeTarget(null); router.refresh(); }
-      else setPurgeErr(r.error);
-    });
-  }
-  return (
-    <div className="overflow-hidden rounded-2xl border border-amber-400/40 bg-bg">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-amber-500/10 px-4 py-3">
-        <Archive className="h-4 w-4 text-amber-600" />
-        <h3 className="text-sm font-bold text-fg">Archive</h3>
-        <span className="text-xs text-fg-muted">deleted customers stay here for 30 days — restore brings everything back exactly as it was</span>
-      </div>
-      {archived.length === 0 ? (
-        <p className="px-4 py-12 text-center text-sm text-fg-muted">The archive is empty. When you delete a customer they wait here for 30 days first.</p>
-      ) : (
-        <ul className="divide-y divide-border/60">
-          {archived.map((a) => (
-            <li key={a.uid} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-fg">{a.name}</p>
-                <p className="text-[11px] text-fg-muted">{localPhone(a.mobile)}{a.fid ? ` · File ${a.fid}` : ""} · {a.uid} · deleted {fmtDate(a.deletedAt.slice(0, 10))}</p>
-              </div>
-              <span className="text-sm font-semibold tabular-nums text-fg">{fmt(a.balance)}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${a.daysLeft <= 7 ? "bg-brand-red-tint text-brand-red-dark" : "bg-amber-500/15 text-amber-600"}`}>{a.daysLeft} days left</span>
-              <button type="button" onClick={() => restore(a.uid)} disabled={pending} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-bg px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50">
-                {busy === a.uid && pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Restore
-              </button>
-              <button type="button" onClick={() => { setPurgeErr(null); setPurgeTarget(a); }} disabled={pending} title="Delete instantly — no restore" className="inline-flex items-center gap-1.5 rounded-xl border border-brand-red/40 bg-bg px-3 py-2 text-sm font-semibold text-brand-red-dark transition-colors hover:bg-brand-red-tint disabled:opacity-50">
-                <Trash2 className="h-4 w-4" /> Delete
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {purgeTarget && (
-        <TypeConfirm
-          kind="purge"
-          name={purgeTarget.name}
-          pending={pending && busy === purgeTarget.uid}
-          err={purgeErr}
-          onCancel={() => { if (!pending) { setPurgeTarget(null); setPurgeErr(null); } }}
-          onConfirm={() => purge(purgeTarget.uid)}
-        />
-      )}
     </div>
   );
 }

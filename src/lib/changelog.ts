@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.1",
+    date: "2026-08-16",
+    title: "One archive, one place",
+    changes: [
+      { kind: "changed", text: "The Archive button inside All Customers is gone — the sidebar's Archive section is now the one home for everything deleted (users, holdings and transactions), so there's a single place to look." },
+      { kind: "improved", text: "Md Helal Uddin's and Md Rafi Sarkar's team cards got their mobile numbers and email addresses." },
+    ],
+  },
+  {
     version: "2.4.0",
     date: "2026-08-16",
     title: "The Archive — one recycle bin for everything",
