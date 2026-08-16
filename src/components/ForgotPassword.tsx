@@ -7,7 +7,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Mail, KeyRound, Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2, Info } from "lucide-react";
+import { Mail, Phone, KeyRound, Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2, Info } from "lucide-react";
 import { requestPasswordReset, confirmPasswordReset } from "@/app/actions/password-reset";
 
 type Status = { ok: boolean; text: string } | null;
@@ -15,6 +15,7 @@ type Status = { ok: boolean; text: string } | null;
 const T = {
   bn: {
     emailLabel: "ইমেইল ঠিকানা", emailPh: "you@example.com",
+    mobileLabel: "আপনার লগইন মোবাইল নম্বর", mobilePh: "01XXXXXXXXX বা +XX…",
     sendCode: "কোড পাঠান", sending: "পাঠানো হচ্ছে...",
     codeLabel: "৬-সংখ্যার কোড", codePh: "______",
     newPw: "নতুন পাসওয়ার্ড", newPwPh: "নতুন পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)",
@@ -23,10 +24,12 @@ const T = {
     show: "দেখান", hide: "লুকান",
     doneTitle: "হয়ে গেছে!", toLogin: "লগইন করুন",
     sentTo: "কোড পাঠানো হয়েছে —",
-    noEmailHint: "অ্যাকাউন্টে এখনো ইমেইল যোগ করা না থাকলে অ্যাপে লগইন করে সেটিংস থেকে ইমেইল যোগ করুন, অথবা অফিসে (+৮৮০ ১৯১০-০৬৫১৩৬) যোগাযোগ করুন — ইমেইল যোগ হয়ে গেলেই এখান থেকে রিসেট করা যাবে।",
+    newEmailFor: "নতুন ইমেইল —",
+    noEmailHint: "ইমেইল আগে সেট করা না থাকলেও সমস্যা নেই — ইমেইল লিখে এগোন, আপনার লগইন মোবাইল নম্বর দিলে কোড কনফার্মের সাথে সাথেই ইমেইলটি অ্যাকাউন্টে যুক্ত হয়ে যাবে।",
   },
   en: {
     emailLabel: "Email address", emailPh: "you@example.com",
+    mobileLabel: "Your login mobile number", mobilePh: "01XXXXXXXXX or +XX…",
     sendCode: "Send code", sending: "Sending...",
     codeLabel: "6-digit code", codePh: "______",
     newPw: "New password", newPwPh: "New password (min 6 characters)",
@@ -35,7 +38,8 @@ const T = {
     show: "Show", hide: "Hide",
     doneTitle: "All done!", toLogin: "Log in",
     sentTo: "Code sent to —",
-    noEmailHint: "If your account has no email yet, log in to the app and add one in settings — or ask the office (+880 1910-065136) to add it from Edit user. Once an email is on the account, you can reset from here.",
+    newEmailFor: "New email —",
+    noEmailHint: "No email on your account yet? No problem — enter the email you want, then your login mobile number; the moment the code confirms, that email is attached to your account.",
   },
 } as const;
 
@@ -43,10 +47,11 @@ export default function ForgotPassword({ locale = "bn" }: { locale?: "bn" | "en"
   const t = T[locale];
   const loginHref = locale === "en" ? "/en/login" : "/login";
   const [identifier, setIdentifier] = useState("");
+  const [mobile, setMobile] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [step, setStep] = useState<"request" | "confirm" | "done">("request");
+  const [step, setStep] = useState<"request" | "identify" | "confirm" | "done">("request");
   const [status, setStatus] = useState<Status>(null);
   const [pending, start] = useTransition();
 
@@ -54,10 +59,15 @@ export default function ForgotPassword({ locale = "bn" }: { locale?: "bn" | "en"
     e.preventDefault();
     setStatus(null);
     start(async () => {
-      const r = await requestPasswordReset({ channel: "email", identifier });
+      const r = await requestPasswordReset({ channel: "email", identifier, mobile: step === "identify" ? mobile : undefined });
       if (r.ok) {
         setStatus({ ok: true, text: r.message });
         setStep("confirm");
+      } else if ("need" in r && r.need === "mobile") {
+        // email not on any account → collect the login mobile so this email
+        // can be attached during the reset
+        setStatus({ ok: true, text: r.error });
+        setStep("identify");
       } else {
         setStatus({ ok: false, text: r.error });
       }
@@ -68,7 +78,7 @@ export default function ForgotPassword({ locale = "bn" }: { locale?: "bn" | "en"
     e.preventDefault();
     setStatus(null);
     start(async () => {
-      const r = await confirmPasswordReset({ channel: "email", identifier, code, newPassword });
+      const r = await confirmPasswordReset({ channel: "email", identifier, code, newPassword, mobile: mobile || undefined });
       if (r.ok) setStep("done");
       else setStatus({ ok: false, text: r.error });
     });
@@ -126,6 +136,36 @@ export default function ForgotPassword({ locale = "bn" }: { locale?: "bn" | "en"
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
             <span>{t.noEmailHint}</span>
           </p>
+        </form>
+      ) : step === "identify" ? (
+        <form onSubmit={sendCode} className="space-y-4">
+          <p className="text-xs text-fg-muted">{t.newEmailFor} <span className="font-semibold text-fg">{identifier}</span></p>
+          {banner && <div className={banner}>{status!.text}</div>}
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-fg">{t.mobileLabel}</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-faint">
+                <Phone className="h-4 w-4" />
+              </span>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                placeholder={t.mobilePh}
+                required
+                className="w-full rounded-xl border border-border bg-bg py-3 pl-9 pr-4 text-sm outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/20"
+              />
+            </div>
+          </div>
+          <button type="submit" disabled={pending} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-3 text-sm font-bold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-70 transition-all">
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+            {pending ? t.sending : t.sendCode}
+          </button>
+          <button type="button" onClick={() => { setStep("request"); setStatus(null); setMobile(""); }}
+            className="inline-flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-fg-muted hover:text-brand-blue">
+            <ArrowLeft className="h-3.5 w-3.5" /> {t.back}
+          </button>
         </form>
       ) : (
         <form onSubmit={doReset} className="space-y-4">

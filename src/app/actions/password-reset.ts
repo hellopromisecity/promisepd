@@ -11,11 +11,13 @@
 
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendResetCodeSms } from "@/lib/sms";
+import { sendResetCodeSms, sendBulkSms } from "@/lib/sms";
 import { sendResetCodeEmail } from "@/lib/email";
 
 export type Channel = "phone" | "email";
-export type ResetResult = { ok: true; message: string } | { ok: false; error: string };
+/** need:"mobile" → the typed email is on no account; the UI asks for the
+ *  login mobile so a NEW email can be attached during this reset. */
+export type ResetResult = { ok: true; message: string } | { ok: false; error: string; need?: "mobile" };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PW = 6;
@@ -71,8 +73,48 @@ async function resolveProfile(admin: Admin, channel: Channel, identifier: string
   return null;
 }
 
+/** Account found by mobile, no email set yet → send the code to the TYPED
+ *  email; it's attached to the account only after the code confirms. An
+ *  account that already carries a different email is never overwritten. */
+async function requestEmailResetByMobile(admin: Admin, typedEmail: string, rawMobile: string): Promise<ResetResult> {
+  const email = typedEmail.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return { ok: false, error: "সঠিক ইমেইল দিন।" };
+  const mobile = canonMobile(rawMobile);
+  if (!mobile) return { ok: false, error: "সঠিক মোবাইল নম্বর দিন।" };
+  const { data: profs } = await admin.from("profiles").select("id, mobile, email").eq("mobile", mobile).limit(1);
+  const prof = (profs ?? [])[0] as { id: string; mobile: string | null; email: string | null } | undefined;
+  if (!prof?.id) return { ok: false, error: "এই মোবাইল নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি — নম্বরটি মিলিয়ে দেখুন, অথবা অফিসে (+৮৮০ ১৯১০-০৬৫১৩৬) যোগাযোগ করুন।" };
+
+  let existing = prof.email?.trim() || null;
+  if (!existing) {
+    const { data: accs } = await admin.from("investor_accounts").select("email").eq("profile_id", prof.id).not("email", "is", null).neq("email", "").limit(1);
+    existing = ((accs ?? [])[0] as { email?: string } | undefined)?.email?.trim() || null;
+  }
+  if (existing && existing.toLowerCase() !== email) {
+    // never overwrite an already-set email — the owner must type THAT one
+    return { ok: false, error: "আপনার ইমেইল মিলছে না — এই অ্যাকাউন্টে আগে থেকে যে ইমেইলটি সেট করা আছে, সেটিই দিন।" };
+  }
+
+  const { data: got } = await admin.auth.admin.getUserById(prof.id);
+  const meta = (got?.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const lastSent = typeof meta.reset_sent === "number" ? (meta.reset_sent as number) : 0;
+  if (Date.now() - lastSent < RESEND_COOLDOWN_MS) {
+    return { ok: true, message: "কোড পাঠানো হয়েছে। আবার চাইলে এক মিনিট পরে চেষ্টা করুন।" };
+  }
+
+  const code = sixDigit();
+  const { sent } = await sendResetCodeEmail(email, code);
+  if (!sent) {
+    return { ok: false, error: "ইমেইল সিস্টেম এই মুহূর্তে চালু হচ্ছে — কিছুক্ষণ পরে আবার চেষ্টা করুন, অথবা অফিসে (+৮৮০ ১৯১০-০৬৫১৩৬) যোগাযোগ করুন।" };
+  }
+  await admin.auth.admin.updateUserById(prof.id, {
+    user_metadata: { ...meta, reset_code: sha(code), reset_exp: Date.now() + CODE_TTL_MS, reset_ch: "email", reset_tries: 0, reset_sent: Date.now(), reset_new_email: email },
+  });
+  return { ok: true, message: "আপনার ইমেইলে একটি ৬-সংখ্যার কোড পাঠানো হয়েছে — কোডটি দিলেই ইমেইলটি অ্যাকাউন্টে যুক্ত হয়ে যাবে।" };
+}
+
 /** Step 1 — send a reset code over the chosen channel. */
-export async function requestPasswordReset(input: { channel: Channel; identifier: string }): Promise<ResetResult> {
+export async function requestPasswordReset(input: { channel: Channel; identifier: string; mobile?: string }): Promise<ResetResult> {
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "সার্ভিস এখন সচল নেই। একটু পরে চেষ্টা করুন।" };
   const channel: Channel = input.channel === "email" ? "email" : "phone";
@@ -80,14 +122,17 @@ export async function requestPasswordReset(input: { channel: Channel; identifier
   if (!identifier) return { ok: false, error: channel === "email" ? "ইমেইল দিন।" : "মোবাইল নম্বর দিন।" };
 
   const prof = await resolveProfile(admin, channel, identifier);
-  // Never leak whether the account exists.
   if (!prof) {
-    return {
-      ok: true,
-      message: channel === "email"
-        ? "যদি এই ইমেইলে অ্যাকাউন্ট থাকে, একটি কোড পাঠানো হয়েছে।"
-        : "যদি এই নম্বরে অ্যাকাউন্ট থাকে, একটি কোড পাঠানো হয়েছে।",
-    };
+    // email on no account: with a mobile we can attach it during this reset;
+    // without one, ask the UI to collect it
+    if (channel === "email" && input.mobile?.trim()) {
+      return requestEmailResetByMobile(admin, identifier, input.mobile.trim());
+    }
+    if (channel === "email") {
+      return { ok: false, need: "mobile", error: "এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি — নিচে আপনার লগইন মোবাইল নম্বরটি দিন, কোড কনফার্ম করলেই এই ইমেইল অ্যাকাউন্টে যুক্ত হয়ে যাবে।" };
+    }
+    // phone channel: never leak whether the account exists
+    return { ok: true, message: "যদি এই নম্বরে অ্যাকাউন্ট থাকে, একটি কোড পাঠানো হয়েছে।" };
   }
 
   const { data: got } = await admin.auth.admin.getUserById(prof.id);
@@ -126,6 +171,7 @@ export async function confirmPasswordReset(input: {
   identifier: string;
   code: string;
   newPassword: string;
+  mobile?: string;
 }): Promise<ResetResult> {
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "সার্ভিস এখন সচল নেই।" };
@@ -136,7 +182,16 @@ export async function confirmPasswordReset(input: {
     return { ok: false, error: `পাসওয়ার্ড কমপক্ষে ${MIN_PW} অক্ষরের হতে হবে।` };
   }
 
-  const prof = await resolveProfile(admin, channel, input.identifier);
+  let prof = await resolveProfile(admin, channel, input.identifier);
+  if (!prof && channel === "email" && input.mobile?.trim()) {
+    // the new-email path: the account is identified by its login mobile
+    const m = canonMobile(input.mobile.trim());
+    if (m) {
+      const { data: profs } = await admin.from("profiles").select("id, mobile, email").eq("mobile", m).limit(1);
+      const p = (profs ?? [])[0] as { id: string; mobile: string | null; email: string | null } | undefined;
+      if (p?.id) prof = { id: p.id, mobile: p.mobile ?? null, email: p.email ?? null };
+    }
+  }
   if (!prof) return { ok: false, error: "কোড বা তথ্য সঠিক নয়।" };
 
   const { data: got } = await admin.auth.admin.getUserById(prof.id);
@@ -153,11 +208,28 @@ export async function confirmPasswordReset(input: {
     return { ok: false, error: "কোড সঠিক নয়।" };
   }
 
+  const pendingEmail = typeof meta.reset_new_email === "string" ? (meta.reset_new_email as string) : null;
   const { error } = await admin.auth.admin.updateUserById(prof.id, {
     password: input.newPassword,
-    user_metadata: { ...meta, reset_code: null, reset_exp: null, reset_ch: null, reset_tries: null, reset_sent: null, legacy_pw: null },
+    user_metadata: { ...meta, reset_code: null, reset_exp: null, reset_ch: null, reset_tries: null, reset_sent: null, reset_new_email: null, legacy_pw: null, ...(pendingEmail ? { email: pendingEmail } : {}) },
   });
   if (error) return { ok: false, error: "পাসওয়ার্ড পরিবর্তন করা যায়নি — আবার চেষ্টা করুন।" };
+
+  // The code confirmed ownership of the new inbox → NOW attach it to the
+  // account (profile + any of their investor accounts without an email), and
+  // text the login mobile so the real owner hears about it. Best-effort.
+  if (pendingEmail) {
+    try {
+      if (!prof.email) await admin.from("profiles").update({ email: pendingEmail }).eq("id", prof.id);
+      const { data: accs } = await admin.from("investor_accounts").select("uid, email").eq("profile_id", prof.id);
+      for (const a of (accs ?? []) as { uid: string; email: string | null }[]) {
+        if (!(a.email ?? "").trim()) await admin.from("investor_accounts").update({ email: pendingEmail }).eq("uid", a.uid);
+      }
+      if (prof.mobile) {
+        await sendBulkSms("+" + prof.mobile, `PromisePD: আপনার অ্যাকাউন্টে ইমেইল (${pendingEmail}) যুক্ত হয়েছে এবং পাসওয়ার্ড পরিবর্তন হয়েছে। আপনি না করে থাকলে দ্রুত অফিসে যোগাযোগ করুন: +8801910065136`, "security");
+      }
+    } catch { /* the reset itself already succeeded */ }
+  }
 
   return { ok: true, message: "পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে। এখন নতুন পাসওয়ার্ড দিয়ে লগইন করুন।" };
 }

@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.5",
+    date: "2026-08-16",
+    title: "No email on the account? Add one right inside the reset",
+    changes: [
+      { kind: "new", text: "If the email typed at password reset isn't on any account, the form now asks for the member's LOGIN MOBILE NUMBER: the 6-digit code goes to the new email, and the moment it confirms, that email is attached to the account and the new password is set — one flow, no office visit. Works whether an email was set before or not." },
+      { kind: "improved", text: "Safety built in: an account that already carries a different email is never overwritten (the form shows it masked instead), the email only attaches AFTER the code proves inbox ownership, and the account's mobile gets an SMS notice that an email was added and the password changed — so the real owner always knows." },
+    ],
+  },
+  {
     version: "2.4.4",
     date: "2026-08-16",
     title: "Password reset by email — the phone step is gone",
