@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.2",
+    date: "2026-08-16",
+    title: "Archive pages you can actually flip through",
+    changes: [
+      { kind: "improved", text: "The Archive's lists got a per-page picker (10 / 25 / 50) and full numbered pagination — 1 2 3 … with prev/next, exactly like All Customers — plus a \"Showing X–Y of Z\" line, on every tab. Changing the sort or page size jumps back to page 1." },
+    ],
+  },
+  {
     version: "2.4.1",
     date: "2026-08-16",
     title: "One archive, one place",

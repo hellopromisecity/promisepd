@@ -31,13 +31,13 @@ const compact = (n: number) => {
 
 type Tab = "users" | "projects" | "transactions";
 type SortKey = "deleted" | "expiry" | "amount";
-const PER_PAGE = 25;
 
 export default function ArchiveExplorer({ data }: { data: ArchiveData }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("users");
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("deleted");
+  const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
   const [mounted, setMounted] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -83,9 +83,9 @@ export default function ArchiveExplorer({ data }: { data: ArchiveData }) {
   ), [data.txns, term, sortKey]);
 
   const list = tab === "users" ? users : tab === "projects" ? holdings : txns;
-  const pageCount = Math.max(1, Math.ceil(list.length / PER_PAGE));
+  const pageCount = Math.max(1, Math.ceil(list.length / perPage));
   const curPage = Math.min(page, pageCount);
-  const pageRows = list.slice((curPage - 1) * PER_PAGE, curPage * PER_PAGE);
+  const pageRows = list.slice((curPage - 1) * perPage, curPage * perPage);
 
   function switchTab(t: Tab) { setTab(t); setPage(1); }
 
@@ -215,10 +215,15 @@ export default function ArchiveExplorer({ data }: { data: ArchiveData }) {
           <Search className="h-4 w-4 text-fg-faint" />
           <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search name, mobile, file, project…" className="w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-faint" />
         </div>
-        <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="rounded-xl border border-border bg-bg px-3 py-2 text-sm font-medium text-fg">
+        <select value={sortKey} onChange={(e) => { setSortKey(e.target.value as SortKey); setPage(1); }} className="rounded-xl border border-border bg-bg px-3 py-2 text-sm font-medium text-fg">
           <option value="deleted">Newest deleted first</option>
           <option value="expiry">Expiring soonest first</option>
           <option value="amount">Biggest amount first</option>
+        </select>
+        <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className="rounded-xl border border-border bg-bg px-3 py-2 text-sm font-medium text-fg">
+          <option value={10}>10 / page</option>
+          <option value={25}>25 / page</option>
+          <option value={50}>50 / page</option>
         </select>
         <span className="text-sm tabular-nums text-fg-muted">{list.length} item{list.length !== 1 ? "s" : ""}</span>
       </div>
@@ -276,13 +281,18 @@ export default function ArchiveExplorer({ data }: { data: ArchiveData }) {
           </ul>
         )}
 
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-fg-muted">
-            <span className="tabular-nums">Showing {(curPage - 1) * PER_PAGE + 1}–{Math.min(curPage * PER_PAGE, list.length)} of {list.length}</span>
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1} className="grid h-8 w-8 place-items-center rounded-lg border border-border disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
-              <span className="grid h-8 min-w-8 place-items-center rounded-lg bg-brand-blue px-2 text-sm font-bold text-white">{curPage}</span>
-              <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={curPage >= pageCount} className="grid h-8 w-8 place-items-center rounded-lg border border-border disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+        {list.length > 0 && (tab !== "transactions" || data.txnsReady) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-sm">
+            <p className="tabular-nums text-fg-muted">Showing <b className="text-fg">{(curPage - 1) * perPage + 1}–{Math.min(curPage * perPage, list.length)}</b> of <b className="text-fg">{list.length}</b></p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+              {Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - curPage) <= 1).map((p, idx, arr) => (
+                <span key={p} className="flex items-center">
+                  {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-fg-faint">…</span>}
+                  <button onClick={() => setPage(p)} className={`grid h-8 min-w-8 place-items-center rounded-lg border px-2 text-sm font-semibold ${p === curPage ? "border-brand-blue bg-brand-blue text-white" : "border-border text-fg-muted hover:border-brand-blue/40 hover:text-brand-blue"}`}>{p}</button>
+                </span>
+              ))}
+              <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={curPage >= pageCount} className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
             </div>
           </div>
         )}
