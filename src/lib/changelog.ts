@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.9",
+    date: "2026-08-16",
+    title: "Tarek Ahmed's card, refreshed",
+    changes: [
+      { kind: "changed", text: "Tarek Ahmed's team-page card got his real photo (WebP pipeline: 1.5MB JPEG → 130KB) and an updated profile in Bengali and English — all-round support in the manager's daily operations, client communication and work coordination." },
+    ],
+  },
+  {
     version: "2.3.8",
     date: "2026-08-14",
     title: "Every book payment reaches the app — and refunds count",
