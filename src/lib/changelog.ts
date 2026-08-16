@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.10",
+    date: "2026-08-16",
+    title: "Delete a holding right from the customer popup",
+    changes: [
+      { kind: "new", text: "The All-Customers popup (view holdings) now has a delete button on every book holding — remove a duplicate or junk project row for one customer without leaving the page. Same behaviour as the project page's delete: the holding's payment ledger goes with it and any referral commission is reversed, after a clear confirmation. The customer's account and their other projects stay untouched." },
+    ],
+  },
+  {
     version: "2.3.9",
     date: "2026-08-16",
     title: "Tarek Ahmed's card, refreshed",

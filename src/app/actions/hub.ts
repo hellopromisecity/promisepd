@@ -401,6 +401,9 @@ export async function deleteHubCustomer(id: string, projectKey: string): Promise
     }
     await HC(admin).delete().eq("id", id); // cascades payments
     revalidatePath(`/dashboard/projects/${projectKey}`);
+    // the All-Customers popup deletes holdings too — keep that view fresh
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
     return { ok: true, message: "Customer deleted." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }

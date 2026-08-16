@@ -21,7 +21,9 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, restorePerson, purgePerson, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, restorePerson, purgePerson, deleteHubCustomer, type CustomerInput } from "@/app/actions/hub";
+import { confirmDialog } from "@/components/ui/Dialog";
+import { toast } from "@/components/ui/Toast";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -661,8 +663,28 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
 }
 
 function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => void }) {
+  const router = useRouter();
   const [txnH, setTxnH] = useState<PersonHolding | null>(null);
   const [linkH, setLinkH] = useState<PersonHolding | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Remove ONE holding (this person's book row in that project) — same action
+  // as the project page's trash: the row + its payment ledger go, any referral
+  // commission is reversed. The person's account and other holdings stay.
+  async function delHolding(h: PersonHolding) {
+    const ok = await confirmDialog({
+      title: "Delete holding",
+      message: `Remove ${person.name}'s “${h.project_name}” holding (paid ${fmt(h.paid)}) from the book? Its payment ledger goes with it and any referral commission is reversed. The customer's account and other projects stay.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    setDeletingId(h.id);
+    const r = await deleteHubCustomer(h.id, h.project_key);
+    setDeletingId(null);
+    if (r.ok) { toast(r.message || "Holding deleted.", "success"); onClose(); router.refresh(); }
+    else toast(r.error, "error");
+  }
   // Rebuild a minimal book customer so the shared Transaction / Link modals work
   // (they only need id + project + name; the id drives the payment ledger + link).
   const asHub = (h: PersonHolding): HubCustomer => ({
@@ -711,6 +733,9 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                         {!person.app && (
                           <button onClick={() => setLinkH(h)} title="Link to app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
                         )}
+                        <button onClick={() => delHolding(h)} disabled={deletingId === h.id} title="Delete this holding" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-red/40 hover:text-brand-red disabled:opacity-40">
+                          {deletingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
                       </>
                     )}
                   </div>
