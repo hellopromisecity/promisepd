@@ -75,8 +75,8 @@ export const TEAM_MEMBERS: TeamMember[] = [
   },
   {
     slug: "md-helal-uddin",
-    name: "মো. হেলাল উদ্দিন",
-    nameEn: "Md Helal Uddin",
+    name: "হাফেজ মাওলানা হেলাল উদ্দিন",
+    nameEn: "Hafej Maulana Helal Uddin",
     role: "Senior Officer",
     bio: "কোম্পানির সার্বিক কার্যক্রম দেখাশোনার দায়িত্বে — প্রতিটি বিভাগের কাজ ঠিকঠাকভাবে চলছে কি না, তা নিয়মিত তদারকি করেন। অভিজ্ঞ এই কর্মকর্তার নজরদারিতে অফিসের দৈনন্দিন কার্যক্রম থাকে সুশৃঙ্খল ও গতিশীল।",
     phone: "+8801602720690",
