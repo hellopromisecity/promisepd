@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ReceiptText,
   Archive,
+  HandCoins,
   BarChart3,
   Users,
   CalendarCheck,
@@ -51,6 +52,8 @@ export const ADMIN_NAV: NavEntry[] = [
   // (The legacy Investments group was removed from the sidebar 2026-07-29 at
   // the user's request; its routes stay alive for deep links.)
   { label: "Transactionify", href: "/dashboard/transactionify", icon: ReceiptText, min: "manager" },
+  // Profitify — the deposit schemes' profit-payout history (yearly + lifetime).
+  { label: "Profitify", href: "/dashboard/profitify", icon: HandCoins, min: "manager" },
   { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },
@@ -69,8 +72,8 @@ export const ADMIN_NAV: NavEntry[] = [
   { label: "SMS", href: "/dashboard/sms", icon: Send, min: "manager" },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, min: "manager" },
   { label: "Audit log", href: "/dashboard/insights/audit", icon: History, min: "manager" },
-  // Archive — the 30-day recycle bin: deleted users, holdings & transactions.
-  { label: "Archive", href: "/dashboard/archive", icon: Archive, min: "manager" },
+  // Archivify — the 30-day recycle bin: deleted users, holdings & transactions.
+  { label: "Archivify", href: "/dashboard/archive", icon: Archive, min: "manager" },
   { label: "Changelog", href: "/dashboard/changelog", icon: Rocket, min: "manager" },
 ];
 

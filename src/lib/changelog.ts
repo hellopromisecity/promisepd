@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.6",
+    date: "2026-08-16",
+    title: "Profitify — every taka of profit, year by year",
+    changes: [
+      { kind: "new", text: "A new Profitify section in the sidebar tells the company's whole profit-payout story: lifetime total across the 4 deposit schemes, a per-year tower chart, a lifetime mix donut, and a cycle card for each scheme — Special (every July), General A (every 2 years — paid 2026, next 2028), General B (2-yearly, next 2027) and Monthly (every 5 years) — each showing whether it paid THIS year, how much, its lifetime total and its next payout year." },
+      { kind: "new", text: "Full filtering underneath: pick a scheme, pick a year, search a member — see the year-by-year breakdown and every individual payment (booked entries plus the profit engine's computed member shares for the 16 July 2026 payouts of Special + General A, merged without double counting), with sorting and 10/25/50 pagination." },
+      { kind: "changed", text: "The Archive section is now called Archivify — same recycle bin, matching name." },
+    ],
+  },
+  {
     version: "2.4.5",
     date: "2026-08-16",
     title: "No email on the account? Add one right inside the reset",
