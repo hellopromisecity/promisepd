@@ -180,6 +180,9 @@ export type CustomerInput = {
   name: string; file_no?: string; mobile?: string; district?: string;
   reference?: string; reference_officer_id?: string | null; shares?: string;
   joining_date?: string; total_price?: number;
+  /** Last date to pay (installment deadline) — stored in bio.expiry_date;
+   *  future features (per-day/week/month dues) compute from it. */
+  expiry_date?: string;
   /** App-login extras (create only): the account is made alongside the customer. */
   email?: string; password?: string;
 };
@@ -196,7 +199,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
       file_no: input.file_no || null, name: input.name.trim(), mobile: input.mobile || null, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      bio: { shares: input.shares || null },
+      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -561,7 +564,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
       file_no: input.file_no || (acc.fid as string) || null, name: acc.full_name as string, mobile, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      investor_uid: uid, bio: { shares: input.shares || null },
+      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -582,7 +585,12 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     const { data } = await HC(admin).select("bio, commission_entry_id, mobile, investor_uid, name, project_name, total_price").eq("id", id).maybeSingle();
     const cur = rec(data);
     if (!cur) return { ok: false, error: "Customer not found." };
-    const bio = { ...(cur.bio as Record<string, unknown>), shares: input.shares || (cur.bio as Record<string, unknown>)?.shares || null };
+    const bio = {
+      ...(cur.bio as Record<string, unknown>),
+      shares: input.shares || (cur.bio as Record<string, unknown>)?.shares || null,
+      // the form always sends expiry_date — an empty value CLEARS it
+      expiry_date: "expiry_date" in input ? (input.expiry_date || null) : ((cur.bio as Record<string, unknown>)?.expiry_date ?? null),
+    };
     await HC(admin).update({
       name: input.name.trim(), file_no: input.file_no || null, mobile: input.mobile || null, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,

@@ -269,6 +269,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   const [shares, setShares] = useState(String((customer?.bio?.shares as string) ?? ""));
   const [price, setPrice] = useState(customer ? String(customer.total_price || "") : "");
   const [joining, setJoining] = useState(customer?.joining_date ?? "");
+  const [expiry, setExpiry] = useState(String((customer?.bio?.expiry_date as string) ?? ""));
   const [refId, setRefId] = useState<string | null>((customer as unknown as { reference_officer_id?: string })?.reference_officer_id ?? null);
   const [refName, setRefName] = useState(customer?.reference ?? "");
   const [email, setEmail] = useState("");
@@ -280,7 +281,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   function submit() {
     setErr(null);
     if (!name.trim()) { setErr("Name is required."); return; }
-    const input: CustomerInput = { name, file_no: file, mobile, district, shares, total_price: parseFloat(price) || 0, joining_date: joining, reference: refName, reference_officer_id: refId, email, password };
+    const input: CustomerInput = { name, file_no: file, mobile, district, shares, total_price: parseFloat(price) || 0, joining_date: joining, expiry_date: expiry, reference: refName, reference_officer_id: refId, email, password };
     start(async () => {
       const r = editing ? await updateHubCustomer(customer!.id, project.key, input) : await createHubCustomer(activeProj, input);
       if (r.ok) { toast(r.message || "Saved.", "success"); router.refresh(); onClose(); } else setErr(r.error);
@@ -306,6 +307,10 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
         <div className="grid grid-cols-2 gap-3">
           <div><label className={labelCls}>District</label><input className={inputCls} value={district} onChange={(e) => setDistrict(e.target.value)} /></div>
           <div><label className={labelCls}>Joining date</label><input type="date" className={inputCls} value={joining} onChange={(e) => setJoining(e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className={labelCls}>Last date to pay <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
+          <p className="flex items-end pb-1 text-[11px] leading-snug text-fg-faint">কিস্তি শেষ করার শেষ তারিখ — ভবিষ্যতে দৈনিক/মাসিক কত দিতে হবে, তা এখান থেকে হিসাব হবে।</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
@@ -585,6 +590,7 @@ export function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCu
     ["Address", [b("village"), b("post_office"), b("police_station"), customer.district].filter(Boolean).join(", ") || null],
     ["NID", customer.nid], ["Nominee", b("nominee_name") ? `${b("nominee_name")}${b("nominee_relationship") ? ` (${b("nominee_relationship")})` : ""}` : null],
     ["Nominee mobile", b("nominee_mobile")], ["Unit", [b("block") && `Block ${b("block")}`, b("plot") && `Plot ${b("plot")}`, b("flat") && `Flat ${b("flat")}`, b("flat_size")].filter(Boolean).join(" · ") || null], ["Shares", b("shares")],
+    ["Last date to pay", b("expiry_date") ? fmtDate(b("expiry_date")) : null],
   ];
   return (
     <Modal title={customer.name || "—"} subtitle={`${customer.project_name} · File ${customer.file_no ?? "—"}${customer.mobile ? ` · ${customer.mobile}` : ""}${customer.reference ? ` · ref ${customer.reference}` : ""}`} onClose={onClose} wide>

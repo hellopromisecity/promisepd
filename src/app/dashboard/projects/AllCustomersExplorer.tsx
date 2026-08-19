@@ -458,6 +458,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   const [file, setFile] = useState("");
   const [district, setDistrict] = useState("");
   const [joining, setJoining] = useState("");
+  const [expiry, setExpiry] = useState("");
   const [shares, setShares] = useState("");
   const [price, setPrice] = useState("");
   const [refId, setRefId] = useState<string | null>(null);
@@ -498,7 +499,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
     setErr(null); setMsg(null);
     if (!projKey) { setErr("Pick a project."); return; }
     const input: Omit<CustomerInput, "name" | "email" | "password"> = {
-      file_no: file, district, joining_date: joining, shares, total_price: parseFloat(price) || 0,
+      file_no: file, district, joining_date: joining, expiry_date: expiry, shares, total_price: parseFloat(price) || 0,
       reference: refName, reference_officer_id: refId,
     };
     start(async () => {
@@ -568,6 +569,10 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className={labelCls}>District</label><input className={inputCls} value={district} onChange={(e) => setDistrict(e.target.value)} /></div>
                   <div><label className={labelCls}>Total price ৳</label><input type="number" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={labelCls}>Last date to pay <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
+                  <p className="flex items-end pb-1 text-[11px] leading-snug text-fg-faint">কিস্তি শেষ করার শেষ তারিখ।</p>
                 </div>
                 <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
                 <div><label className={labelCls}>Reference (marketing officer)</label><ReferencePicker value={refId} valueName={refName} onPick={(id, n) => { setRefId(id); setRefName(n); }} /></div>

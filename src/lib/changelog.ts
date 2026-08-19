@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.8",
+    date: "2026-08-19",
+    title: "Last date to pay — the installment deadline on every file",
+    changes: [
+      { kind: "new", text: "Every customer form — Add customer, Edit customer and \"Add to a project\" — now carries a Last date to pay field beside the joining date, with the same calendar picker. It's the installment deadline for that file, shown in the customer's details popup, and it's the foundation for what's coming: per-day, per-week and per-month dues computed from remaining ÷ time left." },
+    ],
+  },
+  {
     version: "2.4.7",
     date: "2026-08-19",
     title: "Profitify counts from 2026 — and Analyticsify",
