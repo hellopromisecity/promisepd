@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.10",
+    date: "2026-08-19",
+    title: "Balance leads the customer popup",
+    changes: [
+      { kind: "changed", text: "The customer popup's stat cards now open with BALANCE (what the company actually holds after withdrawals) in the highlighted first spot, then Profit, then Total paid — the same balance-first reading order as everywhere else on the platform." },
+    ],
+  },
+  {
     version: "2.4.9",
     date: "2026-08-19",
     title: "Edit any holding right from the customer popup",

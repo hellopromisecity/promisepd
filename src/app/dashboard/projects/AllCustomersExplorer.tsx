@@ -642,9 +642,10 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
           </div>
           <div className="px-5 py-4">
             <div className="grid grid-cols-3 gap-2">
-              <Stat label="Total paid" value={fmt(person.totalPaid)} tone="blue" />
+              {/* Balance leads — what the company actually holds is the point */}
+              <Stat label="Balance" value={fmt(person.totalBalance)} tone="blue" />
               <Stat label="Profit" value={fmt(person.totalProfit)} tone="green" />
-              <Stat label="Balance" value={fmt(person.totalBalance)} />
+              <Stat label="Total paid" value={fmt(person.totalPaid)} />
             </div>
             <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-fg-muted">Holdings · {person.holdings.length} project{person.holdings.length > 1 ? "s" : ""}</div>
             <div className="space-y-1.5">
