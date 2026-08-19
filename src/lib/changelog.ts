@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.7",
+    date: "2026-08-19",
+    title: "Profitify counts from 2026 — and Analyticsify",
+    changes: [
+      { kind: "changed", text: "Profitify now counts from 2026 onward — the year this dashboard became the system of record. The old system's 2025 dividend entries no longer appear in the towers, totals or filters, so the lifetime figure is exactly what THIS platform has paid out." },
+      { kind: "changed", text: "The Analytics section is now Analyticsify — the -ify family is complete." },
+    ],
+  },
+  {
     version: "2.4.6",
     date: "2026-08-16",
     title: "Profitify — every taka of profit, year by year",

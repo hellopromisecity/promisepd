@@ -54,7 +54,7 @@ export const ADMIN_NAV: NavEntry[] = [
   { label: "Transactionify", href: "/dashboard/transactionify", icon: ReceiptText, min: "manager" },
   // Profitify — the deposit schemes' profit-payout history (yearly + lifetime).
   { label: "Profitify", href: "/dashboard/profitify", icon: HandCoins, min: "manager" },
-  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
+  { label: "Analyticsify", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },
   // Finance / Income / Expenses removed from the sidebar 2026-07-29 (user's

@@ -11,7 +11,7 @@ import RangeSelect from "./RangeSelect";
 import DailyChart from "./DailyChart";
 
 export const metadata: Metadata = {
-  title: "Analytics",
+  title: "Analyticsify",
   robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   if (!analyticsConfigured()) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Analytics" subtitle="Google Analytics 4 & Search Console." />
+        <PageHeader title="Analyticsify" subtitle="Google Analytics 4 & Search Console." />
         <Card>
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-blue-tint text-brand-blue"><KeyRound className="h-5 w-5" /></span>
@@ -58,7 +58,7 @@ SEARCH_CONSOLE_SITE_URL=https://promisecity.vercel.app/`}</pre>
   if (!data) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Analytics" subtitle="Google Analytics 4 & Search Console." action={<RangeSelect value={range} />} />
+        <PageHeader title="Analyticsify" subtitle="Google Analytics 4 & Search Console." action={<RangeSelect value={range} />} />
         <EmptyState icon={XCircle} title="Couldn't load analytics" message="The service account is set but the API call failed — check the credentials, Property ID and that the account has access." />
       </div>
     );
@@ -67,7 +67,7 @@ SEARCH_CONSOLE_SITE_URL=https://promisecity.vercel.app/`}</pre>
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Analytics"
+        title="Analyticsify"
         subtitle="Live data from Google Analytics & Search Console."
         action={
           <div className="flex flex-wrap items-center gap-2">

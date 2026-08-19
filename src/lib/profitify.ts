@@ -52,6 +52,10 @@ export type ProfitifyData = {
 const r2 = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100;
 const bdDay = (iso: string) => new Date(new Date(iso).getTime() + 6 * 3600e3).toISOString().slice(0, 10);
 
+/** The new dashboard runs from 2026 — older (pre-platform) dividend entries
+ *  are the old system's history and stay OUT of Profitify (owner's call). */
+const START_YEAR = 2026;
+
 /** Payout rhythm per scheme (the business rule, from the owner):
  *  Special = every July · General A = every 2 years (2026 paid → 2028) ·
  *  General B = every 2 years, offset (next 2027) · Monthly = every 5 years. */
@@ -105,6 +109,7 @@ export async function loadProfitify(): Promise<ProfitifyData> {
     if (!c || !p.date) continue;
     const day = bdDay(p.date);
     const year = Number(day.slice(0, 4));
+    if (year < START_YEAR) continue; // pre-platform history stays out
     payments.push({ project_key: c.project_key, project_name: c.project_name, customer_name: c.name || "—", file_no: c.file_no ?? null, amount: r2(p.amount), date: day, year, source: "book" });
     const k = `${p.customer_id}·${year}`;
     bookedByCustYear.set(k, r2((bookedByCustYear.get(k) ?? 0) + r2(p.amount)));
