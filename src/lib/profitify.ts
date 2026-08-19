@@ -63,8 +63,11 @@ const CYCLES: Record<string, { years: number; text: string; fallbackNext: number
 };
 
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
+// NOTE: must stay a bound call — returning the bare `a.from` reference loses
+// `this` and Supabase blows up with "Cannot read properties of undefined
+// (reading 'rest')" at runtime.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const anyFrom = (a: Admin) => a.from as any;
+const anyFrom = (a: Admin) => (table: string): any => (a.from as any).call(a, table);
 
 async function pageAll<T>(q: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
   const out: T[] = [];
