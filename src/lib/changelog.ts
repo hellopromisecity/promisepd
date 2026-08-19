@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.9",
+    date: "2026-08-19",
+    title: "Edit any holding right from the customer popup",
+    changes: [
+      { kind: "new", text: "The View-holdings popup now has an Edit (pencil) button on every book holding — it opens the full edit form for THAT project's file (price, joining date, Last date to pay, shares, reference…), so the installment deadline can be set on every EXISTING file without hunting it down on its project page. The real book row is loaded first, so nothing gets overwritten blank." },
+    ],
+  },
+  {
     version: "2.4.8",
     date: "2026-08-19",
     title: "Last date to pay — the installment deadline on every file",

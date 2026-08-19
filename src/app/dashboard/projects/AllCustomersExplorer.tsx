@@ -21,7 +21,7 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, archiveHubHolding, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, type CustomerInput } from "@/app/actions/hub";
 import { toast } from "@/components/ui/Toast";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
@@ -595,6 +595,18 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [delTarget, setDelTarget] = useState<PersonHolding | null>(null);
   const [delErr, setDelErr] = useState<string | null>(null);
+  // full per-holding edit (fetches the REAL book row first — the popup's own
+  // stub lacks price/file/bio, saving it blind would wipe those fields)
+  const [editH, setEditH] = useState<HubCustomer | null>(null);
+  const [editLoading, setEditLoading] = useState<string | null>(null);
+
+  async function openEdit(h: PersonHolding) {
+    setEditLoading(h.id);
+    const d = await getHubCustomerDetail(h.id);
+    setEditLoading(null);
+    if (d?.customer) setEditH(d.customer);
+    else toast("Couldn't load this holding.", "error");
+  }
 
   // Remove ONE holding (this person's book row in that project) — it moves to
   // Archive → Projects for 30 days, restorable in one click. The person's
@@ -650,6 +662,9 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                     {h.source === "hub" && (
                       <>
                         <button onClick={() => setTxnH(h)} title="Transactions" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-emerald-300 hover:text-emerald-600"><CreditCard className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => openEdit(h)} disabled={editLoading === h.id} title="Edit this holding (price, dates, last date to pay…)" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-40">
+                          {editLoading === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+                        </button>
                         {/* Link only matters while the customer has no app account —
                             everyone linked already syncs to their PWA automatically */}
                         {!person.app && (
@@ -674,6 +689,7 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
       </div>
       {txnH && <TransactionModal customer={asHub(txnH)} project={hp(txnH)} onClose={() => setTxnH(null)} />}
       {linkH && <LinkModal customer={asHub(linkH)} onClose={() => setLinkH(null)} />}
+      {editH && <CustomerFormModal project={{ key: editH.project_key, name: editH.project_name, type: editH.project_type, sort: 0 }} customer={editH} onClose={() => setEditH(null)} />}
       {delTarget && (
         <TypeConfirm
           kind="delete"
