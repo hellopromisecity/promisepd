@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.0",
+    date: "2026-08-19",
+    title: "Leaderboard steps out of the menu",
+    changes: [
+      { kind: "changed", text: "The public লিডারবোর্ড link is removed from the site menu (and it was never in the footer) — the page itself stays fully live at /leaderboard for anyone who has the direct address." },
+    ],
+  },
+  {
     version: "2.4.10",
     date: "2026-08-19",
     title: "Balance leads the customer popup",

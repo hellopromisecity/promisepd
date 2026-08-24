@@ -791,7 +791,8 @@ export const NAV = [
   },
   { label: "গ্যালারি", href: "/gallery", id: "gallery", standalone: true },
   { label: "পার্টনার হোন", href: "/partner", id: "partner", standalone: true },
-  { label: "লিডারবোর্ড", href: "/leaderboard", id: "leaderboard", standalone: true },
+  // লিডারবোর্ড hidden from the menu 2026-08-19 (owner's call) — the /leaderboard
+  // route itself stays live for anyone who types the URL directly.
   { label: "টিম", href: "/team", id: "team", standalone: true },
   { label: "পেছনের গল্প", href: "/story", id: "story", standalone: true },
   { label: "ব্লগ", href: "/blog", id: "blog", standalone: true },
