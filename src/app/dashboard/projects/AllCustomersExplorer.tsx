@@ -52,6 +52,18 @@ export default function AllCustomersExplorer({
   const [mounted, setMounted] = useState(false);
   const [detail, setDetail] = useState<PersonRow | null>(null);
   const [adding, setAdding] = useState(false);
+  // a book-only row (no live app account) → Link picker on its first holding
+  const [linkBook, setLinkBook] = useState<PersonRow | null>(null);
+  const bookStub = (p: PersonRow): HubCustomer | null => {
+    const h = p.holdings.find((x) => x.source === "hub");
+    if (!h) return null;
+    return {
+      id: h.id, project_key: h.project_key, project_name: h.project_name, project_type: h.project_type,
+      file_no: h.file_no ?? null, name: h.holder_name || p.name, mobile: p.mobile, district: null, nid: null, reference: null,
+      joining_date: p.joined, total_price: 0, total_paid: h.paid, total_remaining: 0, dividend: 0,
+      withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: h.linked_uid ?? null, deleted_at: null, bio: {},
+    };
+  };
 
   useEffect(() => { const t = setTimeout(() => setMounted(true), 40); return () => clearTimeout(t); }, []);
   useEffect(() => { setPage(1); }, [q, status, projFilter, perPage]);
@@ -296,11 +308,20 @@ export default function AllCustomersExplorer({
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-end gap-1.5">
                         <button onClick={() => setDetail(p)} title="View holdings" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors hover:border-brand-blue/40 hover:text-brand-blue"><UserRound className="h-4 w-4" /></button>
-                        {isApp && p.app && (
+                        {isApp && p.app ? (
                           <>
                             <UserTxns user={p.app} types={investorTypes} projects={investorProjects} />
                             <CustomerEdit person={p} projects={hubProjects} />
                             <RowMenu person={p} />
+                          </>
+                        ) : (
+                          <>
+                            {/* book-only person (no live app account): edit the
+                                holdings from the popup, or link them to an account */}
+                            <button onClick={() => setDetail(p)} title="Edit holdings (open the popup — each file has its own edit / transactions)" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors hover:border-brand-blue/40 hover:text-brand-blue"><Pencil className="h-4 w-4" /></button>
+                            {p.holdings.some((h) => h.source === "hub") && (
+                              <button onClick={() => setLinkBook(p)} title="Link to an app account" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors hover:border-violet-300 hover:text-violet-600"><Link2 className="h-4 w-4" /></button>
+                            )}
                           </>
                         )}
                       </div>
@@ -328,6 +349,7 @@ export default function AllCustomersExplorer({
       </div>
 
       {detail && <PersonModal person={detail} onClose={() => setDetail(null)} />}
+      {linkBook && bookStub(linkBook) && <LinkModal customer={bookStub(linkBook)!} onClose={() => setLinkBook(null)} />}
       {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
     </div>
   );

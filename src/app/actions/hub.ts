@@ -268,9 +268,15 @@ async function purgePersonCore(admin: Admin, uid: string): Promise<Result> {
   if (!acc) return { ok: false, error: "Account not found." };
   if (!acc.deleted_at) return { ok: false, error: "Only archived customers can be deleted permanently — archive them first." };
 
-  // book side: payments, then the customer rows
-  const { data: hubRows } = await HC(admin).select("id").eq("investor_uid", uid);
-  const hubIds = ((hubRows ?? []) as { id: string }[]).map((h) => h.id);
+  // book side: payments, then the customer rows — but ONLY rows that are
+  // archived themselves. A LIVE row still pointing at this account (a customer
+  // re-added after the archive, or a holding restored on its own) is real
+  // ledger: it is unlinked and kept, never erased alongside the login.
+  const { data: hubRows } = await HC(admin).select("id, deleted_at").eq("investor_uid", uid);
+  const all = (hubRows ?? []) as { id: string; deleted_at: string | null }[];
+  const hubIds = all.filter((h) => h.deleted_at).map((h) => h.id);
+  const liveIds = all.filter((h) => !h.deleted_at).map((h) => h.id);
+  if (liveIds.length) await HC(admin).update({ investor_uid: null }).in("id", liveIds);
   if (hubIds.length) {
     await HP(admin).delete().in("customer_id", hubIds);
     await HC(admin).delete().in("id", hubIds);
@@ -293,7 +299,7 @@ async function purgePersonCore(admin: Admin, uid: string): Promise<Result> {
     } catch { /* best effort — an orphaned login is harmless */ }
   }
 
-  await logAudit({ action: "delete", entity: "investor_account", entityId: uid, detail: `PERMANENTLY deleted ${acc.full_name ?? uid} from the archive (${hubIds.length} book row(s))` });
+  await logAudit({ action: "delete", entity: "investor_account", entityId: uid, detail: `PERMANENTLY deleted ${acc.full_name ?? uid} from the archive (${hubIds.length} book row(s)${liveIds.length ? `; ${liveIds.length} live row(s) kept, unlinked` : ""})` });
   return { ok: true, message: "Deleted permanently." };
 }
 

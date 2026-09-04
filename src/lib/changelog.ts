@@ -31,6 +31,9 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       { kind: "improved", text: "Moving a holding from the customer popup now opens the account picker pre-filled with the name written on the book row (the relative's own name), not the account holder's — so the right account is usually the first hit." },
       { kind: "fixed", text: "After a move the customer popup closes instead of lingering with the old holdings list; reopen the person to see the fresh breakdown." },
+      { kind: "fixed", text: "A customer added back after being deleted (same mobile — Md. Amjad Hossain) was silently tied to the archived login, so All Customers showed a bare “Book” row with no edit or transaction actions. Adding or linking a customer whose number belongs to an archived account now revives that account instead, and Amjad's account is back." },
+      { kind: "fixed", text: "The archive's permanent delete now erases only the book rows that are archived with the person — a live row still pointing at that account is unlinked and kept, never wiped along with the login." },
+      { kind: "new", text: "Book-only rows in All Customers (no live app account) now get an Edit (opens the popup with per-file edit/transactions) and a Link-to-app-account action instead of view-only." },
     ],
   },
   {

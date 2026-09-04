@@ -169,7 +169,23 @@ export async function ensureInvestorForHub(
   opts?: { fid?: string | null; email?: string | null; password?: string | null },
 ): Promise<string | null> {
   const existing = await resolveInvestorUid(admin, hub);
-  if (existing) { if (!hub.investor_uid) await linkHubRow(admin, hub.id, existing); return existing; }
+  if (existing) {
+    // The mobile may belong to an ARCHIVED account (the person was deleted,
+    // then added back as a new customer — the Amjad Hossain case). A second
+    // login on the same number is impossible (phone + auth email are unique),
+    // so bring that account back instead of leaving the new row tied to a
+    // deleted login that All Customers can't show and the 30-day purge would
+    // have taken the row down with.
+    try {
+      const { data: accD } = await (admin.from as any)("investor_accounts").select("deleted_at").eq("uid", existing).maybeSingle();
+      if (accD?.deleted_at) {
+        await (admin.from as any)("investor_accounts").update({ deleted_at: null, is_active: true }).eq("uid", existing);
+        try { await admin.from("audit_logs").insert({ action: "restore", entity: "investor_account", entity_id: existing, detail: `Revived archived account ${existing} — its mobile was reused by a new/linked book customer${hub.name ? ` (${hub.name})` : ""}` } as any); } catch { /* audit is best-effort */ }
+      }
+    } catch { /* pre-0030 (no deleted_at column) — nothing to revive */ }
+    if (!hub.investor_uid) await linkHubRow(admin, hub.id, existing);
+    return existing;
+  }
 
   const name = (hub.name || "").trim();
   const mobile = canonMobile(hub.mobile);
