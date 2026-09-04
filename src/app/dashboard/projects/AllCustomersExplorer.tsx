@@ -623,7 +623,9 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
   // (they only need id + project + name; the id drives the payment ledger + link).
   const asHub = (h: PersonHolding): HubCustomer => ({
     id: h.id, project_key: h.project_key, project_name: h.project_name, project_type: h.project_type,
-    file_no: null, name: person.name, mobile: person.mobile, district: null, nid: null, reference: null,
+    // the BOOK name (a folded relative's row carries their own name, which is
+    // what the Move picker should search for), else the account holder's
+    file_no: h.file_no ?? null, name: h.holder_name || person.name, mobile: person.mobile, district: null, nid: null, reference: null,
     joining_date: person.joined, total_price: 0, total_paid: h.paid, total_remaining: 0, dividend: 0,
     withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: h.linked_uid ?? null, deleted_at: null, bio: {},
   });
@@ -699,7 +701,8 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
         </div>
       </div>
       {txnH && <TransactionModal customer={asHub(txnH)} project={hp(txnH)} onClose={() => setTxnH(null)} />}
-      {linkH && <LinkModal customer={asHub(linkH)} onClose={() => setLinkH(null)} />}
+      {/* a move changes this person's holdings — close the (now stale) popup */}
+      {linkH && <LinkModal customer={asHub(linkH)} onClose={() => setLinkH(null)} onLinked={onClose} />}
       {editH && <CustomerFormModal project={{ key: editH.project_key, name: editH.project_name, type: editH.project_type, sort: 0 }} customer={editH} onClose={() => setEditH(null)} />}
       {delTarget && (
         <TypeConfirm

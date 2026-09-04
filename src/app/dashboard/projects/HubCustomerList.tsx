@@ -481,7 +481,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   );
 }
 
-export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClose: () => void }) {
+export function LinkModal({ customer, onClose, onLinked }: { customer: HubCustomer; onClose: () => void; onLinked?: () => void }) {
   const router = useRouter();
   const [q, setQ] = useState(customer.name || "");
   const [hits, setHits] = useState<InvestorHit[] | null>(null);
@@ -497,7 +497,7 @@ export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClos
       if (!ok) return;
       start(async () => {
         const r = await linkHubToInvestor(customer.id, uid);
-        if (r.ok) { toast(r.message || "Linked.", "success"); router.refresh(); onClose(); } else toast(r.error, "error");
+        if (r.ok) { toast(r.message || "Linked.", "success"); router.refresh(); onClose(); onLinked?.(); } else toast(r.error, "error");
       });
     })();
   }

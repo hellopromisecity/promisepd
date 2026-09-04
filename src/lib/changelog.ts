@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.2",
+    date: "2026-09-04",
+    title: "Move picker searches the book name",
+    changes: [
+      { kind: "improved", text: "Moving a holding from the customer popup now opens the account picker pre-filled with the name written on the book row (the relative's own name), not the account holder's — so the right account is usually the first hit." },
+      { kind: "fixed", text: "After a move the customer popup closes instead of lingering with the old holdings list; reopen the person to see the fresh breakdown." },
+    ],
+  },
+  {
     version: "2.5.1",
     date: "2026-09-04",
     title: "Every holding under its rightful owner",
