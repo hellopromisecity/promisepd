@@ -6,7 +6,7 @@ import { getAdmin, logAudit } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
-import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile } from "@/lib/investor-write";
+import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile, syncBookFromAppTxn } from "@/lib/investor-write";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
@@ -542,6 +542,50 @@ export async function loadArchiveData(): Promise<ArchiveData> {
 
     return { users, holdings, txns, txnsReady };
   } catch { return empty; }
+}
+
+/** Turn an APP-ONLY holding into a real book file. Money entered straight in
+ *  the app (Transactionify / App Users) before the app→book sync existed has
+ *  no book row, so All Customers shows it with an “app” badge and no edit /
+ *  transactions / delete. This replays every app transaction of that project
+ *  through the same reverse-mirror the app editor uses today: one book row
+ *  (linked to the account, file = the account's File ID) + one payment per
+ *  transaction, paired by mirror_tx so nothing is ever double-counted. */
+export async function bookAppHolding(uid: string, appProjectId: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!uid || !appProjectId) return { ok: false, error: "Missing account or project." };
+    const [{ data: txnsD }, { data: typesD }] = await Promise.all([
+      admin.from("investor_transactions").select("transaction_id, type, amount, date, rashid_number, description").eq("uid", uid).eq("project_id", appProjectId).order("date", { ascending: true }),
+      admin.from("investment_types").select("name, operator"),
+    ]);
+    const op = new Map(((typesD ?? []) as { name: string; operator: string }[]).map((t) => [t.name, t.operator]));
+    const txns = (txnsD ?? []) as Record<string, unknown>[];
+    if (!txns.length) return { ok: false, error: "No app transactions found in this project." };
+    // stored dates are UTC timestamps — "…T18:00:00+00:00" IS the next day in
+    // Bangladesh, which is the day the office wrote in the ledger
+    const bdDay = (d: unknown) => { const s = String(d ?? ""); if (!s.includes("T")) return s.slice(0, 10); const t = Date.parse(s); return Number.isFinite(t) ? new Date(t + 6 * 3600 * 1000).toISOString().slice(0, 10) : s.slice(0, 10); };
+    for (const t of txns) {
+      await syncBookFromAppTxn(admin, {
+        transaction_id: String(t.transaction_id), uid, project_id: appProjectId, type: String(t.type ?? ""),
+        operator: op.get(String(t.type ?? "")) ?? "+", amount: Number(t.amount) || 0, date: bdDay(t.date),
+        rashid_number: (t.rashid_number as string) ?? null, description: (t.description as string) ?? null,
+      }, "create");
+    }
+    const ids = txns.map((t) => String(t.transaction_id));
+    const { data: paired } = await HP(admin).select("customer_id").in("mirror_tx", ids);
+    const rows = (paired ?? []) as { customer_id: string }[];
+    if (!rows.length) return { ok: false, error: "Couldn't match this app project to a book project — check that the project names line up." };
+    const cid = rows[0].customer_id;
+    const { data: cD } = await HC(admin).select("project_key, project_name, name, file_no").eq("id", cid).maybeSingle();
+    const c = rec(cD);
+    await logAudit({ action: "create", entity: "hub_customer", entityId: cid, detail: `Book file created from app money: ${c?.name ?? uid} · ${c?.project_name ?? appProjectId} · ${rows.length} of ${ids.length} transaction(s) paired` });
+    if (c?.project_key) revalidatePath(`/dashboard/projects/${c.project_key}`);
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    return { ok: true, message: `Book file ready${c?.file_no ? ` (File ${c.file_no})` : ""} — ${rows.length} transaction${rows.length !== 1 ? "s" : ""} now in the ${c?.project_name ?? "book"} ledger.` };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
 /** Put an EXISTING app user into a project — creates their book row (linked to

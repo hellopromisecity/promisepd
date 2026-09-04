@@ -21,7 +21,8 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, bookAppHolding, type CustomerInput } from "@/app/actions/hub";
+import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 
 const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
@@ -621,6 +622,23 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
   // stub lacks price/file/bio, saving it blind would wipe those fields)
   const [editH, setEditH] = useState<HubCustomer | null>(null);
   const [editLoading, setEditLoading] = useState<string | null>(null);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+
+  // App-only money → a real book file (then edit / transactions / delete work)
+  async function bookApp(h: PersonHolding) {
+    if (!person.uid || !h.app_project_id) return;
+    const ok = await confirmDialog({
+      title: "Create book file",
+      message: `${person.name}'s ${h.project_name} money (paid ${fmt(h.paid)}) was entered in the app only, so it has no book file. Create one now? Every app transaction of this project becomes a book payment (paired 1:1, nothing double-counted), and the holding gets edit / transactions / delete like the others.`,
+      confirmText: "Create file",
+    });
+    if (!ok) return;
+    setBookingId(h.id);
+    const r = await bookAppHolding(person.uid, h.app_project_id);
+    setBookingId(null);
+    if (r.ok) { toast(r.message || "Book file created.", "success"); onClose(); router.refresh(); }
+    else toast(r.error, "error");
+  }
 
   async function openEdit(h: PersonHolding) {
     setEditLoading(h.id);
@@ -696,6 +714,11 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="font-bold tabular-nums text-fg">{fmt(h.balance)}</span>
+                    {h.source === "app" && h.app_project_id && person.uid && (
+                      <button onClick={() => bookApp(h)} disabled={bookingId === h.id} title="Create the book file for this app-only money — then edit / transactions / delete work here" className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-500/10 disabled:opacity-40">
+                        {bookingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />} Create book file
+                      </button>
+                    )}
                     {h.source === "hub" && (
                       <>
                         <button onClick={() => setTxnH(h)} title="Transactions" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-emerald-300 hover:text-emerald-600"><CreditCard className="h-3.5 w-3.5" /></button>

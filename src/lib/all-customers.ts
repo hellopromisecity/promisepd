@@ -26,6 +26,9 @@ export type PersonHolding = {
    *  DIFFERENT account than the one it is linked to — a migration-era
    *  family-share fold that most likely put the row under the wrong person. */
   number_owner?: { uid: string; name: string } | null;
+  /** source "app" only: the investment_projects id the money sits under — what
+   *  "Create book file" needs to turn this into a real book row. */
+  app_project_id?: string | null;
   paid: number;
   profit: number;
   balance: number;
@@ -218,7 +221,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       if (t.invested <= 0 && t.profit <= 0 && t.withdrawn <= 0) continue;
       const hp = appProjToHub.get(appProjId);
       if (!hp || covered.has(hp.key)) continue;
-      holdings.push({ id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type, source: "app", paid: t.invested, profit: t.profit, balance: t.balance });
+      holdings.push({ id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type, source: "app", app_project_id: appProjId, paid: t.invested, profit: t.profit, balance: t.balance });
     }
 
     // display mobile: the account's number, unless it's a book:<uid> placeholder
