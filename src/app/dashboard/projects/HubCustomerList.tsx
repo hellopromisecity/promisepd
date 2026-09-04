@@ -163,11 +163,9 @@ export default function HubCustomerList({ customers, project, projects, profits 
                     <button onClick={() => setEdit(c)} title="Edit" className={`${iconBtn} hover:border-brand-blue/40 hover:text-brand-blue`}><Pencil className="h-4 w-4" /></button>
                     <DeleteBtn customer={c} project={custProj(c)} className={iconBtn} />
                     <button onClick={() => setTxn(c)} title="Transactions" className={`${iconBtn} hover:border-emerald-300 hover:text-emerald-600`}><CreditCard className="h-4 w-4" /></button>
-                    {/* Linked customers already sync to their PWA automatically —
-                        the Link action only appears while a row has no app account */}
-                    {!c.investor_uid && (
-                      <button onClick={() => setLinking(c)} title="Link to app account (sync to their PWA)" className={`${iconBtn} hover:border-violet-300 hover:text-violet-600`}><Link2 className="h-4 w-4" /></button>
-                    )}
+                    {/* Link an account-less row, or MOVE a linked one to the right
+                        account (migration-era rows folded under a relative) */}
+                    <button onClick={() => setLinking(c)} title={c.investor_uid ? `Linked to app ${c.investor_uid} — move to another account` : "Link to app account (sync to their PWA)"} className={`${iconBtn} hover:border-violet-300 hover:text-violet-600`}><Link2 className="h-4 w-4" /></button>
                   </div>
                 </td>
               </tr>
@@ -492,7 +490,10 @@ export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClos
 
   function pick(uid: string, name: string) {
     (async () => {
-      const ok = await confirmDialog({ title: "Link to app account", message: `Link “${customer.name}” to app account ${name}? Their book payments in ${customer.project_name} will sync into that account, so their PWA shows them.`, confirmText: "Link" });
+      const moving = !!customer.investor_uid;
+      const ok = await confirmDialog(moving
+        ? { title: "Move to another app account", message: `Move “${customer.name}”'s ${customer.project_name} holding from app ${customer.investor_uid} to ${name} (${uid})? Its mirrored transactions move across too — the old account stops showing this money, and ${name}'s PWA starts showing it.`, confirmText: "Move" }
+        : { title: "Link to app account", message: `Link “${customer.name}” to app account ${name}? Their book payments in ${customer.project_name} will sync into that account, so their PWA shows them.`, confirmText: "Link" });
       if (!ok) return;
       start(async () => {
         const r = await linkHubToInvestor(customer.id, uid);
@@ -502,8 +503,10 @@ export function LinkModal({ customer, onClose }: { customer: HubCustomer; onClos
   }
 
   return (
-    <Modal title="Link to app account" subtitle={`${customer.name} · ${customer.project_name}`} onClose={onClose}>
-      <p className="mb-2 text-xs text-fg-muted">Connect this book customer to their app / investor account. Their payments then mirror into that account and show in their PWA — for people whose book & app numbers differ.</p>
+    <Modal title={customer.investor_uid ? "Move to another app account" : "Link to app account"} subtitle={`${customer.name} · ${customer.project_name}${customer.investor_uid ? ` · now linked to ${customer.investor_uid}` : ""}`} onClose={onClose}>
+      <p className="mb-2 text-xs text-fg-muted">{customer.investor_uid
+        ? "Pick the account this holding really belongs to. Its transactions move across with it, so the old account stops showing money that was never theirs."
+        : "Connect this book customer to their app / investor account. Their payments then mirror into that account and show in their PWA — for people whose book & app numbers differ."}</p>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search app users by name / UID / FID / mobile…" className={inputCls} />
       <div className="mt-3 max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
         {hits === null ? (

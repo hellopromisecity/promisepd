@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.1",
+    date: "2026-09-04",
+    title: "Every holding under its rightful owner",
+    changes: [
+      { kind: "fixed", text: "All Customers could show one person's deposit under a relative's row — the migration's family-share rule had folded a few book files under the wrong app account (Nadia Binte Amin's General Deposit A sat under her husband's login, so her own row showed only General Deposit B + Fuzala Tower while the project page listed her fine). Such files can now be moved to the right account in one click." },
+      { kind: "new", text: "Move a holding: the Link button on every book row (project page + the customer popup) now also works for already-linked rows — pick the correct app account and the file, together with its mirrored transactions, moves across; both accounts' balances are re-totalled and the audit log records the move." },
+      { kind: "new", text: "The customer popup now shows each file's number, the name written on the book row when it differs from the account holder's, and an amber warning when a file's mobile number actually belongs to another app account — with a one-click “move it there” offer, so the remaining folded families can be sorted out case by case." },
+    ],
+  },
+  {
     version: "2.5.0",
     date: "2026-08-19",
     title: "Leaderboard steps out of the menu",

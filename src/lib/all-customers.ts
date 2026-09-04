@@ -17,6 +17,15 @@ export type PersonHolding = {
   /** The book row's file number — searchable even when the app account
    *  carries a different (or no) File ID. */
   file_no?: string | null;
+  /** The name written on the book row — surfaced when it differs from the
+   *  account holder's, which is how a wrongly-folded relative's row shows up. */
+  holder_name?: string | null;
+  /** The app account this book row is linked to (null = not linked yet). */
+  linked_uid?: string | null;
+  /** The account that actually owns this row's mobile number, when that is a
+   *  DIFFERENT account than the one it is linked to — a migration-era
+   *  family-share fold that most likely put the row under the wrong person. */
+  number_owner?: { uid: string; name: string } | null;
   paid: number;
   profit: number;
   balance: number;
@@ -77,6 +86,9 @@ export type AllCustomersData = {
 };
 
 const normName = (s: string | null | undefined) => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
+/** Last 10 digits of the FIRST number in a book mobile field ("01704… 01628…"
+ *  holds several) — the same token the migration keyed accounts on. */
+const firstMobileKey = (m: string | null | undefined) => { const t = (m || "").match(/\d{10,}/); return t ? t[0].slice(-10) : ""; };
 const normProj = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
 
 /** App project names → the book project they belong to, so the filter shows the
@@ -168,6 +180,10 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
 
   // book rows by their linked account; the rest stay book-only rows
   const accountUids = new Set(investors.map((i) => i.uid));
+  // who really owns each mobile number — flags rows folded under a relative
+  const ownerByPhone = new Map<string, { uid: string; name: string }>();
+  for (const i of investors) { const k = firstMobileKey(i.phone_number); if (k && !ownerByPhone.has(k)) ownerByPhone.set(k, { uid: i.uid, name: i.full_name || i.uid }); }
+  const numberOwner = (c: HubCustomer) => { const o = ownerByPhone.get(firstMobileKey(c.mobile)); return o && o.uid !== c.investor_uid ? o : null; };
   const rowsByUid = new Map<string, HubCustomer[]>();
   const unlinked: HubCustomer[] = [];
   for (const c of customers) {
@@ -194,7 +210,8 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     const covered = new Set(bookRows.map((r) => r.project_key));
     const holdings: PersonHolding[] = bookRows.map((r) => ({
       id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type,
-      source: "hub" as const, file_no: r.file_no ?? null, paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r),
+      source: "hub" as const, file_no: r.file_no ?? null, holder_name: r.name ?? null, linked_uid: r.investor_uid ?? null, number_owner: numberOwner(r),
+      paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r),
     }));
     // app-only money (projects with no book row) — the book ledger wins where both exist
     for (const [appProjId, t] of investorProjectTotals(userTxns)) {
@@ -242,7 +259,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     p.totalProfit += hubAcc(r);
     p.totalBalance += hubBalance(r) + hubAcc(r);
     if (!p.projectKeys.includes(r.project_key)) { p.projectKeys.push(r.project_key); p.projectNames.push(r.project_name); }
-    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", file_no: r.file_no ?? null, paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
+    p.holdings.push({ id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type, source: "hub", file_no: r.file_no ?? null, holder_name: r.name ?? null, linked_uid: r.investor_uid ?? null, number_owner: numberOwner(r), paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r) });
     if (!p.fid && r.file_no) p.fid = r.file_no;
   }
   people.push(...byName.values());

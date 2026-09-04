@@ -841,23 +841,63 @@ export async function searchInvestors(query: string): Promise<InvestorHit[]> {
   return ((data ?? []) as Record<string, unknown>[]).map((a) => ({ uid: a.uid as string, full_name: (a.full_name as string) ?? "", fid: (a.fid as string) ?? null, mobile: (a.phone_number as string) ?? null }));
 }
 
-/** Link a book customer to an app account, then backfill their past book
- *  payments into it so their PWA shows everything immediately. */
+/** Link a book customer to an app account — or MOVE an already-linked row to
+ *  the right one. Migration-era family-share folding put some people's book
+ *  rows under a relative's account (Nadia's General Deposit A sat under her
+ *  husband's login, so All Customers showed it as HIS holding while her own
+ *  row lacked it). Moving carries the row's mirrored app transactions across
+ *  (via the mirror_tx hard link) and recomputes BOTH balances, so the old
+ *  account stops showing money that was never theirs. A first-time link then
+ *  backfills any past book payments the account doesn't have yet. */
 export async function linkHubToInvestor(hubCustomerId: string, uid: string): Promise<Result> {
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!hubCustomerId || !uid) return { ok: false, error: "Missing link." };
-    const { data: c } = await HC(admin).select("project_key, project_name").eq("id", hubCustomerId).maybeSingle();
+    const { data: c } = await HC(admin).select("project_key, project_name, name, investor_uid").eq("id", hubCustomerId).maybeSingle();
     const cust = rec(c);
     if (!cust) return { ok: false, error: "Customer not found." };
-    const { data: inv } = await admin.from("investor_accounts").select("full_name").eq("uid", uid).maybeSingle();
-    if (!inv) return { ok: false, error: "That app account no longer exists." };
+    const oldUid = (cust.investor_uid as string | null) ?? null;
+    if (oldUid === uid) return { ok: true, message: "Already linked to that account." };
+    const { data: inv } = await IA(admin).select("full_name, deleted_at").eq("uid", uid).maybeSingle();
+    const acc = rec(inv);
+    if (!acc || acc.deleted_at) return { ok: false, error: "That app account no longer exists." };
+    const accName = (acc.full_name as string) || uid;
+    // one book row per account per project — a second would double their ledger
+    const { data: sibs } = await HC(admin).select("id, deleted_at").eq("project_key", cust.project_key).eq("investor_uid", uid);
+    if (((sibs ?? []) as { id: string; deleted_at: string | null }[]).some((s) => s.id !== hubCustomerId && !s.deleted_at)) {
+      return { ok: false, error: `${accName} already has a ${cust.project_name} holding — merge the two ledgers first.` };
+    }
+
     await HC(admin).update({ investor_uid: uid }).eq("id", hubCustomerId);
+
+    // moving (not a first link): this row's mirrored transactions belong to the
+    // new account now — carry them across, then re-total the account they left
+    let moved = 0;
+    if (oldUid) {
+      const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", hubCustomerId).not("mirror_tx", "is", null);
+      const mids = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
+      if (mids.length) {
+        const { error } = await admin.from("investor_transactions").update({ uid } as never).in("transaction_id", mids);
+        if (!error) moved = mids.length;
+      }
+      await recomputeInvestorBalance(admin, oldUid);
+    }
     const added = await backfillHubToInvestor(admin, hubCustomerId, uid, cust.project_name as string);
-    await logAudit({ action: "link", entity: "hub_customer", entityId: hubCustomerId, detail: `Linked to app ${uid}; backfilled ${added} txn(s)` });
+    await recomputeInvestorBalance(admin, uid);
+
+    await logAudit({
+      action: "link", entity: "hub_customer", entityId: hubCustomerId,
+      detail: oldUid
+        ? `Moved ${cust.name}'s ${cust.project_name} holding from app ${oldUid} to ${uid}; ${moved} mirrored txn(s) moved, ${added} backfilled`
+        : `Linked to app ${uid}; backfilled ${added} txn(s)`,
+    });
     revalidatePath(`/dashboard/projects/${cust.project_key}`);
     revalidatePath("/dashboard/projects/all");
-    return { ok: true, message: `Linked to ${(rec(inv)?.full_name as string) || uid}${added ? ` · ${added} past transaction${added !== 1 ? "s" : ""} synced to their app` : ""}.` };
+    revalidatePath("/dashboard/investments/users");
+    const synced = added ? ` · ${added} past transaction${added !== 1 ? "s" : ""} synced to their app` : "";
+    return oldUid
+      ? { ok: true, message: `Moved to ${accName} · ${moved} transaction${moved !== 1 ? "s" : ""} moved across${synced}.` }
+      : { ok: true, message: `Linked to ${accName}${synced}.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }

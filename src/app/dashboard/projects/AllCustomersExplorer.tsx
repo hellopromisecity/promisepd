@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
-  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck,
+  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck, AlertTriangle,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
@@ -625,8 +625,9 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
     id: h.id, project_key: h.project_key, project_name: h.project_name, project_type: h.project_type,
     file_no: null, name: person.name, mobile: person.mobile, district: null, nid: null, reference: null,
     joining_date: person.joined, total_price: 0, total_paid: h.paid, total_remaining: 0, dividend: 0,
-    withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: null, deleted_at: null, bio: {},
+    withdrawn: 0, balance: h.balance, payments_count: 0, reference_officer_id: null, investor_uid: h.linked_uid ?? null, deleted_at: null, bio: {},
   });
+  const sameName = (a: string | null | undefined, b: string | null | undefined) => (a || "").toLowerCase().replace(/\s+/g, " ").trim() === (b || "").toLowerCase().replace(/\s+/g, " ").trim();
   const hp = (h: PersonHolding): HubProject => ({ key: h.project_key, name: h.project_name, type: h.project_type, sort: 0 });
 
   return (
@@ -656,7 +657,18 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                       {h.project_name}
                       {h.source === "app" && <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600"><Smartphone className="h-2.5 w-2.5" /> app</span>}
                     </div>
-                    <div className="text-[11px] text-fg-faint">Paid {fmt(h.paid)}{h.profit ? ` · profit ${fmt(h.profit)}` : ""}</div>
+                    <div className="text-[11px] text-fg-faint">Paid {fmt(h.paid)}{h.profit ? ` · profit ${fmt(h.profit)}` : ""}{h.file_no ? ` · File ${h.file_no}` : ""}</div>
+                    {/* A book row written in ANOTHER name, or whose number belongs to
+                        another account, was most likely folded under this person by
+                        the migration's family-share rule — say so, and offer the fix */}
+                    {h.source === "hub" && h.holder_name && !sameName(h.holder_name, person.name) && (
+                      <div className="mt-0.5 text-[11px] font-semibold text-amber-700">Book name: {h.holder_name}</div>
+                    )}
+                    {h.source === "hub" && h.number_owner && (
+                      <button onClick={() => setLinkH(h)} className="mt-0.5 flex items-center gap-1 text-left text-[11px] font-semibold text-amber-700 hover:underline">
+                        <AlertTriangle className="h-3 w-3 shrink-0" /> This file&apos;s number belongs to {h.number_owner.name} ({h.number_owner.uid}) — move it there?
+                      </button>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="font-bold tabular-nums text-fg">{fmt(h.balance)}</span>
@@ -666,11 +678,9 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                         <button onClick={() => openEdit(h)} disabled={editLoading === h.id} title="Edit this holding (price, dates, last date to pay…)" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-40">
                           {editLoading === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
                         </button>
-                        {/* Link only matters while the customer has no app account —
-                            everyone linked already syncs to their PWA automatically */}
-                        {!person.app && (
-                          <button onClick={() => setLinkH(h)} title="Link to app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
-                        )}
+                        {/* Link an account-less row — or MOVE a linked one to the right
+                            person (a relative's row folded under this account) */}
+                        <button onClick={() => setLinkH(h)} title={person.app ? "Move this holding to another app account" : "Link to app account"} className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
                         <button onClick={() => { setDelErr(null); setDelTarget(h); }} disabled={deletingId === h.id} title="Delete this holding" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-red/40 hover:text-brand-red disabled:opacity-40">
                           {deletingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
