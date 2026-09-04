@@ -36,6 +36,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "new", text: "Book-only rows in All Customers (no live app account) now get an Edit (opens the popup with per-file edit/transactions) and a Link-to-app-account action instead of view-only." },
       { kind: "new", text: "Marketing → officer history → Edit entry: the Points box is now typed in, not just shown — set it to 0 or −1 when a referred customer withdraws and the officer's total drops (13 → 12) while the record stays as history. Manual values are marked “manual”, one click resets to the item value, negatives show in red, and the audit log records the change." },
       { kind: "new", text: "Customer popup: an “app” holding (money entered in the app before the app→book sync existed, so it had no book file and no edit / transactions / delete) now has a “Create book file” button — every app transaction of that project becomes a book payment, paired 1:1 by mirror id, and the holding behaves like the rest." },
+      { kind: "changed", text: "Deposit project tables (Special / General A / General B / Monthly) now read the way the MD's ledger does: T. Paid → Profit → T. Withdrawn → T. Remain. The CSV export follows the same order. Real-estate tables are unchanged." },
     ],
   },
   {
