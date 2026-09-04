@@ -34,6 +34,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "fixed", text: "A customer added back after being deleted (same mobile — Md. Amjad Hossain) was silently tied to the archived login, so All Customers showed a bare “Book” row with no edit or transaction actions. Adding or linking a customer whose number belongs to an archived account now revives that account instead, and Amjad's account is back." },
       { kind: "fixed", text: "The archive's permanent delete now erases only the book rows that are archived with the person — a live row still pointing at that account is unlinked and kept, never wiped along with the login." },
       { kind: "new", text: "Book-only rows in All Customers (no live app account) now get an Edit (opens the popup with per-file edit/transactions) and a Link-to-app-account action instead of view-only." },
+      { kind: "new", text: "Marketing → officer history → Edit entry: the Points box is now typed in, not just shown — set it to 0 or −1 when a referred customer withdraws and the officer's total drops (13 → 12) while the record stays as history. Manual values are marked “manual”, one click resets to the item value, negatives show in red, and the audit log records the change." },
     ],
   },
   {

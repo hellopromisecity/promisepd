@@ -50,6 +50,8 @@ const RANGES: { key: Range; label: string }[] = [
 ];
 
 const fmtPts = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
+/** "+1", "0", "−1" — an entry's points can be taken back (withdrawn referral). */
+const signedPts = (n: number) => (n < 0 ? `−${fmtPts(Math.abs(n))}` : n > 0 ? `+${fmtPts(n)}` : "0");
 /** Percentage with one decimal (e.g. 1.3%, 17%) — trailing .0 dropped. */
 const fmtPct = (n: number) => `${Math.round((Number(n) || 0) * 10) / 10}%`;
 function fmtBDT(n: number) {
@@ -922,7 +924,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
                   <span className="text-fg-muted">এই সেলে <b className="text-fg">{fmtBDT(e.afr)}</b></span>
                   <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
-                  <span className="text-fg-muted">points <b className="text-brand-blue">+{fmtPts(e.points)}</b></span>
+                  <span className="text-fg-muted">points <b className={e.points < 0 ? "text-brand-red" : "text-brand-blue"}>{signedPts(e.points)}</b></span>
                   {e.clientInvested != null && (
                     // Commission maturity: green once the client's deposit hits
                     // 10× the commission (commission = 10% of deposit) — the
@@ -967,19 +969,26 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
   const [clientName, setClientName] = useState(entry.client_name ?? "");
   const [clientId, setClientId] = useState(entry.client_id ?? "");
   const [note, setNote] = useState(entry.note ?? "");
+  // Points are editable — start from what the entry actually holds (it may
+  // already have been taken back), not from item × quantity.
+  const [pts, setPts] = useState(String(entry.points ?? 0));
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const item = useMemo(() => items.find((p) => p.id === itemId), [items, itemId]);
   const q = Math.max(0, parseFloat(qty) || 0); // fractional allowed (e.g. 0.5 শতাংশ)
-  const totalPts = Math.round((item?.points ?? 0) * q * 100) / 100;
+  const autoPts = Math.round((item?.points ?? 0) * q * 100) / 100;
+  const ptsNum = pts.trim() === "" || pts.trim() === "-" ? NaN : Number(pts);
+  const ptsValid = Number.isFinite(ptsNum);
+  const overridden = ptsValid && Math.round(ptsNum * 100) / 100 !== autoPts;
   const totalAfr = (item?.afr ?? 0) * q;
   const totalIncome = (item?.income ?? 0) * q;
 
   function submit() {
     setErr(null);
+    if (!ptsValid) { setErr("Points must be a number (0 or a negative value is fine — e.g. −1 when the referred customer withdrew)."); return; }
     start(async () => {
-      const res = await updatePointEntry(entry.id, { itemId, quantity: q, clientName, clientId, saleDate, note });
+      const res = await updatePointEntry(entry.id, { itemId, quantity: q, clientName, clientId, saleDate, note, points: Math.round(ptsNum * 100) / 100 });
       if (res.ok) { toast(res.message || "Updated.", "success"); onDone(); } else setErr(res.error);
     });
   }
@@ -1010,11 +1019,22 @@ function EditEntryDialog({ entry, items, onClose, onDone }: { entry: OfficerHist
             <textarea rows={2} className={`${inputCls} resize-none`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why these points? e.g. Attended Magrib namaz on the tour — helps you remember later." />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-brand-blue-tint px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-brand-blue-dark/70">Points</div><div className="text-lg font-extrabold text-brand-blue-dark">+{fmtPts(totalPts)}</div></div>
+            {/* Points are typed, not just shown: 0 or −1 takes a referral
+                point back when that customer withdrew — the record stays as
+                history, the officer's total drops (13 → 12). */}
+            <div className={`rounded-xl px-3 py-2.5 ${overridden ? "bg-amber-500/12 ring-1 ring-amber-400/50" : "bg-brand-blue-tint"}`}>
+              <label className={`block text-[10px] font-semibold uppercase ${overridden ? "text-amber-700" : "text-brand-blue-dark/70"}`}>Points {overridden ? "· manual" : ""}</label>
+              <input type="number" step="any" value={pts} onChange={(e) => setPts(e.target.value)} className={`mt-0.5 w-full bg-transparent text-lg font-extrabold outline-none ${overridden ? "text-amber-800" : "text-brand-blue-dark"}`} aria-label="Points for this entry" />
+              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-fg-muted">
+                item value {signedPts(autoPts)}
+                {overridden && <button type="button" onClick={() => setPts(String(autoPts))} className="font-semibold text-brand-blue hover:underline">reset</button>}
+              </div>
+            </div>
             <div className="rounded-xl bg-bg-soft px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-fg-muted">AFR</div><div className="text-sm font-extrabold text-fg">{fmtBDT(totalAfr)}</div></div>
             <div className="rounded-xl bg-emerald-50 px-3 py-2.5"><div className="text-[10px] font-semibold uppercase text-emerald-700/80">Income</div><div className="text-sm font-extrabold text-emerald-700">{fmtBDT(totalIncome)}</div></div>
           </div>
-          <button onClick={submit} disabled={pending || q <= 0} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
+          <p className="text-[11px] text-fg-muted">Referred customer withdrew? Set the points to <b>0</b> or <b>−1</b> and note why — the entry stays in history and the officer&apos;s total goes down.</p>
+          <button onClick={submit} disabled={pending || q <= 0 || !ptsValid} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save changes
           </button>
         </div>

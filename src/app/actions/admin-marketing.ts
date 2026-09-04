@@ -238,7 +238,13 @@ export async function deletePointEntry(entryId: string): Promise<ActionResult> {
  *  recompute the officer's totals. */
 export async function updatePointEntry(
   entryId: string,
-  input: { itemId: string; quantity: number; clientName?: string; clientId?: string; saleDate?: string; note?: string },
+  input: {
+    itemId: string; quantity: number; clientName?: string; clientId?: string; saleDate?: string; note?: string;
+    /** Manual points for THIS entry — overrides item × quantity. Zero or
+     *  negative is allowed: when a referred customer later withdraws, the
+     *  referral point is taken back (13 → 12) without deleting the record. */
+    points?: number | null;
+  },
 ): Promise<ActionResult> {
   return runAction(async () => {
     await requireManager();
@@ -250,10 +256,13 @@ export async function updatePointEntry(
     if (qty <= 0) throw new Error("Quantity must be greater than 0.");
     const { data: item } = await admin.from("marketing_point_items").select("label, points, afr, income").eq("id", input.itemId).maybeSingle();
     if (!item) throw new AuthzError("Pick a point item.");
+    const autoPts = round2(Number(item.points || 0) * qty);
+    const manual = input.points != null && Number.isFinite(Number(input.points)) ? round2(Number(input.points)) : null;
+    const pts = manual ?? autoPts;
     const { error } = await admin.from("marketing_point_entries").update({
       item_label: item.label,
       quantity: qty,
-      points: round2(Number(item.points || 0) * qty),
+      points: pts,
       afr: round2(Number(item.afr || 0) * qty),
       income: round2(Number(item.income || 0) * qty),
       sale_date: cleanDate(input.saleDate),
@@ -263,8 +272,11 @@ export async function updatePointEntry(
     }).eq("id", entryId);
     if (error) throw new Error(error.message);
     await recomputeOfficerTotals(admin, entry.officer_id as string);
+    if (manual != null && manual !== autoPts) {
+      await logAudit({ action: "update", entity: "marketing_points", entityId: entry.officer_id as string, detail: `Entry “${item.label}” points set manually to ${manual} (item value ${autoPts})${input.note ? ` — ${input.note}` : ""}` });
+    }
     revalidateLeaderboard();
-    return { message: "Entry updated." };
+    return { message: manual != null && manual !== autoPts ? `Entry updated — points set to ${manual} (item value would be ${autoPts}); totals recomputed.` : "Entry updated." };
   });
 }
 
