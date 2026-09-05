@@ -118,10 +118,11 @@ export default function AllCustomersExplorer({
   const setSort = (k: SortKey) => { if (sortKey === k) setAsc((v) => !v); else { setSortKey(k); setAsc(false); } };
 
   function exportCsv() {
-    const head = ["#", "Name", "Mobile", "File ID", "App UID", "Projects", "Balance", "Paid", "Profit", "Joined"];
+    const head = ["#", "Name", "Mobile", "File ID", "App UID", "Status", "Joined", "Projects", "Paid", "Profit", "Balance"];
     const lines = [head.join(",")];
     sorted.forEach((p, i) => {
-      const cells = [i + 1, p.name, localPhone(p.mobile), p.fid ?? "", p.uid ?? "", p.projectNames.join(" | "), Math.round(p.totalBalance), Math.round(p.totalPaid), Math.round(p.totalProfit), p.joined ?? ""];
+      const status = p.app ? `${p.is_active ? "Active" : "Inactive"} / ${p.is_verified ? "Verified" : "Unverified"}` : "Book";
+      const cells = [i + 1, p.name, localPhone(p.mobile), p.fid ?? "", p.uid ?? "", status, p.joined ?? "", p.projectNames.join(" | "), Math.round(p.totalPaid), Math.round(p.totalProfit), Math.round(p.totalBalance)];
       lines.push(cells.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -138,9 +139,9 @@ export default function AllCustomersExplorer({
       { k: "name", t: "Name", x: 40, w: 175 },
       { k: "phone", t: "Mobile", x: 215, w: 100 },
       { k: "proj", t: "Projects", x: 315, w: 130 },
-      { k: "bal", t: "Balance", x: 445, w: 95, r: true },
-      { k: "paid", t: "Paid", x: 540, w: 90, r: true },
-      { k: "profit", t: "Profit", x: 630, w: 100, r: true },
+      { k: "paid", t: "Paid", x: 445, w: 95, r: true },
+      { k: "profit", t: "Profit", x: 540, w: 90, r: true },
+      { k: "bal", t: "Balance", x: 630, w: 100, r: true },
     ];
     const drawHeader = () => {
       doc.setFillColor(24, 71, 161); doc.rect(0, 0, W, 50, "F");
@@ -256,13 +257,14 @@ export default function AllCustomersExplorer({
             <thead className="sticky top-0 z-10 bg-bg-soft/95 backdrop-blur">
               <tr className="border-b border-border">
                 <th className="w-10 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">#</th>
+                {/* Owner's reading order: Status → Joined → Projects → Paid → Profit → Balance */}
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="name" label="Customer" /></th>
-                <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Projects</th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="balance" label="Balance" right /></th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="paid" label="Paid" right /></th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="profit" label="Profit" right /></th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Status</th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="joined" label="Joined" right /></th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-fg-muted">Projects</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="paid" label="Paid" right /></th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="profit" label="Profit" right /></th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted"><SortH k="balance" label="Balance" right /></th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide text-fg-muted">Actions</th>
               </tr>
             </thead>
@@ -288,14 +290,6 @@ export default function AllCustomersExplorer({
                       </button>
                     </td>
                     <td className="px-3 py-3">
-                      <button onClick={() => setDetail(p)} className="text-left text-fg-muted hover:text-brand-blue" title={p.projectNames.join(", ")}>
-                        {p.projectNames.length <= 1 ? (p.projectNames[0] ?? "—") : <>{p.projectNames[0]} <span className="rounded-full bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">+{p.projectNames.length - 1}</span></>}
-                      </button>
-                    </td>
-                    <td className={`px-3 py-3 text-right font-bold tabular-nums ${p.totalBalance < 0 ? "text-brand-red-dark" : "text-fg"}`}>{fmt(p.totalBalance)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-brand-blue">{fmt(p.totalPaid)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{p.totalProfit ? fmt(p.totalProfit) : "—"}</td>
-                    <td className="px-3 py-3">
                       {isApp ? (
                         <div className="flex flex-col gap-1">
                           <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${p.is_active ? "bg-emerald-500/15 text-emerald-600" : "bg-fg-faint/15 text-fg-muted"}`}>{p.is_active ? "Active" : "Inactive"}</span>
@@ -306,6 +300,14 @@ export default function AllCustomersExplorer({
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3 text-right text-xs text-fg-muted">{fmtDate(p.joined)}</td>
+                    <td className="px-3 py-3">
+                      <button onClick={() => setDetail(p)} className="text-left text-fg-muted hover:text-brand-blue" title={p.projectNames.join(", ")}>
+                        {p.projectNames.length <= 1 ? (p.projectNames[0] ?? "—") : <>{p.projectNames[0]} <span className="rounded-full bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">+{p.projectNames.length - 1}</span></>}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums text-brand-blue">{fmt(p.totalPaid)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{p.totalProfit ? fmt(p.totalProfit) : "—"}</td>
+                    <td className={`px-3 py-3 text-right font-bold tabular-nums ${p.totalBalance < 0 ? "text-brand-red-dark" : "text-fg"}`}>{fmt(p.totalBalance)}</td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-end gap-1.5">
                         <button onClick={() => setDetail(p)} title="View holdings" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors hover:border-brand-blue/40 hover:text-brand-blue"><UserRound className="h-4 w-4" /></button>
