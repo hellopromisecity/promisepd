@@ -185,7 +185,21 @@ export type CustomerInput = {
   expiry_date?: string;
   /** App-login extras (create only): the account is made alongside the customer. */
   email?: string; password?: string;
+  /** Promise City (land) only — stored in bio: decimal (শতাংশ) + road / plot /
+   *  block. Sent only by the land form, so other projects never touch them. */
+  decimal?: string; road?: string; plot?: string; block?: string;
 };
+
+/** The land fields, only for the keys the form actually sent — an update from
+ *  a non-land form leaves the row's existing plot / road / block untouched. */
+function landBio(input: Pick<CustomerInput, "decimal" | "road" | "plot" | "block">): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  if (input.decimal !== undefined) out.decimal = input.decimal?.trim() || null;
+  if (input.road !== undefined) out.road = input.road?.trim() || null;
+  if (input.plot !== undefined) out.plot = input.plot?.trim() || null;
+  if (input.block !== undefined) out.block = input.block?.trim() || null;
+  return out;
+}
 
 // ── customer CRUD ────────────────────────────────────────────────
 export async function createHubCustomer(project: { key: string; name: string; type: string; sort: number }, input: CustomerInput): Promise<Result> {
@@ -199,7 +213,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
       file_no: input.file_no || null, name: input.name.trim(), mobile: input.mobile || null, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null },
+      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, ...landBio(input) },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -614,7 +628,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
       file_no: input.file_no || (acc.fid as string) || null, name: acc.full_name as string, mobile, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null },
+      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, ...landBio(input) },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -640,6 +654,7 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
       shares: input.shares || (cur.bio as Record<string, unknown>)?.shares || null,
       // the form always sends expiry_date — an empty value CLEARS it
       expiry_date: "expiry_date" in input ? (input.expiry_date || null) : ((cur.bio as Record<string, unknown>)?.expiry_date ?? null),
+      ...landBio(input),
     };
     await HC(admin).update({
       name: input.name.trim(), file_no: input.file_no || null, mobile: input.mobile || null, district: input.district || null,

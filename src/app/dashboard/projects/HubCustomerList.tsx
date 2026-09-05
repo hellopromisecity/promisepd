@@ -23,7 +23,7 @@ const depRemain = (c: HubCustomer) => c.total_paid + c.dividend - c.withdrawn;
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
 const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
 
-type SortKey = "paid" | "name" | "remaining" | "joining" | "profit" | "withdrawn";
+type SortKey = "paid" | "name" | "remaining" | "joining" | "profit" | "withdrawn" | "price";
 
 export default function HubCustomerList({ customers, project, projects, profits }: { customers: HubCustomer[]; project: HubProject; projects?: HubProject[]; profits?: Record<string, number> }) {
   const isAll = !!projects;
@@ -49,6 +49,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
       if (sortKey === "paid") d = a.total_paid - b.total_paid;
       else if (sortKey === "remaining") d = isDeposit ? (depRemain(a) + (profits?.[a.id] ?? 0)) - (depRemain(b) + (profits?.[b.id] ?? 0)) : a.total_remaining - b.total_remaining;
       else if (sortKey === "withdrawn") d = a.withdrawn - b.withdrawn;
+      else if (sortKey === "price") d = a.total_price - b.total_price;
       else if (sortKey === "name") d = a.name.localeCompare(b.name);
       else if (sortKey === "joining") d = (a.joining_date ?? "").localeCompare(b.joining_date ?? "");
       else if (sortKey === "profit") d = (profits?.[a.id] ?? 0) - (profits?.[b.id] ?? 0);
@@ -65,13 +66,13 @@ export default function HubCustomerList({ customers, project, projects, profits 
     const base = ["#", "Name", "File", "Mobile", "District", "Reference"];
     const head = isDeposit
       ? [...base, "Total paid", "Profit", "Total withdrawn", "Remaining balance"]
-      : [...base, "Remaining", "Paid", "Joining"];
+      : [...base, "Joining", "Paid", "Remaining", "Payable"];
     const lines = [head.join(",")];
     rows.forEach((c, i) => {
       const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
       const money = isDeposit
         ? [c.total_paid, Math.round(profits?.[c.id] || 0), c.withdrawn, depRemain(c) + Math.round(profits?.[c.id] || 0)]
-        : [c.total_remaining, c.total_paid, c.joining_date ?? ""];
+        : [c.joining_date ?? "", c.total_paid, c.total_remaining, c.total_price];
       lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -120,11 +121,13 @@ export default function HubCustomerList({ customers, project, projects, profits 
                   <th className={`${thCls} text-right`}><SortH k="remaining" label="T. Remain" right /></th>
                 </>
               ) : (
-                /* Real estate: Remaining (dues) leads, then Paid, then Joined */
+                /* Real estate: Joined → Paid → Remaining → Payable (the contract
+                   price: 5 lakh price, 3 lakh paid → 2 lakh remaining, 5 lakh payable) */
                 <>
-                  <th className={`${thCls} text-right`}><SortH k="remaining" label="Remaining" right /></th>
-                  <th className={`${thCls} text-right`}><SortH k="paid" label="Paid" right /></th>
                   <th className={`${thCls} text-right`}><SortH k="joining" label="Joined" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="paid" label="Paid" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="remaining" label="Remaining" right /></th>
+                  <th className={`${thCls} text-right`}><SortH k="price" label="Payable" right /></th>
                 </>
               )}
               <th className={`${thCls} text-right`}>Actions</th>
@@ -132,7 +135,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={(isAll ? 1 : 0) + (isDeposit ? 7 : 6)} className="px-4 py-10 text-center text-fg-muted">No customers match.</td></tr>
+              <tr><td colSpan={(isAll ? 1 : 0) + 7} className="px-4 py-10 text-center text-fg-muted">No customers match.</td></tr>
             ) : rows.map((c, i) => (
               <tr key={c.id} className="align-top transition-colors hover:bg-bg-soft">
                 <td className={`${tdCls} pt-4 text-fg-faint`}>{i + 1}</td>
@@ -156,11 +159,12 @@ export default function HubCustomerList({ customers, project, projects, profits 
                     <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{fmt(depRemain(c) + (profits?.[c.id] ?? 0))}</td>
                   </>
                 ) : (
-                  /* Real estate: Remaining = price − paid (dues) leads */
+                  /* Real estate: Joined → Paid → Remaining (price − paid) → Payable (price) */
                   <>
-                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{c.total_remaining ? fmt(c.total_remaining) : "—"}</td>
-                    <td className={`${tdCls} pt-4 text-right tabular-nums text-brand-blue`}>{fmt(c.total_paid)}</td>
                     <td className={`${tdCls} pt-4 text-right text-fg-muted`}>{fmtDate(c.joining_date)}</td>
+                    <td className={`${tdCls} pt-4 text-right tabular-nums text-brand-blue`}>{fmt(c.total_paid)}</td>
+                    <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{c.total_remaining ? fmt(c.total_remaining) : "—"}</td>
+                    <td className={`${tdCls} pt-4 text-right tabular-nums text-fg-muted`}>{c.total_price ? fmt(c.total_price) : "—"}</td>
                   </>
                 )}
                 <td className={`${tdCls} pt-3.5`}>
@@ -271,6 +275,12 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   const [mobile, setMobile] = useState(customer?.mobile ?? "");
   const [district, setDistrict] = useState(customer?.district ?? "");
   const [shares, setShares] = useState(String((customer?.bio?.shares as string) ?? ""));
+  // Promise City (land): decimal (শতাংশ) + road / plot / block. Older imported
+  // rows kept the decimals under bio.flat_size — read that as the fallback.
+  const [decimal, setDecimal] = useState(String((customer?.bio?.decimal as string) ?? (customer?.bio?.flat_size as string) ?? ""));
+  const [road, setRoad] = useState(String((customer?.bio?.road as string) ?? ""));
+  const [plot, setPlot] = useState(String((customer?.bio?.plot as string) ?? ""));
+  const [block, setBlock] = useState(String((customer?.bio?.block as string) ?? ""));
   const [price, setPrice] = useState(customer ? String(customer.total_price || "") : "");
   const [joining, setJoining] = useState(customer?.joining_date ?? "");
   const [expiry, setExpiry] = useState(String((customer?.bio?.expiry_date as string) ?? ""));
@@ -281,11 +291,17 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const earnsCommission = ["fuzala-tower", "fuzala-complex", "promise-city", "ahbab-palace-01", "ahbab-palace-02"].includes(activeProj.key);
+  const isLand = activeProj.key === "promise-city";
+  // the commission quantity: decimals for land (জমি — প্রতি শতাংশ), shares elsewhere
+  const units = isLand ? decimal : shares;
 
   function submit() {
     setErr(null);
     if (!name.trim()) { setErr("Name is required."); return; }
-    const input: CustomerInput = { name, file_no: file, mobile, district, shares, total_price: parseFloat(price) || 0, joining_date: joining, expiry_date: expiry, reference: refName, reference_officer_id: refId, email, password };
+    const input: CustomerInput = {
+      name, file_no: file, mobile, district, total_price: parseFloat(price) || 0, joining_date: joining, expiry_date: expiry, reference: refName, reference_officer_id: refId, email, password,
+      ...(isLand ? { shares: decimal, decimal, road, plot, block } : { shares }),
+    };
     start(async () => {
       const r = editing ? await updateHubCustomer(customer!.id, project.key, input) : await createHubCustomer(activeProj, input);
       if (r.ok) { toast(r.message || "Saved.", "success"); router.refresh(); onClose(); } else setErr(r.error);
@@ -317,9 +333,20 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
           <p className="flex items-end pb-1 text-[11px] leading-snug text-fg-faint">কিস্তি শেষ করার শেষ তারিখ — ভবিষ্যতে দৈনিক/মাসিক কত দিতে হবে, তা এখান থেকে হিসাব হবে।</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
+          {isLand ? (
+            <div><label className={labelCls}>Decimal (শতাংশ) <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" className={inputCls} value={decimal} onChange={(e) => setDecimal(e.target.value)} placeholder="e.g. 2.5" /></div>
+          ) : (
+            <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
+          )}
           <div><label className={labelCls}>Total price ৳</label><input type="number" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         </div>
+        {isLand && (
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className={labelCls}>Road no.</label><input className={inputCls} value={road} onChange={(e) => setRoad(e.target.value)} /></div>
+            <div><label className={labelCls}>Plot no.</label><input className={inputCls} value={plot} onChange={(e) => setPlot(e.target.value)} /></div>
+            <div><label className={labelCls}>Block no.</label><input className={inputCls} value={block} onChange={(e) => setBlock(e.target.value)} /></div>
+          </div>
+        )}
         {!editing && (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -333,7 +360,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
           <label className={labelCls}>Reference (marketing officer)</label>
           <ReferencePicker value={refId} valueName={refName} onPick={(id, n) => { setRefId(id); setRefName(n); }} />
           {earnsCommission && refId && (
-            <p className="mt-1 text-[11px] text-emerald-600">✓ This officer will be auto-credited points + commission for this {project.name} sale ({shares || 1} share{Number(shares) > 1 ? "s" : ""}).</p>
+            <p className="mt-1 text-[11px] text-emerald-600">✓ This officer will be auto-credited points + commission for this {activeProj.name} sale ({units || 1} {isLand ? "decimal" : "share"}{Number(units) > 1 ? "s" : ""}).</p>
           )}
           {!earnsCommission && <p className="mt-1 text-[11px] text-fg-faint">Deposit schemes don’t earn marketing commission.</p>}
         </div>

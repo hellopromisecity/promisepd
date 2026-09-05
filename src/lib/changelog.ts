@@ -38,6 +38,9 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "new", text: "Customer popup: an “app” holding (money entered in the app before the app→book sync existed, so it had no book file and no edit / transactions / delete) now has a “Create book file” button — every app transaction of that project becomes a book payment, paired 1:1 by mirror id, and the holding behaves like the rest." },
       { kind: "changed", text: "Deposit project tables (Special / General A / General B / Monthly) now read the way the MD's ledger does: T. Paid → Profit → T. Withdrawn → T. Remain. The CSV export follows the same order. Real-estate tables are unchanged." },
       { kind: "changed", text: "All Customers table reordered to Status → Joined → Projects → Paid → Profit → Balance (balance last, as the running total). CSV gains a Status column and the PDF follows the same money order." },
+      { kind: "new", text: "Withdrawn customers: the three-dot menu in All Customers gets “Withdrawn user” (and “Unmark withdrawn”). A marked row is painted half-transparent red with a Withdrawn badge, and the customer filter gains “Withdrawn (N)” — counting only the marks an admin set by hand, never anything computed. Login, balances and book files are untouched. Needs migration 0032." },
+      { kind: "new", text: "Add customer / Edit customer for Promise City now asks for land details: Decimal (শতাংশ) in place of Shares / units, plus Road, Plot and Block numbers. Decimals feed the marketing commission the way shares do (জমি — প্রতি শতাংশ). Other projects keep the old form; older imported rows show their decimals from the book." },
+      { kind: "changed", text: "Real-estate project tables (Fuzala Tower, Fuzala Complex, Promise City, Ahbab Palace) now read Joined → Paid → Remaining → Payable, where Payable is the contract price (5 lakh price, 3 lakh paid → 2 lakh remaining, 5 lakh payable). Export follows." },
     ],
   },
   {

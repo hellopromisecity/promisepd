@@ -429,6 +429,27 @@ export async function setInvestorActive(uid: string, active: boolean): Promise<A
   });
 }
 
+/** Mark / unmark an app account as WITHDRAWN (the customer took their money
+ *  out or left). A purely manual flag — All Customers paints the row red and
+ *  counts only these marks in its "Withdrawn" filter. Nothing else changes:
+ *  login, balances and book rows stay exactly as they are. */
+export async function setInvestorWithdrawn(uid: string, withdrawn: boolean): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    if (!uid) throw new ValidationError("Missing investor.");
+    // withdrawn_at (0032) isn't in the generated types yet → loosen the builder
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin.from as any)("investor_accounts").update({ withdrawn_at: withdrawn ? new Date().toISOString() : null }).eq("uid", uid);
+    if (error) throw new Error(/withdrawn_at|column/i.test(String(error.message)) ? "Withdrawn marks need migration 0032 — run the SQL first." : String(error.message));
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `${withdrawn ? "Marked as withdrawn" : "Withdrawn mark removed"}: ${uid}` });
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/investments/users");
+    return { message: withdrawn ? "Marked as withdrawn." : "Withdrawn mark removed." };
+  });
+}
+
 /** Add a brand-new app user — mirrors the old admin's "Add User".  Creates a
  *  login (auth user under the synthetic email), seeds the profile as a member,
  *  and opens a fresh investor_account with a zero balance.  The investor can

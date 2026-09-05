@@ -49,6 +49,8 @@ export type PersonRow = {
   email?: string | null;
   is_verified?: boolean;
   is_active?: boolean;
+  /** Admin's manual "withdrawn" mark (investor_accounts.withdrawn_at). */
+  is_withdrawn?: boolean;
   app?: AppUser;
   joined: string | null;
   totalPaid: number;
@@ -83,7 +85,7 @@ export type AllCustomersData = {
   top: { name: string; balance: number }[];
   /** memberships = customer-per-project count (a person in 3 projects counts 3);
    *  uniqueCount = unique people (one row per account). */
-  totals: { collected: number; finalBalance: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number };
+  totals: { collected: number; finalBalance: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number; withdrawn: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
 };
@@ -117,7 +119,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   const empty: AllCustomersData = {
     people: [], archived: [], projects: [], investorTypes: [], investorProjects: [], top: [],
     health: { total: 0, verified: 0, unverified: 0, active: 0, inactive: 0, verifiedPct: 0, activePct: 0 },
-    totals: { collected: 0, finalBalance: 0, memberships: 0, uniqueCount: 0, appAccounts: 0, payers: 0 },
+    totals: { collected: 0, finalBalance: 0, memberships: 0, uniqueCount: 0, appAccounts: 0, payers: 0, withdrawn: 0 },
   };
   if (!admin) return empty;
 
@@ -237,6 +239,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       // account File ID first, else the first book row's file number — so the
       // row always shows (and matches) the file the office actually uses
       uid: i.uid, fid: i.fid || bookRows.map((r) => r.file_no).find(Boolean) || null, email: i.email, is_verified: i.is_verified, is_active: i.is_active, app: appUser,
+      is_withdrawn: !!(i as { withdrawn_at?: string | null }).withdrawn_at,
       joined: joinedBook ?? (i.created_at ? i.created_at.slice(0, 10) : null),
       totalPaid: holdings.reduce((s, h) => s + h.paid, 0),
       totalProfit: holdings.reduce((s, h) => s + h.profit, 0),
@@ -293,6 +296,8 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       uniqueCount: people.length,
       appAccounts: investors.length,
       payers: people.filter((p) => p.totalPaid > 0).length,
+      // ONLY the admin's manual marks — never inferred from balances
+      withdrawn: people.filter((p) => p.is_withdrawn).length,
     },
     investorTypes: types.map((t) => ({ name: t.name, operator: t.operator })),
     investorProjects: projects.map((p) => ({ project_id: p.project_id, project_name: p.project_name })),

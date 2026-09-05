@@ -25,6 +25,9 @@ export type InvestorAccount = {
   language: string;
   is_verified: boolean;
   is_active: boolean;
+  /** Manually marked "withdrawn" (migration 0032) — the customer took their
+   *  money out / left. A red row in All Customers; never computed. */
+  withdrawn_at?: string | null;
   balance: InvestorBalance | null;
   last_login: string | null;
   created_at: string;

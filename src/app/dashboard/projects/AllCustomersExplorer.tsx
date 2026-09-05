@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
-  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck, AlertTriangle,
+  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck, AlertTriangle, Ban,
 } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
@@ -20,7 +20,7 @@ import type { HubCustomer } from "@/lib/hub";
 import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type HubProject } from "./HubCustomerList";
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
-import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, type InvestorInput } from "@/app/actions/admin-investments";
+import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, setInvestorWithdrawn, type InvestorInput } from "@/app/actions/admin-investments";
 import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, bookAppHolding, type CustomerInput } from "@/app/actions/hub";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
@@ -30,7 +30,7 @@ const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleStrin
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
-type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying";
+type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying" | "withdrawn";
 
 export default function AllCustomersExplorer({
   people, projects, health, top, totals, investorTypes, investorProjects,
@@ -39,7 +39,7 @@ export default function AllCustomersExplorer({
   projects: HubProject[];
   health: AppHealth;
   top: { name: string; balance: number }[];
-  totals: { collected: number; finalBalance: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number };
+  totals: { collected: number; finalBalance: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number; withdrawn: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
 }) {
@@ -79,6 +79,7 @@ export default function AllCustomersExplorer({
       const app = !!p.app;
       if (status === "verified" && !(app && p.is_verified)) return false;
       if (status === "unverified" && !(app && !p.is_verified)) return false;
+      if (status === "withdrawn" && !p.is_withdrawn) return false;
       if (status === "paying" && !(p.totalPaid > 0)) return false;
       if (status === "nonpaying" && p.totalPaid > 0) return false;
       if (!term) return true;
@@ -121,7 +122,7 @@ export default function AllCustomersExplorer({
     const head = ["#", "Name", "Mobile", "File ID", "App UID", "Status", "Joined", "Projects", "Paid", "Profit", "Balance"];
     const lines = [head.join(",")];
     sorted.forEach((p, i) => {
-      const status = p.app ? `${p.is_active ? "Active" : "Inactive"} / ${p.is_verified ? "Verified" : "Unverified"}` : "Book";
+      const status = (p.is_withdrawn ? "Withdrawn · " : "") + (p.app ? `${p.is_active ? "Active" : "Inactive"} / ${p.is_verified ? "Verified" : "Unverified"}` : "Book");
       const cells = [i + 1, p.name, localPhone(p.mobile), p.fid ?? "", p.uid ?? "", status, p.joined ?? "", p.projectNames.join(" | "), Math.round(p.totalPaid), Math.round(p.totalProfit), Math.round(p.totalBalance)];
       lines.push(cells.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","));
     });
@@ -242,6 +243,8 @@ export default function AllCustomersExplorer({
           <option value="nonpaying">Non-paying ({totals.uniqueCount - totals.payers})</option>
           <option value="verified">Verified ({health.verified})</option>
           <option value="unverified">Unverified ({health.unverified})</option>
+          {/* manual marks only (three-dot menu → Mark as withdrawn) */}
+          <option value="withdrawn">Withdrawn ({totals.withdrawn})</option>
         </select>
         <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / page</option>)}
@@ -275,7 +278,7 @@ export default function AllCustomersExplorer({
                 const tint = avatarTint(p.id);
                 const isApp = !!p.app;
                 return (
-                  <tr key={p.id} className="border-b border-border/60 align-top transition-colors hover:bg-bg-soft/50">
+                  <tr key={p.id} className="border-b border-border/60 align-top transition-colors hover:bg-bg-soft/50" style={p.is_withdrawn ? { backgroundColor: "rgba(239, 68, 68, 0.5)" } : undefined} title={p.is_withdrawn ? "Marked as withdrawn" : undefined}>
                     <td className="px-3 py-3 text-fg-faint">{start + i + 1}</td>
                     <td className="px-3 py-3">
                       <button onClick={() => setDetail(p)} className="flex items-center gap-2.5 text-left">
@@ -294,6 +297,7 @@ export default function AllCustomersExplorer({
                         <div className="flex flex-col gap-1">
                           <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${p.is_active ? "bg-emerald-500/15 text-emerald-600" : "bg-fg-faint/15 text-fg-muted"}`}>{p.is_active ? "Active" : "Inactive"}</span>
                           <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${p.is_verified ? "bg-brand-blue-tint text-brand-blue" : "bg-amber-500/15 text-amber-600"}`}>{p.is_verified ? "Verified" : "Unverified"}</span>
+                          {p.is_withdrawn && <span className="w-fit rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-bold text-white">Withdrawn</span>}
                         </div>
                       ) : (
                         <span className="w-fit rounded-full bg-bg-soft px-2 py-0.5 text-[10px] font-bold text-fg-muted">Book</span>
@@ -365,7 +369,7 @@ function RowMenu({ person }: { person: PersonRow }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; up: boolean }>({ top: 0, left: 0, up: false });
-  const [confirm, setConfirm] = useState<null | "deactivate" | "activate" | "delete">(null);
+  const [confirm, setConfirm] = useState<null | "deactivate" | "activate" | "delete" | "withdraw" | "unwithdraw">(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -382,10 +386,14 @@ function RowMenu({ person }: { person: PersonRow }) {
     setOpen(true);
   }
 
-  function run(kind: "deactivate" | "activate" | "delete") {
+  function run(kind: "deactivate" | "activate" | "delete" | "withdraw" | "unwithdraw") {
     setErr(null);
     start(async () => {
-      const r = kind === "delete" ? await archivePerson(person.uid!) : await setInvestorActive(person.uid!, kind === "activate");
+      const r = kind === "delete"
+        ? await archivePerson(person.uid!)
+        : kind === "withdraw" || kind === "unwithdraw"
+          ? await setInvestorWithdrawn(person.uid!, kind === "withdraw")
+          : await setInvestorActive(person.uid!, kind === "activate");
       if (!r.ok) return setErr(r.error);
       setConfirm(null);
       router.refresh();
@@ -404,6 +412,11 @@ function RowMenu({ person }: { person: PersonRow }) {
             <button type="button" onClick={() => { setOpen(false); setErr(null); setConfirm(person.is_active ? "deactivate" : "activate"); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-fg hover:bg-bg-soft">
               {person.is_active ? <UserX className="h-4 w-4 text-amber-600" /> : <UserCheck className="h-4 w-4 text-emerald-600" />} {person.is_active ? "Deactivate user" : "Activate user"}
             </button>
+            {/* Manual "withdrawn" mark — red row + counted in the Withdrawn filter.
+                Nothing else changes (login, balances, book rows all stay). */}
+            <button type="button" onClick={() => { setOpen(false); setErr(null); setConfirm(person.is_withdrawn ? "unwithdraw" : "withdraw"); }} className="flex w-full items-center gap-2 border-t border-border/60 px-3 py-2.5 text-left text-sm font-medium text-fg hover:bg-bg-soft">
+              <Ban className={`h-4 w-4 ${person.is_withdrawn ? "text-emerald-600" : "text-brand-red"}`} /> {person.is_withdrawn ? "Unmark withdrawn" : "Withdrawn user"}
+            </button>
             <button type="button" onClick={() => { setOpen(false); setErr(null); setConfirm("delete"); }} className="flex w-full items-center gap-2 border-t border-border/60 px-3 py-2.5 text-left text-sm font-medium text-brand-red-dark hover:bg-brand-red-tint">
               <Trash2 className="h-4 w-4" /> Delete user
             </button>
@@ -419,14 +432,14 @@ function RowMenu({ person }: { person: PersonRow }) {
  *  Exported — the Archive page reuses it for its purge buttons. `title` /
  *  `message` override the kind's stock copy (e.g. holding-specific warnings). */
 export function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm, title: titleOverride, message: messageOverride }: {
-  kind: "deactivate" | "activate" | "delete" | "purge"; name: string; pending: boolean; err: string | null;
+  kind: "deactivate" | "activate" | "delete" | "purge" | "withdraw" | "unwithdraw"; name: string; pending: boolean; err: string | null;
   onCancel: () => void; onConfirm: () => void; title?: string; message?: string;
 }) {
   const [typed, setTyped] = useState("");
   const word = kind === "delete" || kind === "purge" ? "delete" : kind === "deactivate" ? "deactivate" : null;
   const ready = !word || typed.trim().toLowerCase() === word;
   const danger = kind === "delete" || kind === "purge";
-  const title = titleOverride ?? (kind === "purge" ? "Delete forever" : kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : "Activate user");
+  const title = titleOverride ?? (kind === "purge" ? "Delete forever" : kind === "delete" ? "Delete user" : kind === "deactivate" ? "Deactivate user" : kind === "withdraw" ? "Mark as withdrawn" : kind === "unwithdraw" ? "Unmark withdrawn" : "Activate user");
   const message = messageOverride ?? (
     kind === "purge"
       ? `“${name}” will be erased PERMANENTLY — the account, their book rows, every payment and transaction, and their app login. This is an instant delete: there is NO archive and NO restore after this. Be sure.`
@@ -434,7 +447,11 @@ export function TypeConfirm({ kind, name, pending, err, onCancel, onConfirm, tit
         ? `“${name}” disappears from every list — All Customers, the project pages and reports. They stay in the Archive for 30 days, restorable in one click.`
         : kind === "deactivate"
           ? `“${name}” stays everywhere but their app account is switched off.`
-          : `Switch “${name}”’s app account back on.`);
+          : kind === "withdraw"
+            ? `Mark “${name}” as a withdrawn customer? Their row turns red and they count in the “Withdrawn” filter. Nothing else changes — login, balances and book files stay as they are. You can unmark any time.`
+            : kind === "unwithdraw"
+              ? `Remove the withdrawn mark from “${name}”? The row goes back to normal.`
+              : `Switch “${name}”’s app account back on.`);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && onCancel()}>
       <div className="w-full max-w-sm animate-[pop_.18s_ease-out] rounded-2xl border border-border bg-bg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -485,6 +502,12 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   const [joining, setJoining] = useState("");
   const [expiry, setExpiry] = useState("");
   const [shares, setShares] = useState("");
+  // Promise City (land): decimal (শতাংশ) + road / plot / block instead of shares
+  const [decimal, setDecimal] = useState("");
+  const [road, setRoad] = useState("");
+  const [plot, setPlot] = useState("");
+  const [block, setBlock] = useState("");
+  const isLand = projKey === "promise-city";
   const [price, setPrice] = useState("");
   const [refId, setRefId] = useState<string | null>(null);
   const [refName, setRefName] = useState("");
@@ -524,8 +547,10 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
     setErr(null); setMsg(null);
     if (!projKey) { setErr("Pick a project."); return; }
     const input: Omit<CustomerInput, "name" | "email" | "password"> = {
-      file_no: file, district, joining_date: joining, expiry_date: expiry, shares, total_price: parseFloat(price) || 0,
+      file_no: file, district, joining_date: joining, expiry_date: expiry, total_price: parseFloat(price) || 0,
       reference: refName, reference_officer_id: refId,
+      // land: decimals drive the commission quantity (জমি — প্রতি শতাংশ) the way shares do elsewhere
+      ...(isLand ? { shares: decimal, decimal, road, plot, block } : { shares }),
     };
     start(async () => {
       const r = await assignCustomerToProject(person.uid!, projKey, input);
@@ -599,7 +624,18 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
                   <div><label className={labelCls}>Last date to pay <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
                   <p className="flex items-end pb-1 text-[11px] leading-snug text-fg-faint">কিস্তি শেষ করার শেষ তারিখ।</p>
                 </div>
-                <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
+                {isLand ? (
+                  <>
+                    <div><label className={labelCls}>Decimal (শতাংশ) <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" className={inputCls} value={decimal} onChange={(e) => setDecimal(e.target.value)} placeholder="e.g. 2.5" /></div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><label className={labelCls}>Road no.</label><input className={inputCls} value={road} onChange={(e) => setRoad(e.target.value)} /></div>
+                      <div><label className={labelCls}>Plot no.</label><input className={inputCls} value={plot} onChange={(e) => setPlot(e.target.value)} /></div>
+                      <div><label className={labelCls}>Block no.</label><input className={inputCls} value={block} onChange={(e) => setBlock(e.target.value)} /></div>
+                    </div>
+                  </>
+                ) : (
+                  <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
+                )}
                 <div><label className={labelCls}>Reference (marketing officer)</label><ReferencePicker value={refId} valueName={refName} onPick={(id, n) => { setRefId(id); setRefName(n); }} /></div>
                 <button onClick={assign} disabled={pending || !projKey} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark disabled:opacity-60">
                   {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />} Add to project
