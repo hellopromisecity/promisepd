@@ -23,7 +23,15 @@ const depRemain = (c: HubCustomer) => c.total_paid + c.dividend - c.withdrawn;
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg outline-none focus:border-brand-blue/50";
 const labelCls = "mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-muted";
 
-type SortKey = "paid" | "name" | "remaining" | "joining" | "profit" | "withdrawn" | "price";
+type SortKey = "paid" | "name" | "remaining" | "joining" | "profit" | "withdrawn" | "price" | "decimal";
+/** Promise City land size in decimals (শতাংশ): bio.decimal (the form) or
+ *  bio.flat_size (the book import kept the decimals there). null = unknown. */
+const decOf = (c: HubCustomer): number | null => {
+  const v = c.bio?.decimal ?? c.bio?.flat_size;
+  const n = parseFloat(String(v ?? ""));
+  return Number.isFinite(n) ? n : null;
+};
+const fmtDec = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
 export default function HubCustomerList({ customers, project, projects, profits }: { customers: HubCustomer[]; project: HubProject; projects?: HubProject[]; profits?: Record<string, number> }) {
   const isAll = !!projects;
@@ -38,6 +46,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
   const [pushing, setPushing] = useState(false);
   const [linking, setLinking] = useState<HubCustomer | null>(null);
   const isDeposit = project.type === "deposit";
+  const isLand = project.key === "promise-city"; // plots: a Decimal column after Payable
   const custProj = (c: HubCustomer): HubProject => ({ key: c.project_key, name: c.project_name, type: c.project_type, sort: 0 });
 
   const rows = useMemo(() => {
@@ -50,6 +59,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
       else if (sortKey === "remaining") d = isDeposit ? (depRemain(a) + (profits?.[a.id] ?? 0)) - (depRemain(b) + (profits?.[b.id] ?? 0)) : a.total_remaining - b.total_remaining;
       else if (sortKey === "withdrawn") d = a.withdrawn - b.withdrawn;
       else if (sortKey === "price") d = a.total_price - b.total_price;
+      else if (sortKey === "decimal") d = (decOf(a) ?? -1) - (decOf(b) ?? -1);
       else if (sortKey === "name") d = a.name.localeCompare(b.name);
       else if (sortKey === "joining") d = (a.joining_date ?? "").localeCompare(b.joining_date ?? "");
       else if (sortKey === "profit") d = (profits?.[a.id] ?? 0) - (profits?.[b.id] ?? 0);
@@ -66,13 +76,13 @@ export default function HubCustomerList({ customers, project, projects, profits 
     const base = ["#", "Name", "File", "Mobile", "District", "Reference"];
     const head = isDeposit
       ? [...base, "Total paid", "Profit", "Total withdrawn", "Remaining balance"]
-      : [...base, "Joining", "Paid", "Remaining", "Payable"];
+      : [...base, "Joining", "Paid", "Remaining", "Payable", ...(isLand ? ["Decimal"] : [])];
     const lines = [head.join(",")];
     rows.forEach((c, i) => {
       const baseVals = [i + 1, c.name, c.file_no ?? "", c.mobile ?? "", c.district ?? "", c.reference ?? ""];
       const money = isDeposit
         ? [c.total_paid, Math.round(profits?.[c.id] || 0), c.withdrawn, depRemain(c) + Math.round(profits?.[c.id] || 0)]
-        : [c.joining_date ?? "", c.total_paid, c.total_remaining, c.total_price];
+        : [c.joining_date ?? "", c.total_paid, c.total_remaining, c.total_price, ...(isLand ? [decOf(c) ?? ""] : [])];
       lines.push([...baseVals, ...money].map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     });
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -128,6 +138,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
                   <th className={`${thCls} text-right`}><SortH k="paid" label="Paid" right /></th>
                   <th className={`${thCls} text-right`}><SortH k="remaining" label="Remaining" right /></th>
                   <th className={`${thCls} text-right`}><SortH k="price" label="Payable" right /></th>
+                  {isLand && <th className={`${thCls} text-right`}><SortH k="decimal" label="Decimal" right /></th>}
                 </>
               )}
               <th className={`${thCls} text-right`}>Actions</th>
@@ -135,7 +146,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={(isAll ? 1 : 0) + 7} className="px-4 py-10 text-center text-fg-muted">No customers match.</td></tr>
+              <tr><td colSpan={(isAll ? 1 : 0) + 7 + (isLand ? 1 : 0)} className="px-4 py-10 text-center text-fg-muted">No customers match.</td></tr>
             ) : rows.map((c, i) => (
               <tr key={c.id} className="align-top transition-colors hover:bg-bg-soft">
                 <td className={`${tdCls} pt-4 text-fg-faint`}>{i + 1}</td>
@@ -165,6 +176,7 @@ export default function HubCustomerList({ customers, project, projects, profits 
                     <td className={`${tdCls} pt-4 text-right tabular-nums text-brand-blue`}>{fmt(c.total_paid)}</td>
                     <td className={`${tdCls} pt-4 text-right font-bold tabular-nums text-fg`}>{c.total_remaining ? fmt(c.total_remaining) : "—"}</td>
                     <td className={`${tdCls} pt-4 text-right tabular-nums text-fg-muted`}>{c.total_price ? fmt(c.total_price) : "—"}</td>
+                    {isLand && <td className={`${tdCls} pt-4 text-right tabular-nums text-fg`}>{decOf(c) != null ? fmtDec(decOf(c)!) : "—"}</td>}
                   </>
                 )}
                 <td className={`${tdCls} pt-3.5`}>

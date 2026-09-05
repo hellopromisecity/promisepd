@@ -279,7 +279,7 @@ export default function AllCustomersExplorer({
                 const tint = avatarTint(p.id);
                 const isApp = !!p.app;
                 return (
-                  <tr key={p.id} className="border-b border-border/60 align-top transition-colors hover:bg-bg-soft/50" style={p.is_withdrawn ? { backgroundColor: "rgba(239, 68, 68, 0.5)" } : undefined} title={p.is_withdrawn ? "Marked as withdrawn" : undefined}>
+                  <tr key={p.id} className="border-b border-border/60 align-top transition-colors hover:bg-bg-soft/50" style={p.is_withdrawn ? { backgroundColor: "rgba(239, 68, 68, 0.2)" } : undefined} title={p.is_withdrawn ? "Marked as withdrawn" : undefined}>
                     <td className="px-3 py-3 text-fg-faint">{start + i + 1}</td>
                     <td className="px-3 py-3">
                       <button onClick={() => setDetail(p)} className="flex items-center gap-2.5 text-left">

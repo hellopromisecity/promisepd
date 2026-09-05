@@ -42,6 +42,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "new", text: "Add customer / Edit customer for Promise City now asks for land details: Decimal (শতাংশ) in place of Shares / units, plus Road, Plot and Block numbers. Decimals feed the marketing commission the way shares do (জমি — প্রতি শতাংশ). Other projects keep the old form; older imported rows show their decimals from the book." },
       { kind: "changed", text: "Real-estate project tables (Fuzala Tower, Fuzala Complex, Promise City, Ahbab Palace) now read Joined → Paid → Remaining → Payable, where Payable is the contract price (5 lakh price, 3 lakh paid → 2 lakh remaining, 5 lakh payable). Export follows." },
       { kind: "fixed", text: "Remaining on real-estate rows could go stale when an installment was entered from the app side (Md Feroz Kabir: ৳4L price, ৳4L paid, still showed ৳3L remaining). Remaining is now always computed live as price − paid + refunds, and the app-side mirror keeps the stored figure in step too." },
+      { kind: "new", text: "Promise City page: a sortable Decimal (শতাংশ) column after Payable — each plot holder's land size, read from the book import (and from the new Decimal field on the form). Export includes it." },
+      { kind: "changed", text: "Withdrawn rows in All Customers are now a soft 20% red instead of 50%." },
     ],
   },
   {
