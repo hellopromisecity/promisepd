@@ -35,7 +35,7 @@ export type ProjectOpt = { project_id: string; project_name: string };
 
 /** ৳ with full thousands grouping. */
 export function taka(n: number | null | undefined): string {
-  return `৳${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
+  return `৳${(Math.round(Number(n) || 0) || 0).toLocaleString("en-US")}`;
 }
 
 /** Compact market form: ৳2.20 Cr, ৳1.10 L, else grouped. */

@@ -25,7 +25,8 @@ import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustom
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 
-const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
+// `|| 0` after the round kills a negative zero ("৳-0" on a fully-withdrawn deposit)
+const fmt = (n: number) => "৳" + (Math.round(Number(n) || 0) || 0).toLocaleString("en-IN");
 const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleString("en-US");
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 

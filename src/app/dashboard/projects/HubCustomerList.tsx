@@ -15,7 +15,7 @@ import type { HubCustomer, HubPayment } from "@/lib/hub";
 
 export type HubProject = { key: string; name: string; type: string; sort: number };
 
-const fmt = (n: number) => "৳" + Math.round(Number(n) || 0).toLocaleString("en-IN");
+const fmt = (n: number) => "৳" + (Math.round(Number(n) || 0) || 0).toLocaleString("en-IN");
 const fmtDate = (iso: string | null) => { if (!iso) return "—"; try { return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); } catch { return iso; } };
 /** Deposit "remaining balance" — money still in the company after every
  *  withdrawal: total paid + dividend − withdrawn. */
