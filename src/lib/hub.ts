@@ -153,7 +153,11 @@ function mapCustomer(c: Record<string, unknown>): HubCustomer {
     joining_date: (c.joining_date as string) ?? null,
     total_price: n(c.total_price),
     total_paid: n(c.total_paid),
-    total_remaining: n(c.total_remaining),
+    // Remaining is LIVE: contract price − net paid (a ledger-backed refund
+    // re-opens dues). The stored column went stale whenever a payment arrived
+    // through the app-side mirror (Feroz Kabir: 4L price, 4L paid, still
+    // "3L remaining"), so never trust it while a price is set.
+    total_remaining: n(c.total_price) > 0 ? Math.round((n(c.total_price) - n(c.total_paid) + n(c.withdrawn)) * 100) / 100 : n(c.total_remaining),
     dividend: n(c.dividend),
     withdrawn: n(c.withdrawn),
     balance: n(c.balance),

@@ -347,11 +347,19 @@ const r2 = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100;
 /** Re-roll a book customer's totals from their payments (same math as the
  *  hub actions' recompute — kept in step so the two never drift). */
 async function recomputeHubCustomer(admin: Admin, customerId: string): Promise<void> {
-  const { data } = await (admin.from as any)("hub_customer_payments").select("amount, kind").eq("customer_id", customerId);
+  const [{ data }, { data: rowD }] = await Promise.all([
+    (admin.from as any)("hub_customer_payments").select("amount, kind").eq("customer_id", customerId),
+    (admin.from as any)("hub_customers").select("total_price").eq("id", customerId).maybeSingle(),
+  ]);
   const rows = (data ?? []) as Record<string, unknown>[];
   let paid = 0, dividend = 0, withdrawn = 0;
   for (const p of rows) { const a = Number(p.amount) || 0; const k = p.kind as string; if (k === "dividend") dividend += a; else if (k === "withdrawal") withdrawn += a; else paid += a; }
-  await (admin.from as any)("hub_customers").update({ total_paid: r2(paid), dividend: r2(dividend), withdrawn: r2(withdrawn), payments_count: rows.length }).eq("id", customerId);
+  // same Remaining rule as the book-side recompute (hub.ts): price − paid + withdrawn
+  const price = Number((rowD as { total_price?: unknown } | null)?.total_price) || 0;
+  await (admin.from as any)("hub_customers").update({
+    total_paid: r2(paid), dividend: r2(dividend), withdrawn: r2(withdrawn), payments_count: rows.length,
+    total_remaining: price > 0 ? r2(price - paid + withdrawn) : 0,
+  }).eq("id", customerId);
 }
 
 /** The customer's book row in the app project's book — creating one when the
