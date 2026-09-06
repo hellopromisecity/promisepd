@@ -69,9 +69,10 @@ export async function loadFinance(): Promise<FinanceData> {
   const empty: FinanceData = { heads: [], accounts: [], txns: [], balances: {}, ready: false };
   if (!admin) return empty;
   // hub-style loosening: finance_heads + the 0033 columns aren't in the
-  // generated types yet
+  // generated types yet. Keep the call BOUND to the client — a detached
+  // `admin.from` loses `this` and throws at runtime.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const from = admin.from as any;
+  const from = (table: string) => (admin.from as any)(table);
 
   const [headsRes, accRes] = await Promise.all([
     from("finance_heads").select("*").order("sort", { ascending: true }).order("name", { ascending: true }),

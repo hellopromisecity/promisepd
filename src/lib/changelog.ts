@@ -25,6 +25,20 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.3",
+    date: "2026-09-06",
+    title: "Finance — the office book gets its own section",
+    changes: [
+      { kind: "new", text: "Sidebar → Finance: a new group with four pages — Overview, Bank & Cash, Income, Expense. Managers and admins see it; the July /dashboard/income and /dashboard/expenses pages now redirect here." },
+      { kind: "new", text: "Overview: pick a period (this month, last month, last 30 days, this year, last 12 months, all time) and read income, expense, net surplus/deficit and the total bank & cash position; a 12-month income-vs-expense bar chart; income by head and expense by head with their totals; where the money sits (cash / bank / mobile); the latest ten entries." },
+      { kind: "new", text: "Bank & Cash: every place the office keeps money — cash drawer, bank accounts, bKash / Nagad / Rocket — as cards with a live balance (opening balance + income deposited − expense paid), the total position, a split donut, and the movements of whichever account you click. Admins add, edit and remove accounts (removal only while an account has no entries)." },
+      { kind: "new", text: "Income ledger: heads from the MD's list — Capital, Cash sale, Booking money, Installment, Service charge, Miscellaneous, Others — plus “+ New head” (admins) to add a custom head that stays in the picker. Each entry records amount, date, the account it went into, who it came from, method (cash / bank transfer / cheque / bKash / Nagad / Rocket / card), a reference and a note. Others always asks what exactly." },
+      { kind: "new", text: "Expense ledger: the 15 heads from the MD's sheet — Registration, Office rent, Salary, Furniture, Stationery, Accommodation, Transportation, Electricity/net/garbage bills, Staff lunch, Land purchase & registration, Promotion, Marketing Director honorarium, Miscellaneous, Car gas/oil, Sales commission — plus Others and custom heads, with the same entry form (who was paid, from which account)." },
+      { kind: "new", text: "Both ledgers: stat cards (period total, this month, top head, all time), by-head and by-account bars, search across head / party / reference / note, head, account and period filters, sortable columns (date, head, party, account, amount, recorded by), 10–100 rows per page, a running total of what is shown, CSV export, and edit / delete with a confirmation. Every write is audit-logged." },
+      { kind: "changed", text: "Migration 0033 adds the finance_heads table (seeded with the default heads) and head / detail / reference columns on the ledger. Labels are English throughout." },
+    ],
+  },
+  {
     version: "2.5.2",
     date: "2026-09-04",
     title: "Move picker searches the book name",
@@ -44,7 +58,6 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "fixed", text: "Remaining on real-estate rows could go stale when an installment was entered from the app side (Md Feroz Kabir: ৳4L price, ৳4L paid, still showed ৳3L remaining). Remaining is now always computed live as price − paid + refunds, and the app-side mirror keeps the stored figure in step too." },
       { kind: "new", text: "Promise City page: a sortable Decimal (শতাংশ) column after Payable — each plot holder's land size, read from the book import (and from the new Decimal field on the form). Export includes it." },
       { kind: "changed", text: "Withdrawn rows in All Customers are now a soft 20% red instead of 50%." },
-      { kind: "new", text: "Finance — a new sidebar section for the office book, four pages: Overview (income & expense by head with totals, net, a 12-month income-vs-expense chart, where the money sits, latest entries); Bank & Cash (cash drawer, bank accounts, bKash/Nagad with live balances = opening + in − out, add/edit accounts, per-account movements); Income and Expense ledgers (heads picker with the MD's list — 6 income heads, 15 expense heads, plus Others with a “what exactly” note and “+ New head” for admins — search, head/account/period filters, sortable columns, pagination, CSV, edit/delete). Needs migration 0033. The July /dashboard/income and /expenses pages now redirect here." },
     ],
   },
   {
