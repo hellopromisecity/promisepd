@@ -23,6 +23,9 @@ import {
   Settings,
   Rocket,
   KeyRound,
+  Landmark,
+  TrendingUp,
+  TrendingDown,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/auth";
@@ -55,10 +58,19 @@ export const ADMIN_NAV: NavEntry[] = [
   // Profitify — the deposit schemes' profit-payout history (yearly + lifetime).
   { label: "Profitify", href: "/dashboard/profitify", icon: HandCoins, min: "manager" },
   { label: "Analyticsify", href: "/dashboard/analytics", icon: BarChart3, min: "manager" },
+  // Finance — the office book (2026-09-06): heads-based income & expense,
+  // bank & cash accounts with live balances, and an overview of both.
+  {
+    label: "Finance", icon: Landmark,
+    children: [
+      { label: "Overview", href: "/dashboard/finance", icon: LayoutDashboard, min: "manager" },
+      { label: "Bank & Cash", href: "/dashboard/finance/bank", icon: Wallet, min: "manager" },
+      { label: "Income", href: "/dashboard/finance/income", icon: TrendingUp, min: "manager" },
+      { label: "Expense", href: "/dashboard/finance/expense", icon: TrendingDown, min: "manager" },
+    ],
+  },
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },
-  // Finance / Income / Expenses removed from the sidebar 2026-07-29 (user's
-  // request) — routes stay alive for direct links.
   { label: "Blog", href: "/dashboard/blog", icon: Newspaper, min: "manager" },
   { label: "Projectify", href: "/dashboard/projects", icon: Building, min: "manager" },
   // Marketing split into two top-level items 2026-07-29 (was one group).

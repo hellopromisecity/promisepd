@@ -3,20 +3,20 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/ui";
 import { loadFinance } from "@/lib/finance";
-import BankCash from "../BankCash";
+import LedgerExplorer from "../LedgerExplorer";
 import FinanceTabs from "../FinanceTabs";
 
-export const metadata: Metadata = { title: "Finance · Bank & Cash", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Finance · Expense", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
-export default async function BankCashPage() {
+export default async function ExpensePage() {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
   const data = await loadFinance();
   return (
     <div className="space-y-6">
-      <PageHeader title="Finance · Bank & Cash" subtitle="ক্যাশ ড্রয়ার, ব্যাংক, বিকাশ/নগদ — every account with its live balance." action={<FinanceTabs active="bank" />} />
-      <BankCash data={data} canEdit={me.role === "admin"} />
+      <PageHeader title="Finance · Expense" subtitle="ব্যয় — office rent, salary, registration, promotion, commission… every taka that went out, by head." action={<FinanceTabs active="expense" />} />
+      <LedgerExplorer kind="expense" data={data} canManageHeads={me.role === "admin"} />
     </div>
   );
 }

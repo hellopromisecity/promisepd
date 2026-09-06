@@ -44,6 +44,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "fixed", text: "Remaining on real-estate rows could go stale when an installment was entered from the app side (Md Feroz Kabir: ৳4L price, ৳4L paid, still showed ৳3L remaining). Remaining is now always computed live as price − paid + refunds, and the app-side mirror keeps the stored figure in step too." },
       { kind: "new", text: "Promise City page: a sortable Decimal (শতাংশ) column after Payable — each plot holder's land size, read from the book import (and from the new Decimal field on the form). Export includes it." },
       { kind: "changed", text: "Withdrawn rows in All Customers are now a soft 20% red instead of 50%." },
+      { kind: "new", text: "Finance — a new sidebar section for the office book, four pages: Overview (income & expense by head with totals, net, a 12-month income-vs-expense chart, where the money sits, latest entries); Bank & Cash (cash drawer, bank accounts, bKash/Nagad with live balances = opening + in − out, add/edit accounts, per-account movements); Income and Expense ledgers (heads picker with the MD's list — 6 income heads, 15 expense heads, plus Others with a “what exactly” note and “+ New head” for admins — search, head/account/period filters, sortable columns, pagination, CSV, edit/delete). Needs migration 0033. The July /dashboard/income and /expenses pages now redirect here." },
     ],
   },
   {
