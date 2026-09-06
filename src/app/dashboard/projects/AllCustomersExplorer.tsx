@@ -627,7 +627,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
                 </div>
                 {isLand ? (
                   <>
-                    <div><label className={labelCls}>Decimal (শতাংশ) <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" className={inputCls} value={decimal} onChange={(e) => setDecimal(e.target.value)} placeholder="e.g. 2.5" /></div>
+                    <div><label className={labelCls}>Decimal <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" className={inputCls} value={decimal} onChange={(e) => setDecimal(e.target.value)} placeholder="e.g. 2.5" /></div>
                     <div className="grid grid-cols-3 gap-3">
                       <div><label className={labelCls}>Road no.</label><input className={inputCls} value={road} onChange={(e) => setRoad(e.target.value)} /></div>
                       <div><label className={labelCls}>Plot no.</label><input className={inputCls} value={plot} onChange={(e) => setPlot(e.target.value)} /></div>

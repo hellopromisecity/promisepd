@@ -15,7 +15,7 @@ export default async function IncomePage() {
   const data = await loadFinance();
   return (
     <div className="space-y-6">
-      <PageHeader title="Finance · Income" subtitle="আয় — মূলধন, নগদ বিক্রয়, বুকিং মানি, কিস্তি, সার্ভিস চার্জ, বিবিধ… every taka that came in, by head." action={<FinanceTabs active="income" />} />
+      <PageHeader title="Finance · Income" subtitle="Capital, cash sale, booking money, installment, service charge, miscellaneous — every taka that came in, by head." action={<FinanceTabs active="income" />} />
       <LedgerExplorer kind="income" data={data} canManageHeads={me.role === "admin"} />
     </div>
   );

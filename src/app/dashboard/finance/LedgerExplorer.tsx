@@ -257,7 +257,6 @@ export function EntryModal({ kind, heads, accounts, entry, canManageHeads, onClo
   const NEW = "__new__";
   const [headId, setHeadId] = useState(entry?.head_id ?? active.find((h) => !/^others?$/i.test(h.name))?.id ?? "");
   const [newHead, setNewHead] = useState("");
-  const [newHeadBn, setNewHeadBn] = useState("");
   const [detail, setDetail] = useState(entry?.head_detail ?? "");
   const [amount, setAmount] = useState(entry ? String(entry.amount) : "");
   const [date, setDate] = useState(entry?.txn_date ?? todayIso());
@@ -276,10 +275,10 @@ export function EntryModal({ kind, heads, accounts, entry, canManageHeads, onClo
     setErr(null);
     if (!(Number(amount) > 0)) return setErr("Amount must be greater than 0.");
     if (isNew && !newHead.trim()) return setErr("Type the new head's name.");
-    if (!isNew && !headId) return setErr("Pick a head (খাত).");
+    if (!isNew && !headId) return setErr("Pick a head.");
     if (isOthers && !detail.trim()) return setErr("“Others” needs a short note of what it was.");
     const input: EntryInput = {
-      amount: Number(amount), head_id: isNew ? null : headId, newHead: isNew ? { name: newHead, name_bn: newHeadBn || null } : null,
+      amount: Number(amount), head_id: isNew ? null : headId, newHead: isNew ? { name: newHead } : null,
       head_detail: detail, txn_date: date, account_id: accountId || null, party, method, reference, description,
     };
     start(async () => {
@@ -289,21 +288,20 @@ export function EntryModal({ kind, heads, accounts, entry, canManageHeads, onClo
   }
 
   return (
-    <Modal title={editing ? `Edit ${kind}` : `Add ${kind}`} subtitle={kind === "income" ? "টাকা এলো — কোন খাতে, কোথায় জমা হলো" : "টাকা গেল — কোন খাতে, কোথা থেকে"} onClose={onClose}>
+    <Modal title={editing ? `Edit ${kind}` : `Add ${kind}`} subtitle={kind === "income" ? "Money in — which head, and where it was deposited" : "Money out — which head, and which account paid"} onClose={onClose}>
       {err && <div className="mb-3 rounded-xl border border-brand-red/30 bg-brand-red-tint px-3 py-2 text-sm text-brand-red-dark">{err}</div>}
       <div className="space-y-3">
         <div>
-          <label className={labelCls}>Head (খাত) *</label>
+          <label className={labelCls}>Head *</label>
           <select className={inputCls} value={headId} onChange={(e) => setHeadId(e.target.value)}>
             {active.map((h) => <option key={h.id} value={h.id}>{headLabel(h)}</option>)}
             {canManageHeads && <option value={NEW}>＋ New head…</option>}
           </select>
         </div>
         {isNew && (
-          <div className="grid grid-cols-2 gap-3 rounded-xl border border-dashed border-brand-blue/40 bg-brand-blue-tint/40 p-3">
-            <div><label className={labelCls}>New head name *</label><input className={inputCls} value={newHead} onChange={(e) => setNewHead(e.target.value)} placeholder="e.g. Legal fees" autoFocus /></div>
-            <div><label className={labelCls}>বাংলা নাম <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input className={inputCls} value={newHeadBn} onChange={(e) => setNewHeadBn(e.target.value)} placeholder="যেমন: আইনি খরচ" /></div>
-            <p className="col-span-2 text-[11px] text-fg-muted">Saved to the head list — it will be in the picker for every future entry.</p>
+          <div className="rounded-xl border border-dashed border-brand-blue/40 bg-brand-blue-tint/40 p-3">
+            <label className={labelCls}>New head name *</label><input className={inputCls} value={newHead} onChange={(e) => setNewHead(e.target.value)} placeholder="e.g. Legal fees" autoFocus />
+            <p className="mt-1.5 text-[11px] text-fg-muted">Saved to the head list — it will be in the picker for every future entry.</p>
           </div>
         )}
         {(isOthers || detail) && (

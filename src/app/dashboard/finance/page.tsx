@@ -15,7 +15,7 @@ export default async function FinanceOverviewPage() {
   const data = await loadFinance();
   return (
     <div className="space-y-6">
-      <PageHeader title="Finance · Overview" subtitle="আয়-ব্যয়ের খাতওয়ারি হিসাব — income and expense by head, net, and where the money sits." action={<FinanceTabs active="overview" />} />
+      <PageHeader title="Finance · Overview" subtitle="Income and expense by head, the net, and where the money sits — the office book at a glance." action={<FinanceTabs active="overview" />} />
       <FinanceOverview data={data} />
     </div>
   );

@@ -15,7 +15,7 @@ export default async function ExpensePage() {
   const data = await loadFinance();
   return (
     <div className="space-y-6">
-      <PageHeader title="Finance · Expense" subtitle="ব্যয় — office rent, salary, registration, promotion, commission… every taka that went out, by head." action={<FinanceTabs active="expense" />} />
+      <PageHeader title="Finance · Expense" subtitle="Office rent, salary, registration, promotion, commission — every taka that went out, by head." action={<FinanceTabs active="expense" />} />
       <LedgerExplorer kind="expense" data={data} canManageHeads={me.role === "admin"} />
     </div>
   );

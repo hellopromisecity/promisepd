@@ -27,13 +27,13 @@ create index if not exists transactions_head_idx on public.transactions (head_id
 
 -- Default heads (the owner's ledger). Re-runnable.
 insert into public.finance_heads (kind, name, name_bn, sort, is_default) values
-  ('income',  'Capital',        'মূলধন',         1,  true),
-  ('income',  'Cash sale',      'নগদ বিক্রয়',    2,  true),
-  ('income',  'Booking money',  'বুকিং মানি',    3,  true),
-  ('income',  'Installment',    'কিস্তি',         4,  true),
-  ('income',  'Service charge', 'সার্ভিস চার্জ',  5,  true),
-  ('income',  'Miscellaneous',  'বিবিধ',          6,  true),
-  ('income',  'Others',         'অন্যান্য',       99, true),
+  ('income',  'Capital',        null, 1,  true),
+  ('income',  'Cash sale',      null, 2,  true),
+  ('income',  'Booking money',  null, 3,  true),
+  ('income',  'Installment',    null, 4,  true),
+  ('income',  'Service charge', null, 5,  true),
+  ('income',  'Miscellaneous',  null, 6,  true),
+  ('income',  'Others',         null, 99, true),
   ('expense', 'Registration',                              null, 1,  true),
   ('expense', 'Office rent',                               null, 2,  true),
   ('expense', 'Salary',                                    null, 3,  true),
@@ -49,5 +49,8 @@ insert into public.finance_heads (kind, name, name_bn, sort, is_default) values
   ('expense', 'Miscellaneous',                             null, 13, true),
   ('expense', 'Car gas, oil etc.',                         null, 14, true),
   ('expense', 'Sales commission',                          null, 15, true),
-  ('expense', 'Others',                                    'অন্যান্য', 99, true)
+  ('expense', 'Others',                                    null, 99, true)
 on conflict (kind, name) do nothing;
+
+-- English-only labels (the Bangla names were the MD's sample, not the UI)
+update public.finance_heads set name_bn = null where name_bn is not null;

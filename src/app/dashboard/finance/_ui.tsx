@@ -30,7 +30,7 @@ export const txnHead = (t: FinTxn) => (t.head_detail ? `${t.category} — ${t.he
 export const METHODS = ["Cash", "Bank transfer", "Cheque", "bKash", "Nagad", "Rocket", "Card"];
 
 export const ACCOUNT_TYPES: { value: string; label: string; hint: string }[] = [
-  { value: "cash", label: "Cash drawer", hint: "নগদ — office cash" },
+  { value: "cash", label: "Cash drawer", hint: "office cash in hand" },
   { value: "bank", label: "Bank", hint: "Islami Bank, DBBL, …" },
   { value: "mobile", label: "Mobile banking", hint: "bKash / Nagad / Rocket" },
 ];

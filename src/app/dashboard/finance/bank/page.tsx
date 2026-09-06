@@ -15,7 +15,7 @@ export default async function BankCashPage() {
   const data = await loadFinance();
   return (
     <div className="space-y-6">
-      <PageHeader title="Finance · Bank & Cash" subtitle="ক্যাশ ড্রয়ার, ব্যাংক, বিকাশ/নগদ — every account with its live balance." action={<FinanceTabs active="bank" />} />
+      <PageHeader title="Finance · Bank & Cash" subtitle="Cash drawer, bank accounts, bKash / Nagad — every account with its live balance." action={<FinanceTabs active="bank" />} />
       <BankCash data={data} canEdit={me.role === "admin"} />
     </div>
   );

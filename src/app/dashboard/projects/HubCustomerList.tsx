@@ -346,7 +346,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
         </div>
         <div className="grid grid-cols-2 gap-3">
           {isLand ? (
-            <div><label className={labelCls}>Decimal (শতাংশ) <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" className={inputCls} value={decimal} onChange={(e) => setDecimal(e.target.value)} placeholder="e.g. 2.5" /></div>
+            <div><label className={labelCls}>Decimal <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" className={inputCls} value={decimal} onChange={(e) => setDecimal(e.target.value)} placeholder="e.g. 2.5" /></div>
           ) : (
             <div><label className={labelCls}>Shares / units <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} className={inputCls} value={shares} onChange={(e) => setShares(e.target.value)} placeholder="Real estate only" /></div>
           )}

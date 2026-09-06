@@ -100,7 +100,7 @@ async function resolveHead(admin: NonNullable<ReturnType<typeof getAdmin>>, kind
     return { id: String(data.id), name: String(data.name) };
   }
   const id = clean(input.head_id);
-  if (!id) throw new Error("Pick a head (খাত).");
+  if (!id) throw new Error("Pick a head.");
   const { data, error } = await heads.select("id, name, kind").eq("id", id).maybeSingle();
   if (error) throw new Error(/relation|does not exist/i.test(String(error.message)) ? "Finance heads need migration 0033 — run the SQL first." : error.message);
   if (!data) throw new Error("That head no longer exists.");
