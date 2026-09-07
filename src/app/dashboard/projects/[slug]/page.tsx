@@ -13,6 +13,7 @@ import ProjectMetaPanel from "../ProjectMetaPanel";
 import type { EditableProject } from "../../investments/projects/ProjectForm";
 import HubCustomerList from "../HubCustomerList";
 import DepositProfitPanel from "../DepositProfitPanel";
+import RealEstateInsights from "../RealEstateInsights";
 import {
   projectModel, effectiveStatus,
   shareMapFromOverride, buildingsFromOverride, sellThrough, type OverrideRow,
@@ -132,7 +133,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={Coins} tone="neutral" />
       </div>
 
-      <ProjectMetaPanel linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />
+      {isDeposit ? (
+        <ProjectMetaPanel linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />
+      ) : (
+        // Real estate: the insight panels (collection ring, top holders, plot
+        // sizes / dues, joins per month — plus the land cards for Promise
+        // City) with a compact Project details box beside them.
+        <RealEstateInsights
+          customers={customers}
+          isLand={slug === "promise-city"}
+          details={<ProjectMetaPanel compact linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />}
+        />
+      )}
 
       {profitPanel}
 

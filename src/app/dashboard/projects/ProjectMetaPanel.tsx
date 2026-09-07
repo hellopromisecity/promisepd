@@ -32,11 +32,15 @@ export default function ProjectMetaPanel({
   hubName,
   appHref,
   investors,
+  compact = false,
 }: {
   linked: EditableProject | null;
   hubName: string;
   appHref: string | null;
   investors?: number;
+  /** Sidebar-sized box (beside the insight panels): icon buttons, clamped
+   *  description, two-column fields. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -54,22 +58,22 @@ export default function ProjectMetaPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-bg p-5 shadow-sm">
+    <div className={`rounded-2xl border border-border bg-bg shadow-sm ${compact ? "flex h-full flex-col p-4" : "p-5"}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
           <Info className="h-4 w-4 text-brand-blue" /> Project details
-          <span className="font-normal text-fg-faint">— shown in the app &amp; investor PWA</span>
+          {!compact && <span className="font-normal text-fg-faint">— shown in the app &amp; investor PWA</span>}
         </h2>
         {linked && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {appHref && (
-              <Link href={appHref} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40 hover:text-brand-blue">
-                <Users className="h-4 w-4" /> Investors
+              <Link href={appHref} title="Investors" className={`inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40 hover:text-brand-blue ${compact ? "h-8 w-8 justify-center" : "px-3 py-2"}`}>
+                <Users className="h-4 w-4" />{!compact && " Investors"}
               </Link>
             )}
             <ProjectForm project={linked} variant="icon" />
-            <button type="button" onClick={del} disabled={pending} title="Delete app project" className="inline-flex items-center gap-1.5 rounded-xl border border-brand-red/30 bg-bg px-3 py-2 text-sm font-semibold text-brand-red-dark transition-colors hover:bg-brand-red-tint disabled:opacity-50">
-              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete
+            <button type="button" onClick={del} disabled={pending} title="Delete app project" className={`inline-flex items-center gap-1.5 rounded-xl border border-brand-red/30 bg-bg text-sm font-semibold text-brand-red-dark transition-colors hover:bg-brand-red-tint disabled:opacity-50 ${compact ? "h-8 w-8 justify-center" : "px-3 py-2"}`}>
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}{!compact && " Delete"}
             </button>
           </div>
         )}
@@ -86,7 +90,7 @@ export default function ProjectMetaPanel({
           </div>
         </div>
       ) : (
-        <div className="mt-4 space-y-4">
+        <div className={`mt-4 ${compact ? "space-y-3" : "space-y-4"}`}>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-bold text-emerald-700">{linked.status}</span>
             <span className="font-mono text-fg-faint">{linked.project_id}</span>
@@ -95,9 +99,11 @@ export default function ProjectMetaPanel({
             {linked.hide_share_price && <span className="inline-flex items-center gap-1 text-fg-faint"><EyeOff className="h-3 w-3" /> share hidden</span>}
           </div>
 
-          {linked.project_details && <p className="whitespace-pre-line text-sm leading-relaxed text-fg-muted">{linked.project_details}</p>}
+          {linked.project_details && (
+            <p className={`whitespace-pre-line leading-relaxed text-fg-muted ${compact ? "line-clamp-4 text-xs" : "text-sm"}`} title={compact ? linked.project_details : undefined}>{linked.project_details}</p>
+          )}
 
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+          <dl className={`grid grid-cols-2 gap-x-4 gap-y-3 ${compact ? "" : "sm:grid-cols-4"}`}>
             <Field k="Total goal" v={fmt(linked.total_amount_required)} />
             <Field k="Per-user share" v={fmt(linked.per_user_share_amount)} />
             <Field k="Start" v={dOnly(linked.start_date)} />

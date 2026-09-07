@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.4",
+    date: "2026-09-07",
+    title: "Promise City page gets its land dashboard",
+    changes: [
+      { kind: "new", text: "Promise City: four land cards under the totals — Land sold in decimals with the bigha and katha conversion (company convention: 1 katha = 1.5 decimal, 1 bigha = 30 decimal) and the number of plots; average price per decimal (with per-katha and per-bigha); Payable (contract prices, how many files are priced and fully paid); Dues (what is still to collect and the share left)." },
+      { kind: "new", text: "Every real-estate project page (Fuzala Tower, Fuzala Complex, Promise City, Ahbab Palace): an animated Collection ring (paid vs payable, dues, fully-paid count), Biggest plots by decimal (Promise City) or Top payers, Plot sizes spread (≤1 / 1–3 / 3–10 / 10+ decimal) or Largest dues, and a New-customers-per-month bar chart for the last 12 months." },
+      { kind: "changed", text: "The Project details box no longer spans the full width on real-estate pages — it sits compact beside the insight panels (icon buttons, clamped description, two-column fields). Deposit pages keep the wide box." },
+    ],
+  },
+  {
     version: "2.5.3",
     date: "2026-09-06",
     title: "Finance — the office book gets its own section",
