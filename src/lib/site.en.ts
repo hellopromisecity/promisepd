@@ -141,7 +141,7 @@ export const PROJECT_EN: Record<
   },
   "ahbab-palace-01": {
     name: "Ahbab Palace · 01",
-    status: "Ongoing",
+    status: "Completed",
     location: "Bashundhara River View, Dhaka",
     price: "Tk 40.00 Lakh",
     description:

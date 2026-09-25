@@ -654,7 +654,7 @@ export const PROJECTS: Project[] = [
   {
     slug: "ahbab-palace-01",
     name: "আহবাব প্যালেস · ০১",
-    status: "চলমান",
+    status: "সম্পন্ন",
     location: "বসুন্ধরা রিভার ভিউ, ঢাকা",
     price: "৳ ৪০.০০ লাখ",
     description:

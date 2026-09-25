@@ -9,6 +9,7 @@ import { PROJECTS } from "@/lib/site";
 import { PROJECT_EN } from "@/lib/site.en";
 import { DICT, localizedPath } from "@/lib/i18n";
 import { useLocale } from "./LocaleProvider";
+import { useState } from "react";
 
 const STATUS_DOT: Record<string, string> = {
   red: "bg-brand-red",
@@ -16,10 +17,23 @@ const STATUS_DOT: Record<string, string> = {
   ash: "bg-brand-ash-dark",
 };
 
+/** Tab filter over the book status (চলমান / আসন্ন / সম্পন্ন). */
+type Tab = "all" | "running" | "upcoming" | "completed";
+const STATUS_TAB: Record<string, Tab> = { "চলমান": "running", "আসন্ন": "upcoming", "সম্পন্ন": "completed" };
+const TABS: { key: Tab; bn: string; en: string }[] = [
+  { key: "all", bn: "সব", en: "All" },
+  { key: "running", bn: "চলমান", en: "Running" },
+  { key: "upcoming", bn: "আসন্ন", en: "Upcoming" },
+  { key: "completed", bn: "সম্পন্ন", en: "Completed" },
+];
+
 export default function Projects() {
   const locale = useLocale();
   const isEn = locale === "en";
   const t = DICT[locale].home;
+  const [tab, setTab] = useState<Tab>("all");
+  const count = (k: Tab) => (k === "all" ? PROJECTS.length : PROJECTS.filter((p) => STATUS_TAB[p.status] === k).length);
+  const shown = tab === "all" ? PROJECTS : PROJECTS.filter((p) => STATUS_TAB[p.status] === tab);
   return (
     <section
       id="projects"
@@ -64,10 +78,45 @@ export default function Projects() {
           </p>
         </motion.div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {PROJECTS.map((project, i) => (
+        {/* Status tabs — All / Running / Upcoming / Completed */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="mx-auto mb-10 flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl border border-border bg-bg-soft p-1.5 shadow-sm"
+          role="tablist"
+          aria-label={isEn ? "Filter projects by status" : "অবস্থা অনুযায়ী প্রকল্প"}
+        >
+          {TABS.map((tb) => {
+            const n = count(tb.key);
+            const active = tab === tb.key;
+            return (
+              <button
+                key={tb.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(tb.key)}
+                className={`relative inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${active ? "text-white" : "text-fg-muted hover:text-fg"}`}
+              >
+                {active && <motion.span layoutId="projects-tab" className="absolute inset-0 rounded-xl bg-brand-blue shadow-[var(--shadow-brand)]" transition={{ type: "spring", stiffness: 380, damping: 32 }} />}
+                <span className="relative">{isEn ? tb.en : tb.bn}</span>
+                <span className={`relative rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${active ? "bg-white/20 text-white" : "bg-bg text-fg-faint"}`}>{n}</span>
+              </button>
+            );
+          })}
+        </motion.div>
+
+        {shown.length === 0 && (
+          <p className="py-10 text-center text-sm text-fg-muted">{isEn ? "No projects in this category yet." : "এই ধাপে এখনো কোনো প্রকল্প নেই।"}</p>
+        )}
+
+        <motion.div layout className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((project, i) => (
             <motion.article
               key={project.slug}
+              layout
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
@@ -159,7 +208,7 @@ export default function Projects() {
               </div>
             </motion.article>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

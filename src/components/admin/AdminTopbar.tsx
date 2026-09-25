@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { Menu, Search, Bell, ChevronDown, ExternalLink, LogOut, ArrowRight, ArrowUpRight, ArrowDownRight, ReceiptText } from "lucide-react";
 import type { Member } from "@/lib/auth";
 import { logout } from "@/app/actions/auth";
+import ThemeToggle from "@/components/ThemeToggle";
 import { latestTransactionsForBell, type BellTxn } from "@/app/actions/notifications";
 
 function initials(name: string) {
@@ -72,6 +73,8 @@ export default function AdminTopbar({
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
+        {/* light / dark — same switch as the public site */}
+        <ThemeToggle className="mr-1" />
         <div className="relative">
           <button
             aria-label="Notifications"

@@ -146,7 +146,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="bn" className={bn.variable}>
+    <html lang="bn" className={bn.variable} suppressHydrationWarning>
       <head>
         {/* No preconnect to api.dicebear.com — avatars from it don't appear
             above the fold on the public pages, so PageSpeed flagged it as an
@@ -158,9 +158,30 @@ export default function RootLayout({
         {/* Footer + FABs stay on the website but disappear inside the installed
             PWA so it feels native. Raw <style> on purpose: Tailwind v4's
             Lightning CSS drops this rule if it lives in globals.css. */}
+        {/* Light / dark: re-apply the saved choice BEFORE first paint so a
+            dark visitor never sees a white flash. Pairs with ThemeToggle. */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {"(function(){try{if(localStorage.getItem('pc-theme')==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}})();"}
+        </Script>
         <style
           dangerouslySetInnerHTML={{
             __html: [
+              // ── Dark theme ──────────────────────────────────────────────
+              // Every utility built on the brand tokens (bg-bg, text-fg,
+              // border-border, bg-brand-blue-tint …) flips through these
+              // variables; the few hard-coded whites / tints below are
+              // remapped so cards, pills and soft badges stay readable.
+              "html[data-theme=dark]{color-scheme:dark;--color-bg:#0b1220;--color-bg-soft:#111a2e;--color-bg-soft-2:#16213a;--color-fg:#e8edf7;--color-fg-soft:#c9d2e6;--color-fg-muted:#94a0b8;--color-fg-faint:#7c879c;--color-border:#223052;--color-border-strong:#2c3b63;--color-brand-blue-tint:#1b2d55;--color-brand-red-tint:#3a1a24;--color-brand-ash-tint:#1a2338;--color-brand-ash-soft:#2a3550;--shadow-card:0 2px 14px -4px rgba(0,0,0,.5);scrollbar-color:#3463c7 #111a2e}html[data-theme=dark] .glass,html[data-theme=dark] .glass-strong{background:rgba(17,26,46,.75)!important;border-color:rgba(255,255,255,.08)!important}",
+              "html[data-theme=dark] .bg-white{background-color:var(--color-bg-soft)!important}",
+              "html[data-theme=dark] .bg-white\\/95,html[data-theme=dark] .bg-white\\/90,html[data-theme=dark] .bg-white\\/80,html[data-theme=dark] .bg-white\\/70,html[data-theme=dark] .bg-white\\/60{background-color:rgba(17,26,46,.92)!important}",
+              "html[data-theme=dark] .bg-emerald-50{background-color:rgba(16,185,129,.14)!important}html[data-theme=dark] .bg-amber-50{background-color:rgba(245,158,11,.14)!important}html[data-theme=dark] .bg-violet-50{background-color:rgba(139,92,246,.16)!important}",
+              "html[data-theme=dark] .text-emerald-700{color:#34d399!important}html[data-theme=dark] .text-amber-700,html[data-theme=dark] .text-amber-800{color:#fbbf24!important}html[data-theme=dark] .text-brand-blue-dark{color:#8fb0f5!important}html[data-theme=dark] .text-brand-red-dark{color:#ff6b74!important}",
+              // image scrims / backdrops that were built from the (now light) fg colour stay dark
+              "html[data-theme=dark] .from-fg\\/85{--tw-gradient-from:rgba(11,18,32,.85)}html[data-theme=dark] .via-fg\\/25{--tw-gradient-via:rgba(11,18,32,.25)}html[data-theme=dark] .bg-fg\\/30{background-color:rgba(0,0,0,.6)!important}",
+              "html[data-theme=dark] img.mix-blend-multiply{mix-blend-mode:screen}",
+              "html[data-theme=dark] .bg-white\\/92,html[data-theme=dark] .bg-white\\/75{background-color:rgba(17,26,46,.9)!important}html[data-theme=dark] .bg-\\[\\#fff7e6\\]{background-color:rgba(245,158,11,.16)!important}",
+              "html[data-theme=dark] .bg-emerald-100{background-color:rgba(16,185,129,.2)!important}html[data-theme=dark] .bg-amber-100{background-color:rgba(245,158,11,.2)!important}html[data-theme=dark] .text-emerald-800{color:#34d399!important}html[data-theme=dark] .text-violet-700{color:#c4b5fd!important}",
+              "html[data-theme=dark] .to-white{--tw-gradient-to:var(--color-bg)}html[data-theme=dark] .via-white\\/30{--tw-gradient-via:rgba(11,18,32,.3)}html[data-theme=dark] .from-white\\/40{--tw-gradient-from:rgba(255,255,255,.08)}",
               // Footer + FABs disappear inside the installed PWA.
               "@media all and (display-mode:standalone){.pwa-hide{display:none!important}}",
               // Mobile performance: freeze the always-running decorative

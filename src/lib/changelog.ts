@@ -25,6 +25,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.6",
+    date: "2026-09-25",
+    title: "Dark mode, project tabs, social dock",
+    changes: [
+      { kind: "new", text: "Light / dark switch — a sun-and-moon pill on the public navbar (and inside the mobile menu) and on the dashboard topbar. The choice is remembered per device and applied before the page paints, so there is no white flash. Every brand-token colour flips; hard-coded whites and soft badges are remapped so cards, pills and charts stay readable." },
+      { kind: "new", text: "Homepage Projects: status tabs — All / Running / Upcoming / Completed — with counts and an animated active pill; Ahbab Palace · 01 is now marked Completed, the other four projects Running." },
+      { kind: "new", text: "Floating social dock: a round button at the bottom-left of every public page. Tap it and a bar slides up with the Facebook page, YouTube channel and WhatsApp channel, then share-this-page (Facebook / WhatsApp / Telegram / X) and copy-link; tap again (or anywhere) to hide it. Works on phones too; hidden inside the installed app." },
+      { kind: "changed", text: "Language switch is now a compact dropdown (বাং by default → বাংলা / English) instead of the two-pill toggle, freeing navbar space for the theme switch." },
+    ],
+  },
+  {
     version: "2.5.5",
     date: "2026-09-25",
     title: "Two people, one login — split them",

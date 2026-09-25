@@ -1,16 +1,18 @@
 "use client";
 
-/** Fixed left-edge social share rail.  Shares whatever page the visitor is
- *  currently on (URL built live from the pathname) to Facebook / WhatsApp /
- *  Telegram / X, plus a copy-link button for sharing the exact URL anywhere.
- *  Desktop + tablet only (md+); the installed PWA hides it via the parent
- *  `.pwa-hide` wrapper in layout.tsx.  lucide dropped brand icons, so the
- *  social marks are inlined as SVG. */
+/** Floating social dock — a round button pinned bottom-left; tap it and a
+ *  vertical bar slides up with the company's pages (Facebook, YouTube,
+ *  WhatsApp channel), then share-this-page links (Facebook / WhatsApp /
+ *  Telegram / X) and copy-link. Tap the button again (or anywhere else) to
+ *  hide it. Works on every screen size; the installed PWA hides it via the
+ *  parent `.pwa-hide` wrapper in layout.tsx. lucide dropped brand icons, so
+ *  the social marks are inlined as SVG. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Link2, Check } from "lucide-react";
+import { Link2, Check, Share2, X } from "lucide-react";
 import { stripLocale } from "@/lib/i18n";
+import { SITE } from "@/lib/site";
 
 type IconProps = React.SVGProps<SVGSVGElement>;
 const Fb = (p: IconProps) => (
@@ -33,62 +35,84 @@ const XLogo = (p: IconProps) => (
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
   </svg>
 );
+const Yt = (p: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...p}>
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+  </svg>
+);
 
 export default function ShareSidebar() {
   const pathname = usePathname() || "/";
   const isEn = stripLocale(pathname).locale === "en";
   const [origin, setOrigin] = useState("");
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => setOrigin(window.location.origin), []);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
 
   const url = `${origin}${pathname}`;
   const e = encodeURIComponent(url);
-  const items = [
-    { key: "fb", label: "Facebook", color: "#1877F2", Icon: Fb, href: `https://www.facebook.com/sharer/sharer.php?u=${e}` },
-    { key: "wa", label: "WhatsApp", color: "#25D366", Icon: Wa, href: `https://wa.me/?text=${e}` },
-    { key: "tg", label: "Telegram", color: "#229ED9", Icon: Tg, href: `https://t.me/share/url?url=${e}` },
-    { key: "x", label: "X", color: "#0f1419", Icon: XLogo, href: `https://twitter.com/intent/tweet?url=${e}` },
+  const social = SITE.socials as { facebook?: string; youtube?: string; whatsapp?: string };
+  const pages = [
+    social.facebook && { key: "fbp", label: isEn ? "Facebook page" : "ফেসবুক পেজ", color: "#1877F2", Icon: Fb, href: social.facebook },
+    social.youtube && { key: "yt", label: isEn ? "YouTube channel" : "ইউটিউব চ্যানেল", color: "#FF0000", Icon: Yt, href: social.youtube },
+    social.whatsapp && { key: "wac", label: isEn ? "WhatsApp channel" : "হোয়াটসঅ্যাপ চ্যানেল", color: "#25D366", Icon: Wa, href: social.whatsapp },
+  ].filter(Boolean) as { key: string; label: string; color: string; Icon: (p: IconProps) => React.JSX.Element; href: string }[];
+  const shares = [
+    { key: "fb", label: isEn ? "Share on Facebook" : "ফেসবুকে শেয়ার", color: "#1877F2", Icon: Fb, href: `https://www.facebook.com/sharer/sharer.php?u=${e}` },
+    { key: "wa", label: isEn ? "Share on WhatsApp" : "হোয়াটসঅ্যাপে শেয়ার", color: "#25D366", Icon: Wa, href: `https://wa.me/?text=${e}` },
+    { key: "tg", label: isEn ? "Share on Telegram" : "টেলিগ্রামে শেয়ার", color: "#229ED9", Icon: Tg, href: `https://t.me/share/url?url=${e}` },
+    { key: "x", label: isEn ? "Share on X" : "X-এ শেয়ার", color: "var(--color-fg)", Icon: XLogo, href: `https://twitter.com/intent/tweet?url=${e}` },
   ];
 
   async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* clipboard blocked — no-op */
-    }
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
   }
 
+  const item = "grid h-9 w-9 place-items-center rounded-full transition-transform hover:scale-110 hover:bg-bg-soft";
+
   return (
-    <div className="fixed left-0 top-1/2 z-40 hidden -translate-y-1/2 flex-col items-center gap-1.5 rounded-r-2xl border border-l-0 border-border bg-white/95 p-2 shadow-lg backdrop-blur md:flex">
-      <span className="text-[8px] font-bold uppercase tracking-wider text-fg-faint">
-        {isEn ? "Share" : "শেয়ার"}
-      </span>
-      {items.map(({ key, label, color, Icon, href }) => (
-        <a
-          key={key}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={isEn ? `Share on ${label}` : `${label}-এ শেয়ার করুন`}
-          aria-label={`Share on ${label}`}
-          className="grid h-9 w-9 place-items-center rounded-full transition-transform hover:scale-110 hover:bg-bg-soft"
-          style={{ color }}
-        >
-          <Icon className="h-5 w-5" />
-        </a>
-      ))}
-      <span className="my-0.5 h-px w-5 bg-border" />
+    <div ref={ref} className="fixed bottom-5 left-4 z-40 flex flex-col items-center gap-2 sm:bottom-6 sm:left-5">
+      {/* the bar — slides up from the button */}
+      <div
+        className={`flex flex-col items-center gap-1 rounded-2xl border border-border bg-bg p-1.5 shadow-xl transition-all duration-300 ease-out ${open ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
+        aria-hidden={!open}
+      >
+        <span className="text-[8px] font-bold uppercase tracking-wider text-fg-faint">{isEn ? "Follow" : "ফলো"}</span>
+        {pages.map(({ key, label, color, Icon, href }) => (
+          <a key={key} href={href} target="_blank" rel="noopener noreferrer" title={label} aria-label={label} className={item} style={{ color }}>
+            <Icon className="h-5 w-5" />
+          </a>
+        ))}
+        <span className="my-0.5 h-px w-5 bg-border" />
+        <span className="text-[8px] font-bold uppercase tracking-wider text-fg-faint">{isEn ? "Share" : "শেয়ার"}</span>
+        {shares.map(({ key, label, color, Icon, href }) => (
+          <a key={key} href={href} target="_blank" rel="noopener noreferrer" title={label} aria-label={label} className={item} style={{ color }}>
+            <Icon className="h-5 w-5" />
+          </a>
+        ))}
+        <button type="button" onClick={copyLink} title={isEn ? "Copy link" : "লিংক কপি করুন"} aria-label="Copy link" className={`${item} text-brand-blue`}>
+          {copied ? <Check className="h-5 w-5 text-emerald-500" /> : <Link2 className="h-5 w-5" />}
+        </button>
+      </div>
+
+      {/* the round button */}
       <button
         type="button"
-        onClick={copyLink}
-        title={isEn ? "Copy link" : "লিংক কপি করুন"}
-        aria-label={isEn ? "Copy link" : "Copy link"}
-        className="grid h-9 w-9 place-items-center rounded-full text-brand-blue transition-transform hover:scale-110 hover:bg-bg-soft"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={isEn ? (open ? "Hide social links" : "Social links") : open ? "সোশ্যাল বার লুকান" : "সোশ্যাল লিংক"}
+        title={isEn ? "Social & share" : "সোশ্যাল ও শেয়ার"}
+        className={`grid h-12 w-12 place-items-center rounded-full shadow-[0_10px_30px_-8px_rgba(24,71,161,0.6)] transition-all duration-300 hover:scale-105 ${open ? "bg-fg text-bg" : "bg-brand-blue text-white animate-pulse-ring"}`}
       >
-        {copied ? <Check className="h-5 w-5 text-emerald-500" /> : <Link2 className="h-5 w-5" />}
+        {open ? <X className="h-5 w-5" /> : <Share2 className="h-5 w-5" />}
       </button>
     </div>
   );

@@ -38,6 +38,7 @@ import {
 } from "@/lib/site.en";
 import { FORMS_EN } from "@/lib/pages.en";
 import LangSwitcher from "./LangSwitcher";
+import ThemeToggle, { useTheme } from "./ThemeToggle";
 import AuthNavButton from "./AuthNavButton";
 
 /** English overlay for a dropdown item (division / project / form) by the
@@ -84,6 +85,7 @@ const ACCENT_TO_SOLID: Record<string, string> = {
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const dark = useTheme() === "dark";
   // Which mega-dropdown is open — keyed by NAV item id ("divisions" /
   // "projects").  null = none.  Lets multiple nav items each own a
   // dropdown without clobbering each other.
@@ -208,11 +210,11 @@ export default function Navbar() {
         <motion.div
           animate={{
             backgroundColor: isCondensed
-              ? "rgba(255,255,255,0.82)"
-              : "rgba(255,255,255,0)",
+              ? (dark ? "rgba(11,18,32,0.86)" : "rgba(255,255,255,0.82)")
+              : (dark ? "rgba(11,18,32,0)" : "rgba(255,255,255,0)"),
             borderBottomColor: isCondensed
-              ? "rgba(229,231,235,0.9)"
-              : "rgba(229,231,235,0)",
+              ? (dark ? "rgba(34,48,82,0.9)" : "rgba(229,231,235,0.9)")
+              : (dark ? "rgba(34,48,82,0)" : "rgba(229,231,235,0)"),
             boxShadow: isCondensed
               ? "0 6px 24px -10px rgba(15,23,42,0.12)"
               : "0 0 0 0 rgba(0,0,0,0)",
@@ -461,8 +463,9 @@ export default function Navbar() {
             </nav>
 
             <div className="flex items-center gap-2 py-1">
-              {/* EN / BN language switcher — two separate versions. */}
+              {/* Language dropdown (বাং default) + light/dark switch. */}
               <LangSwitcher />
+              <ThemeToggle className="hidden sm:inline-flex" />
 
               {/* Login / Account — primary header action (replaced the
                   Call CTA).  Shows "Account" once signed in.  Hidden on
@@ -692,9 +695,16 @@ export default function Navbar() {
                 })}
               </nav>
 
+              {/* Language + theme — the desktop pills are hidden on the
+                  smallest screens, so they live here inside the menu. */}
+              <div className="mt-5 flex items-center justify-between gap-2 rounded-xl border border-border bg-bg-soft px-3 py-2">
+                <span className="text-xs font-semibold text-fg-muted">{isEn ? "Language · Theme" : "ভাষা · থিম"}</span>
+                <div className="flex items-center gap-2"><LangSwitcher /><ThemeToggle /></div>
+              </div>
+
               {/* Auth row — small screens don't show the desktop Login
                   chip, so we surface Login + Sign Up inside the menu. */}
-              <div className="mt-6 grid grid-cols-2 gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <AuthNavButton
                   variant="mobile"
                   loginHref={lp("/login")}
