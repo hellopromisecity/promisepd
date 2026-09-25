@@ -1,21 +1,27 @@
 "use client";
 
-/** Real-estate project dashboard block — the numbers behind a project at a
- *  glance: collection progress (paid vs payable) as a ring, top holders as
- *  animated bars, dues spread, joins per month — and for land (Promise City)
- *  the plot picture: total decimals sold with the bigha / katha conversion,
- *  average price per decimal / katha, holders by decimal. Company convention
- *  (owner, 2026-09-07): 1 decimal = 1 শতাংশ, 1.5 decimal = 1 katha,
- *  30 decimal = 1 bigha. */
+/** Project dashboard block — the numbers behind a project at a glance, for
+ *  all three kinds of project:
+ *   • land   (Promise City): land sold in decimal / bigha / katha, avg price
+ *            per decimal, biggest plots, plot sizes;
+ *   • estate (towers / flats): collection ring (paid vs payable), top payers,
+ *            payment-status split, largest dues;
+ *   • deposit (GDA / GDB / Special / Monthly): deposits ring (still held vs
+ *            deposited + profit), top depositors, member status split;
+ *  plus, for every kind, new customers per month (last 12).
+ *  Company land convention (owner, 2026-09-07): 1 decimal = 1 শতাংশ,
+ *  1.5 decimal = 1 katha, 30 decimal = 1 bigha. */
 
 import { useEffect, useMemo, useState } from "react";
-import { LandPlot, Ruler, PieChart, Trophy, CalendarDays, Wallet, AlertCircle } from "lucide-react";
+import { LandPlot, Ruler, PieChart, Trophy, CalendarDays, Wallet, AlertCircle, Users } from "lucide-react";
 import { StatCard } from "@/components/admin/ui";
 import type { HubCustomer } from "@/lib/hub";
 import { Donut, BarList } from "../finance/_ui";
 
 const DEC_PER_KATHA = 1.5;
 const DEC_PER_BIGHA = 30;
+
+export type InsightMode = "land" | "estate" | "deposit";
 
 const fmt = (n: number) => {
   n = Number(n) || 0;
@@ -28,7 +34,9 @@ const num = (n: number, d = 2) => (Number.isInteger(n) ? String(n) : n.toFixed(d
 const decOf = (c: HubCustomer): number | null => { const v = c.bio?.decimal ?? c.bio?.flat_size; const n = parseFloat(String(v ?? "")); return Number.isFinite(n) && n > 0 ? n : null; };
 const firstName = (s: string) => (s || "").replace(/^(md\.?|mst\.?|muhammad|mohammad|muha:)\s*/i, "").split(/\s+/).slice(0, 2).join(" ");
 
-export default function RealEstateInsights({ customers, isLand, details }: { customers: HubCustomer[]; isLand: boolean; details: React.ReactNode }) {
+export default function RealEstateInsights({ customers, mode, accrued = 0, details }: { customers: HubCustomer[]; mode: InsightMode; accrued?: number; details: React.ReactNode }) {
+  const isLand = mode === "land";
+  const isDeposit = mode === "deposit";
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => setMounted(true), 40); return () => clearTimeout(t); }, []);
 
@@ -39,6 +47,18 @@ export default function RealEstateInsights({ customers, isLand, details }: { cus
     const priced = customers.filter((c) => c.total_price > 0).length;
     const fullyPaid = customers.filter((c) => c.total_price > 0 && c.total_remaining <= 0).length;
     const pct = payable > 0 ? Math.min(100, (paid / payable) * 100) : 0;
+    // deposit schemes: what members put in, what they were paid, what they took out
+    const profitPaid = customers.reduce((a, c) => a + c.dividend, 0);
+    const withdrawn = customers.reduce((a, c) => a + c.withdrawn, 0);
+    const held = paid + profitPaid - withdrawn + accrued;
+    const depositBase = paid + profitPaid + accrued;
+    const heldPct = depositBase > 0 ? Math.max(0, Math.min(100, (held / depositBase) * 100)) : 0;
+    const heldOf = (c: HubCustomer) => c.total_paid + c.dividend - c.withdrawn;
+    const members = [
+      { label: "Active", n: customers.filter((c) => c.total_paid > 0 && heldOf(c) > 0).length, color: "#10b981" },
+      { label: "Closed / withdrawn", n: customers.filter((c) => c.total_paid > 0 && heldOf(c) <= 0).length, color: "#e11924" },
+      { label: "No deposit yet", n: customers.filter((c) => !(c.total_paid > 0)).length, color: "#94a3b8" },
+    ];
     // land
     const withDec = customers.map((c) => ({ c, d: decOf(c) })).filter((x): x is { c: HubCustomer; d: number } => x.d != null);
     const decimals = withDec.reduce((a, x) => a + x.d, 0);
@@ -68,10 +88,14 @@ export default function RealEstateInsights({ customers, isLand, details }: { cus
       { label: "Not started", n: customers.filter((c) => c.total_price > 0 && c.total_paid <= 0).length, color: "#f59e0b" },
       { label: "No price set", n: customers.filter((c) => !(c.total_price > 0)).length, color: "#94a3b8" },
     ];
-    return { paid, payable, dues, priced, fullyPaid, pct, decimals, withDec: withDec.length, pricePerDec, topPaid, topDec, topDues, months, maxJoin, sizes, status };
-  }, [customers, isLand]);
+    return { paid, payable, dues, priced, fullyPaid, pct, profitPaid, withdrawn, held, depositBase, heldPct, members, decimals, withDec: withDec.length, pricePerDec, topPaid, topDec, topDues, months, maxJoin, sizes, status };
+  }, [customers, isLand, accrued]);
 
   const bigha = s.decimals / DEC_PER_BIGHA, katha = s.decimals / DEC_PER_KATHA;
+
+  // the status-split list (third panel) — bars per bucket
+  const split = isDeposit ? s.members : s.status;
+  const splitUnit = isDeposit ? "member" : "file";
 
   return (
     <div className="space-y-3">
@@ -89,18 +113,30 @@ export default function RealEstateInsights({ customers, isLand, details }: { cus
       <div className="grid gap-3 xl:grid-cols-4">
         <div className="xl:col-span-1">{details}</div>
         <div className="grid gap-3 md:grid-cols-3 xl:col-span-3">
-        {/* collection ring */}
+        {/* ring: collection (estate / land) or deposits still held (deposit) */}
         <div className="rounded-2xl border border-border bg-bg p-4">
-          <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-fg"><PieChart className="h-4 w-4 text-brand-blue" /> Collection</p>
-          <div className="flex items-center justify-around gap-2">
-            <Donut mounted={mounted} pct={s.pct} color="#1847A1" label="collected" a={fmt(s.paid)} b={`of ${fmt(s.payable)}`} size={96} />
-            <div className="space-y-1.5 text-xs">
-              <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Paid</span><b className="tabular-nums text-brand-blue">{fmt(s.paid)}</b></p>
-              <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Dues</span><b className="tabular-nums text-brand-red-dark">{fmt(s.dues)}</b></p>
-              <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Fully paid</span><b className="tabular-nums text-fg">{s.fullyPaid}/{s.priced}</b></p>
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-fg"><PieChart className="h-4 w-4 text-brand-blue" /> {isDeposit ? "Deposits" : "Collection"}</p>
+          {isDeposit ? (
+            <div className="flex items-center justify-around gap-2">
+              <Donut mounted={mounted} pct={s.heldPct} color="#1847A1" label="still held" a={fmt(s.held)} b={`of ${fmt(s.depositBase)}`} size={96} />
+              <div className="space-y-1.5 text-xs">
+                <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Deposited</span><b className="tabular-nums text-brand-blue">{fmt(s.paid)}</b></p>
+                <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Profit paid</span><b className="tabular-nums text-emerald-600">{fmt(s.profitPaid)}</b></p>
+                {accrued > 0 && <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Accrued (live)</span><b className="tabular-nums text-emerald-600">{fmt(accrued)}</b></p>}
+                <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Withdrawn</span><b className="tabular-nums text-brand-red-dark">{fmt(s.withdrawn)}</b></p>
+              </div>
             </div>
-          </div>
-          {!isLand && (
+          ) : (
+            <div className="flex items-center justify-around gap-2">
+              <Donut mounted={mounted} pct={s.pct} color="#1847A1" label="collected" a={fmt(s.paid)} b={`of ${fmt(s.payable)}`} size={96} />
+              <div className="space-y-1.5 text-xs">
+                <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Paid</span><b className="tabular-nums text-brand-blue">{fmt(s.paid)}</b></p>
+                <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Dues</span><b className="tabular-nums text-brand-red-dark">{fmt(s.dues)}</b></p>
+                <p className="flex items-center justify-between gap-3"><span className="text-fg-muted">Fully paid</span><b className="tabular-nums text-fg">{s.fullyPaid}/{s.priced}</b></p>
+              </div>
+            </div>
+          )}
+          {mode === "estate" && (
             <div className="mt-3 border-t border-border pt-3">
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Largest dues</p>
               <BarList mounted={mounted} rows={s.topDues.slice(0, 4)} color="#e11924" total={s.dues} empty="No dues." />
@@ -110,15 +146,15 @@ export default function RealEstateInsights({ customers, isLand, details }: { cus
 
         {/* top holders */}
         <div className="rounded-2xl border border-border bg-bg p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><Trophy className="h-4 w-4 text-amber-500" /> {isLand ? "Biggest plots" : "Top payers"}</p>
+          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><Trophy className="h-4 w-4 text-amber-500" /> {isLand ? "Biggest plots" : isDeposit ? "Top depositors" : "Top payers"}</p>
           {isLand ? (
             <BarListUnits mounted={mounted} rows={s.topDec} unit="dec" color="#10b981" empty="No decimals recorded yet." />
           ) : (
-            <BarList mounted={mounted} rows={s.topPaid} color="#1847A1" total={s.paid} empty="No payments yet." />
+            <BarList mounted={mounted} rows={s.topPaid} color="#1847A1" total={s.paid} empty={isDeposit ? "No deposits yet." : "No payments yet."} />
           )}
         </div>
 
-        {/* land sizes or largest dues */}
+        {/* land sizes, member status or payment status */}
         <div className="rounded-2xl border border-border bg-bg p-4">
           {isLand ? (
             <>
@@ -135,16 +171,18 @@ export default function RealEstateInsights({ customers, isLand, details }: { cus
             </>
           ) : (
             <>
-              <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><Wallet className="h-4 w-4 text-brand-blue" /> Payment status</p>
+              <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg">
+                {isDeposit ? <Users className="h-4 w-4 text-brand-blue" /> : <Wallet className="h-4 w-4 text-brand-blue" />} {isDeposit ? "Member status" : "Payment status"}
+              </p>
               <ul className="space-y-2.5">
-                {s.status.map((b, i) => (
+                {split.map((b, i) => (
                   <li key={b.label}>
-                    <div className="flex items-baseline justify-between text-sm"><span className="font-medium text-fg">{b.label}</span><span className="text-xs text-fg-muted">{b.n} file{b.n === 1 ? "" : "s"}</span></div>
+                    <div className="flex items-baseline justify-between text-sm"><span className="font-medium text-fg">{b.label}</span><span className="text-xs text-fg-muted">{b.n} {splitUnit}{b.n === 1 ? "" : "s"}</span></div>
                     <div className="mt-1 h-2 overflow-hidden rounded-full bg-bg-soft"><div className="h-full rounded-full transition-[width] duration-700" style={{ width: mounted ? `${customers.length ? Math.max(b.n ? 2 : 0, (b.n / customers.length) * 100) : 0}%` : "0%", background: b.color, transitionDelay: `${i * 60}ms` }} /></div>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-[11px] text-fg-faint">{customers.length} files in this project</p>
+              <p className="mt-3 text-[11px] text-fg-faint">{customers.length} {isDeposit ? "members" : "files"} in this project</p>
             </>
           )}
         </div>
@@ -154,7 +192,7 @@ export default function RealEstateInsights({ customers, isLand, details }: { cus
 
       {/* joins per month — wide */}
       <div className="rounded-2xl border border-border bg-bg p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><CalendarDays className="h-4 w-4 text-violet-500" /> New customers <span className="text-[11px] font-normal text-fg-faint">· last 12 months · {customers.length} total</span></p>
+          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><CalendarDays className="h-4 w-4 text-violet-500" /> New {isDeposit ? "members" : "customers"} <span className="text-[11px] font-normal text-fg-faint">· last 12 months · {customers.length} total</span></p>
           <div className="flex h-24 items-end gap-1.5">
             {s.months.map((m, i) => (
               <div key={m.key} className="group relative flex h-full flex-1 items-end" title={`${m.label}: ${m.n}`}>

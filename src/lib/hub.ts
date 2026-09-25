@@ -116,6 +116,48 @@ export async function hubProjectCustomers(key: string): Promise<HubCustomer[]> {
   return rows.map(mapCustomer).filter((c) => !c.deleted_at);
 }
 
+/** Monthly money flow for one project — every book payment of its customers
+ *  bucketed by calendar month for the last 12 months: deposits + profit
+ *  credits count as In, withdrawals as Out. Feeds the project page's
+ *  "Monthly flow" chart (same shape as the Dashboard's Capital flow). */
+export async function hubProjectMonthlyFlow(customerIds: string[]): Promise<{ bars: { label: string; in: number; out: number }[]; count: number }> {
+  const admin = getAdmin();
+  const now = new Date();
+  const months: { key: string; label: string; in: number; out: number }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-GB", { month: "short" }), in: 0, out: 0 });
+  }
+  const firstKey = months[0].key + "-01";
+  let count = 0;
+  if (admin && customerIds.length) {
+    // .in() with a few hundred ids is fine; chunk to keep the URL short and
+    // page each chunk past the 1000-row cap.
+    for (let c = 0; c < customerIds.length; c += 200) {
+      const ids = customerIds.slice(c, c + 200);
+      for (let from = 0; ; from += 1000) {
+        const { data } = await admin
+          .from("hub_customer_payments")
+          .select("date, amount, kind")
+          .in("customer_id", ids)
+          .gte("date", firstKey)
+          .range(from, from + 999);
+        const rows = (data ?? []) as { date: string | null; amount: unknown; kind: string | null }[];
+        for (const r of rows) {
+          const m = months.find((x) => (r.date ?? "").startsWith(x.key));
+          if (!m) continue;
+          const amt = Math.abs(n(r.amount));
+          if (!amt) continue;
+          count++;
+          if (r.kind === "withdrawal") m.out += amt; else m.in += amt;
+        }
+        if (rows.length < 1000) break;
+      }
+    }
+  }
+  return { bars: months.map(({ label, in: i, out }) => ({ label, in: i, out })), count };
+}
+
 /** One customer + their full payment ledger. */
 export async function hubCustomer(id: string): Promise<{ customer: HubCustomer; payments: HubPayment[] } | null> {
   const admin = getAdmin();

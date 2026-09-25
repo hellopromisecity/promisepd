@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.7",
+    date: "2026-09-25",
+    title: "Every project gets its own dashboard",
+    changes: [
+      { kind: "new", text: "Projectify → each of the 9 project pages now opens with a Monthly flow chart — money in (deposits, profit) vs out (withdrawals) for the last 12 months, hover any month for In / Out / Net — the same chart the main Dashboard uses, filtered to that one project." },
+      { kind: "new", text: "Deposit schemes (General A / B, Special, Monthly) get the insight panels real-estate projects already had: a Deposits ring (still held vs deposited + profit), Top depositors, Member status (active / closed / no deposit) and New members per month — next to the compact Project details box." },
+      { kind: "fixed", text: "Dashboard Capital flow tooltip now shows Net (in − out) for the hovered month, matching Transactionify." },
+    ],
+  },
+  {
     version: "2.5.6",
     date: "2026-09-25",
     title: "Dark mode, project tabs, social dock",

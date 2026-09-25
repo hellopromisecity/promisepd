@@ -6,7 +6,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PROJECTS } from "@/lib/site";
 import { PageHeader, StatCard, Card, Badge, type Tone } from "@/components/admin/ui";
-import { hubProjectMeta, hubProjectCustomers } from "@/lib/hub";
+import { hubProjectMeta, hubProjectCustomers, hubProjectMonthlyFlow } from "@/lib/hub";
 import { listProjects, matchHubProject } from "@/lib/investments";
 import { getProfitConfig, accruedProfitByCustomer, dailyPerLakh } from "@/lib/deposit-profit";
 import ProjectMetaPanel from "../ProjectMetaPanel";
@@ -14,6 +14,7 @@ import type { EditableProject } from "../../investments/projects/ProjectForm";
 import HubCustomerList from "../HubCustomerList";
 import DepositProfitPanel from "../DepositProfitPanel";
 import RealEstateInsights from "../RealEstateInsights";
+import ProjectFlow from "../ProjectFlow";
 import {
   projectModel, effectiveStatus,
   shareMapFromOverride, buildingsFromOverride, sellThrough, type OverrideRow,
@@ -46,6 +47,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const payers = customers.filter((c) => c.total_paid > 0).length;
   const raised = customers.reduce((s, c) => s + c.total_paid, 0);
   const payments = customers.reduce((s, c) => s + c.payments_count, 0);
+  const flow = await hubProjectMonthlyFlow(customers.map((c) => c.id));
 
   // This book project's matching APP project (same real project, matched by
   // name) — its rich metadata is what the app/PWA reads. Surfacing it here lets
@@ -133,18 +135,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <StatCard label="Avg / payer" value={fmt(payers ? raised / payers : 0)} icon={Coins} tone="neutral" />
       </div>
 
-      {isDeposit ? (
-        <ProjectMetaPanel linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />
-      ) : (
-        // Real estate: the insight panels (collection ring, top holders, plot
-        // sizes / dues, joins per month — plus the land cards for Promise
-        // City) with a compact Project details box beside them.
-        <RealEstateInsights
-          customers={customers}
-          isLand={slug === "promise-city"}
-          details={<ProjectMetaPanel compact linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />}
-        />
-      )}
+      {/* Monthly money flow — same chart as the Dashboard, this project only. */}
+      <ProjectFlow bars={flow.bars} count={flow.count} subtitle="last 12 months" />
+
+      {/* Insight panels for every project: collection / deposits ring, top
+          payers, status split, joins per month — plus the land cards for
+          Promise City — with a compact Project details box beside them. */}
+      <RealEstateInsights
+        customers={customers}
+        mode={isDeposit ? "deposit" : slug === "promise-city" ? "land" : "estate"}
+        accrued={accruedSum}
+        details={<ProjectMetaPanel compact linked={editable} hubName={meta.name} appHref={linkedProj ? `/dashboard/investments/projects/${linkedProj.project_id}` : null} />}
+      />
 
       {profitPanel}
 
