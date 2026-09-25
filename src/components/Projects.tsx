@@ -84,7 +84,7 @@ export default function Projects() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="mx-auto mb-10 flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl border border-border bg-bg-soft p-1.5 shadow-sm"
+          className="mx-auto mb-10 flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-brand-blue p-1.5 shadow-[var(--shadow-brand)]"
           role="tablist"
           aria-label={isEn ? "Filter projects by status" : "অবস্থা অনুযায়ী প্রকল্প"}
         >
@@ -98,11 +98,11 @@ export default function Projects() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setTab(tb.key)}
-                className={`relative inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${active ? "text-white" : "text-fg-muted hover:text-fg"}`}
+                className={`relative inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition-colors ${active ? "text-brand-blue" : "text-white/85 hover:text-white"}`}
               >
-                {active && <motion.span layoutId="projects-tab" className="absolute inset-0 rounded-xl bg-brand-blue shadow-[var(--shadow-brand)]" transition={{ type: "spring", stiffness: 380, damping: 32 }} />}
+                {active && <motion.span layoutId="projects-tab" className="absolute inset-0 rounded-full bg-white shadow-sm" transition={{ type: "spring", stiffness: 380, damping: 32 }} />}
                 <span className="relative">{isEn ? tb.en : tb.bn}</span>
-                <span className={`relative rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${active ? "bg-white/20 text-white" : "bg-bg text-fg-faint"}`}>{n}</span>
+                <span className={`relative rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${active ? "bg-brand-blue/10 text-brand-blue" : "bg-white/15 text-white"}`}>{n}</span>
               </button>
             );
           })}

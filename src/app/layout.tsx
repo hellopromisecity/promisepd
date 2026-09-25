@@ -5,7 +5,6 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ScrollToTop from "@/components/ScrollToTop";
-import WhatsAppFAB from "@/components/WhatsAppFAB";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import PwaInstallButton from "@/components/PwaInstallButton";
 import ShareSidebar from "@/components/ShareSidebar";
@@ -237,7 +236,6 @@ export default function RootLayout({
         <SiteChrome>
           <Footer />
           <ScrollToTop />
-          <WhatsAppFAB />
           <PwaInstallButton />
           <ShareSidebar />
           <PWAInstallPrompt />

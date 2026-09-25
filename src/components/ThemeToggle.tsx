@@ -1,10 +1,11 @@
 "use client";
 
-/** Light / dark switch — two icons, click the sun for light, the moon for
- *  dark. The choice is stored in localStorage ("pc-theme") and applied as
- *  `data-theme` on <html>; the inline script in layout.tsx re-applies it
- *  before first paint so there is no flash. Used on the public navbar
- *  (desktop + mobile menu) and the dashboard topbar. */
+/** Light / dark switch — ONE round button. While the site is light it shows
+ *  a moon (tap → dark); while dark it shows a sun (tap → light). The choice
+ *  is stored in localStorage ("pc-theme") and applied as `data-theme` on
+ *  <html>; the inline script in layout.tsx re-applies it before first paint
+ *  so there is no flash. Used on the public navbar (desktop + mobile menu)
+ *  and the dashboard topbar. */
 
 import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
@@ -17,27 +18,6 @@ export function applyTheme(t: Theme) {
   if (t === "dark") root.setAttribute("data-theme", "dark");
   else root.removeAttribute("data-theme");
   try { localStorage.setItem(THEME_KEY, t); } catch { /* private mode */ }
-}
-
-export default function ThemeToggle({ compact = false, className = "" }: { compact?: boolean; className?: string }) {
-  const [theme, setTheme] = useState<Theme>("light");
-  useEffect(() => {
-    setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
-  }, []);
-  const set = (t: Theme) => { applyTheme(t); setTheme(t); };
-  const base = `inline-flex items-center justify-center rounded-full transition-colors ${compact ? "h-7 w-7" : "h-7 w-8"}`;
-  const on = "bg-brand-blue text-white shadow-sm";
-  const off = "text-fg-soft hover:text-fg";
-  return (
-    <div className={`inline-flex items-center gap-0.5 rounded-full border border-border bg-bg p-0.5 ${className}`} role="group" aria-label="Light / dark">
-      <button type="button" onClick={() => set("light")} aria-pressed={theme === "light"} title="Light" className={`${base} ${theme === "light" ? on : off}`}>
-        <Sun className="h-3.5 w-3.5" />
-      </button>
-      <button type="button" onClick={() => set("dark")} aria-pressed={theme === "dark"} title="Dark" className={`${base} ${theme === "dark" ? on : off}`}>
-        <Moon className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
 }
 
 /** Read the live theme from <html data-theme> — re-renders when it changes
@@ -53,4 +33,23 @@ export function useTheme(): Theme {
     return () => mo.disconnect();
   }, []);
   return theme;
+}
+
+export default function ThemeToggle({ compact = false, className = "" }: { compact?: boolean; className?: string }) {
+  const theme = useTheme();
+  const dark = theme === "dark";
+  const next: Theme = dark ? "light" : "dark";
+  const label = dark ? "Switch to light mode" : "Switch to dark mode";
+  return (
+    <button
+      type="button"
+      onClick={() => applyTheme(next)}
+      aria-label={label}
+      title={label}
+      aria-pressed={dark}
+      className={`inline-flex items-center justify-center rounded-full border border-border bg-bg text-fg transition-colors hover:border-brand-blue/50 hover:text-brand-blue ${compact ? "h-7 w-7" : "h-8 w-8"} ${className}`}
+    >
+      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
 }
