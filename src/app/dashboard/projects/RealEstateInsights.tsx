@@ -34,7 +34,13 @@ const num = (n: number, d = 2) => (Number.isInteger(n) ? String(n) : n.toFixed(d
 const decOf = (c: HubCustomer): number | null => { const v = c.bio?.decimal ?? c.bio?.flat_size; const n = parseFloat(String(v ?? "")); return Number.isFinite(n) && n > 0 ? n : null; };
 const firstName = (s: string) => (s || "").replace(/^(md\.?|mst\.?|muhammad|mohammad|muha:)\s*/i, "").split(/\s+/).slice(0, 2).join(" ");
 
-export default function RealEstateInsights({ customers, mode, accrued = 0, details }: { customers: HubCustomer[]; mode: InsightMode; accrued?: number; details: React.ReactNode }) {
+export default function RealEstateInsights({ customers, mode, accrued = 0, details, activeMonth = null, onMonthClick }: {
+  customers: HubCustomer[]; mode: InsightMode; accrued?: number; details: React.ReactNode;
+  /** YYYY-MM of the selected "New customers" tower (highlighted). */
+  activeMonth?: string | null;
+  /** Tower click → (YYYY-MM, "Jan 2026"). Towers are plain bars without it. */
+  onMonthClick?: (key: string, label: string) => void;
+}) {
   const isLand = mode === "land";
   const isDeposit = mode === "deposit";
   const [mounted, setMounted] = useState(false);
@@ -72,7 +78,7 @@ export default function RealEstateInsights({ customers, mode, accrued = 0, detai
     const topDues = customers.filter((c) => c.total_price > 0 && c.total_remaining > 0).sort((a, b) => b.total_remaining - a.total_remaining).slice(0, 6).map((c) => ({ label: firstName(c.name), value: c.total_remaining }));
     // joins per month, last 12
     const now = new Date();
-    const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-GB", { month: "short" }), n: 0 }; });
+    const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-GB", { month: "short" }), long: d.toLocaleDateString("en-GB", { month: "short", year: "numeric" }), n: 0 }; });
     for (const c of customers) { const m = months.find((x) => (c.joining_date ?? "").startsWith(x.key)); if (m) m.n++; }
     const maxJoin = Math.max(1, ...months.map((m) => m.n));
     const sizes = isLand ? [
@@ -192,16 +198,28 @@ export default function RealEstateInsights({ customers, mode, accrued = 0, detai
 
       {/* joins per month — wide */}
       <div className="rounded-2xl border border-border bg-bg p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><CalendarDays className="h-4 w-4 text-violet-500" /> New {isDeposit ? "members" : "customers"} <span className="text-[11px] font-normal text-fg-faint">· last 12 months · {customers.length} total</span></p>
+          <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-fg"><CalendarDays className="h-4 w-4 text-violet-500" /> New {isDeposit ? "members" : "customers"} <span className="text-[11px] font-normal text-fg-faint">· last 12 months · {customers.length} total{onMonthClick && " · click a month to list them below"}</span></p>
           <div className="flex h-24 items-end gap-1.5">
-            {s.months.map((m, i) => (
-              <div key={m.key} className="group relative flex h-full flex-1 items-end" title={`${m.label}: ${m.n}`}>
-                <div className="w-full rounded-t bg-gradient-to-t from-violet-600 to-violet-400 transition-[height] duration-700" style={{ height: mounted ? `${m.n ? Math.max(4, (m.n / s.maxJoin) * 100) : 0}%` : "0%", transitionDelay: `${i * 40}ms` }} />
-                {m.n > 0 && <span className="pointer-events-none absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-fg">{m.n}</span>}
-              </div>
-            ))}
+            {s.months.map((m, i) => {
+              const active = activeMonth === m.key;
+              const dim = activeMonth != null && !active;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  disabled={!onMonthClick || m.n === 0}
+                  onClick={() => onMonthClick?.(m.key, m.long)}
+                  aria-pressed={active}
+                  title={`${m.long}: ${m.n}${onMonthClick && m.n ? " — click to show" : ""}`}
+                  className={`group relative flex h-full flex-1 items-end rounded-t transition-opacity ${onMonthClick && m.n ? "cursor-pointer hover:opacity-90" : "cursor-default"} ${dim ? "opacity-40" : ""}`}
+                >
+                  <div className={`w-full rounded-t transition-[height] duration-700 ${active ? "bg-gradient-to-t from-brand-blue to-brand-blue-soft ring-2 ring-brand-blue/40" : "bg-gradient-to-t from-violet-600 to-violet-400"}`} style={{ height: mounted ? `${m.n ? Math.max(4, (m.n / s.maxJoin) * 100) : 0}%` : "0%", transitionDelay: `${i * 40}ms` }} />
+                  {m.n > 0 && <span className={`pointer-events-none absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold ${active ? "text-brand-blue" : "text-fg"}`}>{m.n}</span>}
+                </button>
+              );
+            })}
           </div>
-          <div className="mt-1 flex gap-1.5">{s.months.map((m) => <span key={m.key} className="flex-1 text-center text-[9px] text-fg-faint">{m.label}</span>)}</div>
+          <div className="mt-1 flex gap-1.5">{s.months.map((m) => <span key={m.key} className={`flex-1 text-center text-[9px] ${activeMonth === m.key ? "font-bold text-brand-blue" : "text-fg-faint"}`}>{m.label}</span>)}</div>
       </div>
     </div>
   );

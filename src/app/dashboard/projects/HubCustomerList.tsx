@@ -33,7 +33,11 @@ const decOf = (c: HubCustomer): number | null => {
 };
 const fmtDec = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
-export default function HubCustomerList({ customers, project, projects, profits }: { customers: HubCustomer[]; project: HubProject; projects?: HubProject[]; profits?: Record<string, number> }) {
+export default function HubCustomerList({ customers, project, projects, profits, filterNote }: {
+  customers: HubCustomer[]; project: HubProject; projects?: HubProject[]; profits?: Record<string, number>;
+  /** External filter already applied to `customers` (e.g. a clicked "New customers" month) — shown as a chip with a clear button. */
+  filterNote?: { label: string; onClear: () => void };
+}) {
   const isAll = !!projects;
   const [q, setQ] = useState("");
   const [projFilter, setProjFilter] = useState("all");
@@ -105,6 +109,11 @@ export default function HubCustomerList({ customers, project, projects, profits 
           </select>
         )}
         <div className="flex items-center gap-2 text-sm text-fg-muted">
+          {filterNote && (
+            <button type="button" onClick={filterNote.onClear} title="Clear this filter" className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/30 bg-brand-blue-tint px-2.5 py-1 text-xs font-semibold text-brand-blue transition-colors hover:border-brand-blue/60">
+              {filterNote.label} <X className="h-3.5 w-3.5" />
+            </button>
+          )}
           <span className="tabular-nums">{rows.length} of {customers.length}</span>
           <button onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2 text-sm font-semibold text-fg hover:border-brand-blue/40"><Download className="h-4 w-4" /> Export</button>
           {isDeposit && (

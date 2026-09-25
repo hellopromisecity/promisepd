@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import FlowChart from "@/components/admin/FlowChart";
+import DateRangeFilter, { DEFAULT_RANGE, type AppliedRange } from "@/components/admin/DateRangeFilter";
+import { computeFlow, downloadFlowCsv } from "@/components/admin/flow";
 import {
   Wallet, TrendingUp, Users, UserRound, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
   Receipt, MessageSquare, ArrowDownRight,
-  CalendarRange, ChevronDown, X, Smartphone, Send, TrendingDown,
+  Smartphone, Send, TrendingDown,
 } from "lucide-react";
 
 export type DashboardData = {
@@ -28,88 +30,6 @@ export type DashboardData = {
     sent30d: number; sentToday: number; sent7d: number; cost30d: number; cost7d: number;
   } | null;
 };
-
-type Txn = { date: string; op: string; amount: number };
-
-const DASH_PRESETS = [
-  { id: "12m", label: "Last 12 months" },
-  { id: "7d", label: "Last 7 days" },
-  { id: "30d", label: "Last 30 days" },
-  { id: "this_year", label: "This year" },
-  { id: "last_year", label: "Last year" },
-  { id: "custom", label: "Custom range" },
-] as const;
-
-function presetRange(id: string): { from: string; to: string } {
-  const now = new Date();
-  const iso = (d: Date) => d.toLocaleDateString("en-CA");
-  const y = now.getFullYear();
-  if (id === "7d") { const f = new Date(now); f.setDate(f.getDate() - 6); return { from: iso(f), to: iso(now) }; }
-  if (id === "30d") { const f = new Date(now); f.setDate(f.getDate() - 29); return { from: iso(f), to: iso(now) }; }
-  if (id === "this_year") return { from: `${y}-01-01`, to: iso(now) };
-  if (id === "last_year") return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31` };
-  return { from: "", to: "" }; // 12m / custom-empty → flow falls back to last 12 months
-}
-
-/** Capital flow for a date range: In(+)/Out(−) per bucket, granularity follows
- *  the span (≤45d daily, ≤180d weekly, else monthly); empty range → last 12 months. */
-function computeFlow(txns: Txn[], from: string, to: string) {
-  const empty = { gran: "month" as "day" | "week" | "month", bars: [] as { label: string; in: number; out: number }[], count: 0, inTotal: 0, outTotal: 0 };
-  if (!txns.length) return empty;
-  // BD calendar day — identical on server (UTC) and browser (BD) so
-  // hydration never mismatches; raw slice(0,10) read midnight-stored rows
-  // (T18:00Z) as the previous day on the server.
-  const dk = (iso: string) => (iso ? new Date(new Date(iso).getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10) : "");
-  const defaulted = !from || !to; // no explicit range → we may trim empty edges
-  let fromS = from, toS = to;
-  if (!fromS || !toS) {
-    // Last 12 calendar months ending TODAY (BD day) — never anchored to the
-    // latest transaction, so a future-dated entry can't drag the window forward.
-    const today = dk(new Date().toISOString());
-    const [ty, tm] = today.split("-").map(Number);
-    toS = toS || today;
-    fromS = fromS || new Date(Date.UTC(ty, tm - 12, 1)).toISOString().slice(0, 10);
-  }
-  const fromD = new Date(`${fromS}T00:00:00`), toD = new Date(`${toS}T00:00:00`);
-  if (Number.isNaN(fromD.getTime()) || Number.isNaN(toD.getTime()) || fromD > toD) return empty;
-  const span = (toD.getTime() - fromD.getTime()) / 86400000;
-  const gran: "day" | "week" | "month" = span <= 45 ? "day" : span <= 180 ? "week" : "month";
-  const keyOf = (iso: string) => {
-    const ds = dk(iso); // BD day, hydration-safe
-    if (gran === "day") return ds;
-    if (gran === "month") return ds.slice(0, 7);
-    const d = new Date(`${ds}T00:00:00`); d.setDate(d.getDate() - d.getDay()); return d.toLocaleDateString("en-CA");
-  };
-  const acc = new Map<string, { in: number; out: number }>();
-  let count = 0, inTotal = 0, outTotal = 0;
-  for (const t of txns) {
-    const d = dk(t.date); if (d < fromS || d > toS) continue;
-    count++; const amt = Number(t.amount) || 0;
-    if (t.op === "-") outTotal += amt; else inTotal += amt;
-    const k = keyOf(t.date); const e = acc.get(k) ?? { in: 0, out: 0 };
-    if (t.op === "-") e.out += amt; else e.in += amt; acc.set(k, e);
-  }
-  const bars: { label: string; in: number; out: number }[] = [];
-  const push = (key: string, label: string) => { const e = acc.get(key) ?? { in: 0, out: 0 }; bars.push({ label, ...e }); };
-  if (gran === "day") {
-    for (const d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) push(d.toLocaleDateString("en-CA"), String(d.getDate()));
-  } else if (gran === "week") {
-    const d = new Date(fromD); d.setDate(d.getDate() - d.getDay());
-    for (; d <= toD; d.setDate(d.getDate() + 7)) push(d.toLocaleDateString("en-CA"), d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
-  } else {
-    const d = new Date(fromD.getFullYear(), fromD.getMonth(), 1), end = new Date(toD.getFullYear(), toD.getMonth(), 1);
-    for (; d <= end; d.setMonth(d.getMonth() + 1)) push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, d.toLocaleDateString("en-GB", { month: "short" }));
-  }
-  if (defaulted) {
-    // Trim empty edge buckets so the default view starts and ends on real
-    // activity — no hollow months on either side of the graph.
-    let s = 0, e = bars.length;
-    while (s < e && bars[s].in === 0 && bars[s].out === 0) s++;
-    while (e > s && bars[e - 1].in === 0 && bars[e - 1].out === 0) e--;
-    return { gran, bars: bars.slice(s, e), count, inTotal, outTotal };
-  }
-  return { gran, bars, count, inTotal, outTotal };
-}
 
 const compact = (n: number) => {
   const v = Number(n) || 0, a = Math.abs(v);
@@ -179,32 +99,9 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   const maxBal = useMemo(() => Math.max(1, ...d.topInvestors.map((t) => t.balance)), [d.topInvestors]);
 
   // ── date-range filter → drives the capital-flow card ──
-  const [draftPreset, setDraftPreset] = useState("12m");
-  const [draftFrom, setDraftFrom] = useState("");
-  const [draftTo, setDraftTo] = useState("");
-  const [applied, setApplied] = useState<{ from: string; to: string; label: string }>({ from: "", to: "", label: "Last 12 months" });
-  const [filterOpen, setFilterOpen] = useState(false);
-
+  const [applied, setApplied] = useState<AppliedRange>(DEFAULT_RANGE);
   const flow = useMemo(() => computeFlow(d.txns, applied.from, applied.to), [d.txns, applied]);
-
-  function applyFilter() {
-    const label = DASH_PRESETS.find((p) => p.id === draftPreset)?.label ?? "Custom";
-    if (draftPreset === "custom") {
-      setApplied({ from: draftFrom, to: draftTo, label: draftFrom && draftTo ? `${draftFrom} → ${draftTo}` : "Custom range" });
-    } else {
-      setApplied({ ...presetRange(draftPreset), label });
-    }
-    setFilterOpen(false);
-  }
-
-  function exportFlowCsv() {
-    const head = ["Period", "In (BDT)", "Out (BDT)", "Net (BDT)"];
-    const rows = flow.bars.map((b) => [b.label, b.in, b.out, b.in - b.out]);
-    const csv = [head, ...rows, ["TOTAL", flow.inTotal, flow.outTotal, flow.inTotal - flow.outTotal]].map((r) => r.join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `capital-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`; a.click(); URL.revokeObjectURL(url);
-  }
+  const exportFlowCsv = () => downloadFlowCsv(flow.bars, `capital-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`);
 
   return (
     <div className="space-y-6">
@@ -222,35 +119,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* date-range filter — drives the capital flow */}
-          <div className="relative">
-            <button type="button" onClick={() => setFilterOpen((o) => !o)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm font-semibold text-fg transition-colors hover:border-brand-blue/40">
-              <CalendarRange className="h-4 w-4 text-brand-blue" /> {applied.label} <ChevronDown className="h-4 w-4 text-fg-faint" />
-            </button>
-            {filterOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setFilterOpen(false)} />
-                <div className="absolute right-0 z-40 mt-2 w-64 rounded-2xl border border-border bg-bg p-3 shadow-2xl">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-bold uppercase tracking-wide text-fg-muted">Date range</p>
-                    <button type="button" onClick={() => setFilterOpen(false)} className="rounded p-0.5 text-fg-faint hover:text-fg"><X className="h-4 w-4" /></button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {DASH_PRESETS.filter((p) => p.id !== "custom").map((p) => (
-                      <button key={p.id} type="button" onClick={() => setDraftPreset(p.id)} className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${draftPreset === p.id ? "bg-brand-blue text-white" : "bg-bg-soft text-fg hover:bg-brand-blue-tint"}`}>{p.label}</button>
-                    ))}
-                    <button type="button" onClick={() => setDraftPreset("custom")} className={`col-span-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors ${draftPreset === "custom" ? "bg-brand-blue text-white" : "bg-bg-soft text-fg hover:bg-brand-blue-tint"}`}>Custom range</button>
-                  </div>
-                  {draftPreset === "custom" && (
-                    <div className="mt-2 space-y-1.5">
-                      <input type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} className="w-full rounded-lg border border-border bg-bg-soft px-2 py-1.5 text-xs outline-none focus:border-brand-blue/50" />
-                      <input type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} className="w-full rounded-lg border border-border bg-bg-soft px-2 py-1.5 text-xs outline-none focus:border-brand-blue/50" />
-                    </div>
-                  )}
-                  <button type="button" onClick={applyFilter} className="mt-3 w-full rounded-lg bg-brand-blue py-2 text-xs font-bold text-white transition-colors hover:bg-brand-blue-dark">Apply</button>
-                </div>
-              </>
-            )}
-          </div>
+          <DateRangeFilter applied={applied} onApply={setApplied} />
           <Link href="/dashboard/projects" className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] transition-all hover:-translate-y-0.5 hover:bg-brand-blue-dark">
             <Plus className="h-4 w-4" /> New project
           </Link>

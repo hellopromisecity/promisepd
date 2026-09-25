@@ -7,8 +7,9 @@
 
 import { useRef, useState } from "react";
 import { Activity, Download } from "lucide-react";
+import type { FlowBar } from "./flow";
 
-export type FlowBar = { label: string; in: number; out: number };
+export type { FlowBar };
 
 export const compactTaka = (n: number) => {
   const v = Number(n) || 0, a = Math.abs(v);
@@ -17,13 +18,15 @@ export const compactTaka = (n: number) => {
   return `৳${Math.round(v).toLocaleString("en-US")}`;
 };
 
-export default function FlowChart({ flow, on, title = "Capital flow", subtitle, count, onExport, gradientId = "flowIn", height = 230 }: {
+export default function FlowChart({ flow, on, title = "Capital flow", subtitle, count, onExport, headerExtra, gradientId = "flowIn", height = 230 }: {
   flow: FlowBar[];
   on: boolean;
   title?: string;
   subtitle: string;
   count?: number;
   onExport?: () => void;
+  /** Extra control in the header (e.g. a date-range filter), before the CSV button. */
+  headerExtra?: React.ReactNode;
   /** Unique per chart when two charts share a page (SVG gradient ids are global). */
   gradientId?: string;
   height?: number;
@@ -64,6 +67,7 @@ export default function FlowChart({ flow, on, title = "Capital flow", subtitle, 
           <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> In {compactTaka(totIn)}</span>
           <span className="inline-flex items-center gap-1.5 font-semibold text-brand-red"><span className="h-2.5 w-2.5 rounded-full bg-brand-red" /> Out {compactTaka(totOut)}</span>
           <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-600">Net {compactTaka(totIn - totOut)}</span>
+          {headerExtra}
           {onExport && (
             <button type="button" onClick={onExport} title="Export this period (CSV)" className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 font-semibold text-fg-muted transition-colors hover:border-emerald-500/40 hover:text-emerald-600">
               <Download className="h-3.5 w-3.5" /> CSV
