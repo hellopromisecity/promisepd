@@ -178,6 +178,8 @@ export default function RootLayout({
               // image scrims / backdrops that were built from the (now light) fg colour stay dark
               "html[data-theme=dark] .from-fg\\/85{--tw-gradient-from:rgba(11,18,32,.85)}html[data-theme=dark] .via-fg\\/25{--tw-gradient-via:rgba(11,18,32,.25)}html[data-theme=dark] .bg-fg\\/30{background-color:rgba(0,0,0,.6)!important}",
               "html[data-theme=dark] img.mix-blend-multiply{mix-blend-mode:screen}",
+              // hero eyebrow + subtitle are brand-blue on the light site; on the dark hero photo blue is unreadable, so they go white
+              "html[data-theme=dark] .hero-accent{color:#fff!important}",
               "html[data-theme=dark] .bg-white\\/92,html[data-theme=dark] .bg-white\\/75{background-color:rgba(17,26,46,.9)!important}html[data-theme=dark] .bg-\\[\\#fff7e6\\]{background-color:rgba(245,158,11,.16)!important}",
               "html[data-theme=dark] .bg-emerald-100{background-color:rgba(16,185,129,.2)!important}html[data-theme=dark] .bg-amber-100{background-color:rgba(245,158,11,.2)!important}html[data-theme=dark] .text-emerald-800{color:#34d399!important}html[data-theme=dark] .text-violet-700{color:#c4b5fd!important}",
               "html[data-theme=dark] .to-white{--tw-gradient-to:var(--color-bg)}html[data-theme=dark] .via-white\\/30{--tw-gradient-via:rgba(11,18,32,.3)}html[data-theme=dark] .from-white\\/40{--tw-gradient-from:rgba(255,255,255,.08)}",

@@ -71,12 +71,12 @@ const ACCENT_SOLID_CLASS: Record<string, string> = {
 };
 
 const ACCENT_TEXT: Record<string, string> = {
-  red: "text-brand-blue",
-  blue: "text-brand-blue",
-  ash: "text-brand-blue",
-  rb: "text-brand-blue",
-  ab: "text-brand-blue",
-  ar: "text-brand-blue",
+  red: "text-brand-blue hero-accent",
+  blue: "text-brand-blue hero-accent",
+  ash: "text-brand-blue hero-accent",
+  rb: "text-brand-blue hero-accent",
+  ab: "text-brand-blue hero-accent",
+  ar: "text-brand-blue hero-accent",
 };
 
 /** Cursor color for the typewriter on the H1 — blue everywhere. */
@@ -204,7 +204,7 @@ export default function Hero() {
                     {isEn ? `${idx + 1} / 5` : `${toBn(idx + 1)} / ৫`} ·{" "}
                     {curName}
                   </span>
-                  <span className="text-[11px] sm:text-xs uppercase tracking-[0.18em] text-brand-blue font-bold">
+                  <span className="text-[11px] sm:text-xs uppercase tracking-[0.18em] text-brand-blue hero-accent font-bold">
                     {current.nameEn}
                   </span>
                 </div>
