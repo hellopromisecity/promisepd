@@ -31,6 +31,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       { kind: "new", text: "Every project page's flow chart now has the Dashboard's date-range filter (Last 12 months / 7 days / 30 days / This year / Last year / Custom) and a CSV export of the buckets; the bucket size follows the range (daily / weekly / monthly)." },
       { kind: "new", text: "New customers towers are clickable on all 9 project pages: click a month and the customer table below shows only the people who joined that month (a chip above the table clears it; click the tower again to toggle off)." },
+      { kind: "changed", text: "Dark mode polish (dashboard only): brand-blue amounts, labels and icon tiles now read white on the navy cards; light mode is unchanged." },
       { kind: "changed", text: "Transactionify's flow chart is now the same chart as the Dashboard — In / Out / Net on hover, totals in the header, CSV export — driven by the existing date filter." },
     ],
   },

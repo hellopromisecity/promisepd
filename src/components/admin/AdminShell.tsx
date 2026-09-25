@@ -33,7 +33,7 @@ export default function AdminShell({
     // red wash from the bottom-right over the plain background (~10% + ~10%
     // over white). Inline style — Tailwind v4 drops arbitrary gradients here.
     <div
-      className="min-h-screen bg-bg-soft text-fg"
+      className="admin-shell min-h-screen bg-bg-soft text-fg"
       style={{
         background:
           "radial-gradient(1100px 560px at 0% 0%, rgba(24,71,161,0.10), transparent 62%), " +
