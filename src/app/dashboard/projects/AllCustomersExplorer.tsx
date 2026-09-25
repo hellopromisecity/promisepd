@@ -21,7 +21,7 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, setInvestorWithdrawn, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, bookAppHolding, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, bookAppHolding, giveOwnAccount, type CustomerInput } from "@/app/actions/hub";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 
@@ -662,6 +662,22 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
   const [editH, setEditH] = useState<HubCustomer | null>(null);
   const [editLoading, setEditLoading] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [splittingId, setSplittingId] = useState<string | null>(null);
+
+  // A folded relative (own number, no account yet) → their own app account
+  async function splitOut(h: PersonHolding) {
+    const ok = await confirmDialog({
+      title: "Give this file its own account",
+      message: `“${h.holder_name || person.name}” (${h.project_name}, file ${h.file_no ?? "—"}) sits under ${person.name}'s account but has its own number ${h.own_number}. Create a separate app account for that number (login = mobile + default password) and move this file's transactions there? ${person.name}'s account keeps everything else.`,
+      confirmText: "Create own account",
+    });
+    if (!ok) return;
+    setSplittingId(h.id);
+    const r = await giveOwnAccount(h.id);
+    setSplittingId(null);
+    if (r.ok) { toast(r.message || "Split done.", "success"); onClose(); router.refresh(); }
+    else toast(r.error, "error");
+  }
 
   // App-only money → a real book file (then edit / transactions / delete work)
   async function bookApp(h: PersonHolding) {
@@ -748,6 +764,11 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                     {h.source === "hub" && h.number_owner && (
                       <button onClick={() => setLinkH(h)} className="mt-0.5 flex items-center gap-1 text-left text-[11px] font-semibold text-amber-700 hover:underline">
                         <AlertTriangle className="h-3 w-3 shrink-0" /> This file&apos;s number belongs to {h.number_owner.name} ({h.number_owner.uid}) — move it there?
+                      </button>
+                    )}
+                    {h.source === "hub" && h.own_number && (
+                      <button onClick={() => splitOut(h)} disabled={splittingId === h.id} className="mt-0.5 flex items-center gap-1 text-left text-[11px] font-semibold text-amber-700 hover:underline disabled:opacity-50">
+                        {splittingId === h.id ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" /> : <AlertTriangle className="h-3 w-3 shrink-0" />} This file&apos;s number {h.own_number} has no app account — give it its own account?
                       </button>
                     )}
                   </div>

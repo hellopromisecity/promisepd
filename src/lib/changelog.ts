@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.5",
+    date: "2026-09-25",
+    title: "Two people, one login — split them",
+    changes: [
+      { kind: "fixed", text: "Two different customers with the same name (Muhammad · files 57110482 and 81710498, different mobiles) had been folded into one app account by the July migration, so All Customers showed one person holding both deposits (৳4,60,000)." },
+      { kind: "new", text: "Customer popup: when a file sits on a shared account but carries its own mobile number that has no app account yet, an amber line offers “give it its own account”. One click creates the account for that number (login = mobile + the default password), moves that file's transactions across — the mirror-linked ones by id and older imported ones by project, amount and day — sets up the project membership and re-totals both accounts. The other person's account keeps everything else. Audit-logged." },
+      { kind: "changed", text: "The Edit-customer auto-split (changing a folded row's number) now uses the same engine, so it also carries unlinked imported transactions across instead of leaving them on the old account." },
+    ],
+  },
+  {
     version: "2.5.4",
     date: "2026-09-07",
     title: "Promise City page gets its land dashboard",

@@ -26,6 +26,10 @@ export type PersonHolding = {
    *  DIFFERENT account than the one it is linked to — a migration-era
    *  family-share fold that most likely put the row under the wrong person. */
   number_owner?: { uid: string; name: string } | null;
+  /** The row's own mobile when it differs from the shared account's number
+   *  and NO app account owns it yet — a folded relative who can be split out
+   *  into their own account (the popup offers it). */
+  own_number?: string | null;
   /** source "app" only: the investment_projects id the money sits under — what
    *  "Create book file" needs to turn this into a real book row. */
   app_project_id?: string | null;
@@ -189,6 +193,14 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   const ownerByPhone = new Map<string, { uid: string; name: string }>();
   for (const i of investors) { const k = firstMobileKey(i.phone_number); if (k && !ownerByPhone.has(k)) ownerByPhone.set(k, { uid: i.uid, name: i.full_name || i.uid }); }
   const numberOwner = (c: HubCustomer) => { const o = ownerByPhone.get(firstMobileKey(c.mobile)); return o && o.uid !== c.investor_uid ? o : null; };
+  const accPhoneKey = new Map(investors.map((i) => [i.uid, firstMobileKey(i.phone_number)]));
+  const rowsPerUid = new Map<string, number>();
+  for (const c of customers) if (c.investor_uid) rowsPerUid.set(c.investor_uid, (rowsPerUid.get(c.investor_uid) ?? 0) + 1);
+  const ownNumber = (c: HubCustomer) => {
+    const k = firstMobileKey(c.mobile);
+    if (!k || !c.investor_uid || ownerByPhone.has(k) || accPhoneKey.get(c.investor_uid) === k) return null;
+    return (rowsPerUid.get(c.investor_uid) ?? 0) > 1 ? (c.mobile ?? null) : null;
+  };
   const rowsByUid = new Map<string, HubCustomer[]>();
   const unlinked: HubCustomer[] = [];
   for (const c of customers) {
@@ -215,7 +227,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     const covered = new Set(bookRows.map((r) => r.project_key));
     const holdings: PersonHolding[] = bookRows.map((r) => ({
       id: r.id, project_key: r.project_key, project_name: r.project_name, project_type: r.project_type,
-      source: "hub" as const, file_no: r.file_no ?? null, holder_name: r.name ?? null, linked_uid: r.investor_uid ?? null, number_owner: numberOwner(r),
+      source: "hub" as const, file_no: r.file_no ?? null, holder_name: r.name ?? null, linked_uid: r.investor_uid ?? null, number_owner: numberOwner(r), own_number: ownNumber(r),
       paid: r.total_paid, profit: hubAcc(r), balance: hubBalance(r) + hubAcc(r),
     }));
     // app-only money (projects with no book row) — the book ledger wins where both exist

@@ -668,30 +668,13 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     // Migration-era rows that shared one mobile share one app account. When a
     // manager gives such a row its OWN number, this row is its own person now:
     // create/find the account for the new number (default password), move the
-    // row's mirrored app transactions across, and link — so adding or deleting
-    // money for one person can never touch another person's app again.
+    // row's app transactions across, and link — so adding or deleting money
+    // for one person can never touch another person's app again.
     let splitNote = "";
     const newCanon = canonMobile(input.mobile);
-    const oldUid = (cur.investor_uid as string | null) ?? null;
-    if (oldUid && newCanon && newCanon !== canonMobile(cur.mobile as string | null)) {
-      const { data: accD } = await admin.from("investor_accounts").select("uid, phone_number").eq("uid", oldUid).maybeSingle();
-      const accPhone = canonMobile(rec(accD)?.phone_number as string | null);
-      const { data: sib } = await HC(admin).select("id").eq("investor_uid", oldUid).neq("id", id).limit(1);
-      if (accPhone && accPhone !== newCanon && (sib ?? []).length > 0) {
-        await HC(admin).update({ investor_uid: null }).eq("id", id);
-        const newUid = await ensureInvestorForHub(admin, { id, name: input.name, mobile: input.mobile, investor_uid: null }, { fid: input.file_no || null });
-        if (newUid && newUid !== oldUid) {
-          const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", id).not("mirror_tx", "is", null);
-          const mids = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
-          if (mids.length) await admin.from("investor_transactions").update({ uid: newUid } as never).in("transaction_id", mids);
-          const pid = await projectIdForName(admin, String(cur.project_name ?? ""), newUid);
-          if (pid) await ensureMembership(admin, newUid, pid, input.total_price);
-          await logAudit({ action: "link", entity: "hub_customer", entityId: id, detail: `Own number → own account: split from ${oldUid} to ${newUid} (${mids.length} txn(s) moved)` });
-          splitNote = " · own app account set up for the new number";
-        } else if (!newUid) {
-          await HC(admin).update({ investor_uid: oldUid }).eq("id", id); // couldn't build a login — keep the old link
-        }
-      }
+    if (cur.investor_uid && newCanon && newCanon !== canonMobile(cur.mobile as string | null)) {
+      const r = await splitToOwnAccount(admin, id);
+      if (r.ok) splitNote = " · own app account set up for the new number";
     }
 
     // keep the member's app goal in step with their CONTRACT price
@@ -706,6 +689,83 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");
     return { ok: true, message: `Saved.${splitNote}` };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** BD calendar day of a stored timestamp ("…T18:00:00+00:00" IS the next day
+ *  in Bangladesh — the day the book says). */
+const bdDayOf = (d: unknown) => { const s = String(d ?? ""); if (!s.includes("T")) return s.slice(0, 10); const t = Date.parse(s); return Number.isFinite(t) ? new Date(t + 6 * 3600 * 1000).toISOString().slice(0, 10) : s.slice(0, 10); };
+
+/** Give ONE book row its own app account. The row's mobile must differ from
+ *  the account it sits on, and that account must serve other rows too (the
+ *  migration's family-share fold — two people, one login). Creates / finds
+ *  the account for the row's number (default password), moves the row's app
+ *  transactions across — the mirror-linked ones by id, older unlinked ones by
+ *  project + amount + day (and links them) — sets up the membership and
+ *  re-totals both balances. Not exported: "use server" would expose it. */
+async function splitToOwnAccount(admin: Admin, id: string): Promise<{ ok: true; newUid: string; moved: number; name: string } | { ok: false; error: string }> {
+  const { data } = await HC(admin).select("investor_uid, name, mobile, file_no, project_name, total_price").eq("id", id).maybeSingle();
+  const cur = rec(data);
+  if (!cur) return { ok: false, error: "Customer not found." };
+  const oldUid = (cur.investor_uid as string | null) ?? null;
+  if (!oldUid) return { ok: false, error: "This file isn't linked to any account yet — use Link instead." };
+  const rowCanon = canonMobile(cur.mobile as string | null);
+  if (!rowCanon) return { ok: false, error: "This file has no usable mobile number — add one first (Edit), then split." };
+  const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, phone_number").eq("uid", oldUid).maybeSingle();
+  const acc = rec(accD);
+  if (acc && canonMobile(acc.phone_number as string | null) === rowCanon) return { ok: false, error: "This file already uses the account's own number — nothing to split." };
+  const { data: sib } = await HC(admin).select("id").eq("investor_uid", oldUid).neq("id", id).is("deleted_at", null).limit(1);
+  if (!(sib ?? []).length) return { ok: false, error: `${acc?.full_name ?? oldUid} has only this file — change the account's number (pencil → profile) instead of splitting.` };
+
+  await HC(admin).update({ investor_uid: null }).eq("id", id);
+  const newUid = await ensureInvestorForHub(admin, { id, name: cur.name as string, mobile: cur.mobile as string, investor_uid: null }, { fid: (cur.file_no as string) || null });
+  if (!newUid || newUid === oldUid) {
+    await HC(admin).update({ investor_uid: oldUid }).eq("id", id); // couldn't build a login — keep the old link
+    return { ok: false, error: "Couldn't create a login for that number — is it already used by another account?" };
+  }
+
+  // this row's app transactions: mirror-linked by id, older unlinked ones by project + amount + day
+  const pid = await projectIdForName(admin, String(cur.project_name ?? ""), oldUid);
+  const { data: paysD } = await HP(admin).select("id, mirror_tx, amount, date, kind").eq("customer_id", id);
+  const pays = (paysD ?? []) as { id: string; mirror_tx: string | null; amount: number; date: string | null; kind: string }[];
+  const mids = new Set(pays.map((p) => p.mirror_tx).filter(Boolean) as string[]);
+  const unlinked = pays.filter((p) => !p.mirror_tx);
+  if (unlinked.length && pid) {
+    const { data: txD } = await admin.from("investor_transactions").select("transaction_id, amount, date").eq("uid", oldUid).eq("project_id", pid);
+    const pool = ((txD ?? []) as { transaction_id: string; amount: number; date: string }[]).filter((t) => !mids.has(t.transaction_id));
+    for (const p of unlinked) {
+      const i = pool.findIndex((t) => Math.round(Number(t.amount)) === Math.round(Number(p.amount)) && bdDayOf(t.date) === String(p.date ?? "").slice(0, 10));
+      if (i < 0) continue;
+      const [t] = pool.splice(i, 1);
+      mids.add(t.transaction_id);
+      await writeMirrorTx(admin, p.id, t.transaction_id);
+    }
+  }
+  const ids = [...mids];
+  if (ids.length) await admin.from("investor_transactions").update({ uid: newUid } as never).in("transaction_id", ids);
+  const newPid = await projectIdForName(admin, String(cur.project_name ?? ""), newUid);
+  if (newPid) await ensureMembership(admin, newUid, newPid, Number(cur.total_price) || undefined);
+  // anything still unmatched gets mirrored fresh (dedupes by amount + day)
+  await backfillHubToInvestor(admin, id, newUid, String(cur.project_name ?? ""));
+  await recomputeInvestorBalance(admin, oldUid);
+  await recomputeInvestorBalance(admin, newUid);
+  await logAudit({ action: "link", entity: "hub_customer", entityId: id, detail: `Own number → own account: ${cur.name} (${cur.file_no ?? "no file"}) split from ${oldUid} to ${newUid} (${ids.length} txn(s) moved)` });
+  return { ok: true, newUid, moved: ids.length, name: String(cur.name ?? "") };
+}
+
+/** Explicit split from the customer popup: a file folded under a relative's
+ *  account whose own number has no app account yet. */
+export async function giveOwnAccount(hubCustomerId: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!hubCustomerId) return { ok: false, error: "Missing customer." };
+    const r = await splitToOwnAccount(admin, hubCustomerId);
+    if (!r.ok) return r;
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/investments/users");
+    return { ok: true, message: `${r.name} now has their own app account (${r.newUid}, login = mobile + default password) · ${r.moved} transaction${r.moved !== 1 ? "s" : ""} moved across.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
