@@ -350,10 +350,22 @@ export async function changeMemberMobile(uid: string, rawMobile: string): Promis
     }
 
     await admin.from("investor_accounts").update({ phone_number: "+" + mobile }).eq("uid", uid);
-    // linked book rows follow, so transaction SMS reaches the new number
+    // Linked book rows follow, so transaction SMS reaches the new number — but
+    // ONLY the rows that carried the account's OLD number (or none). A row
+    // with a DIFFERENT number of its own is another person's file folded under
+    // this login; overwriting it would erase the one fact that tells them
+    // apart (the popup's "give it its own account" offer reads that number).
     const local = mobile.startsWith("880") ? "0" + mobile.slice(3) : mobile;
+    const oldKey = last10(acc.phone_number);
+    // first BD-shaped token of a book mobile field (it may hold several numbers)
+    const rowKey = (m: string | null) => { const t = (m || "").match(/\d{10,}/); return t ? t[0].slice(-10) : ""; };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from as any)("hub_customers").update({ mobile: local }).eq("investor_uid", uid);
+    const { data: linkedRows } = await (admin.from as any)("hub_customers").select("id, mobile").eq("investor_uid", uid);
+    const follow = ((linkedRows ?? []) as { id: string; mobile: string | null }[])
+      .filter((r) => { const k = rowKey(r.mobile); return !k || k === oldKey; })
+      .map((r) => r.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (follow.length) await (admin.from as any)("hub_customers").update({ mobile: local }).in("id", follow);
 
     await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Changed mobile for ${acc.full_name ?? uid} → ${local}` });
     revalidatePath("/dashboard/projects/all");

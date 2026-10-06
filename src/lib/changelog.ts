@@ -35,6 +35,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       { kind: "new", text: "All Customers filter: “App-only (N)” lists every account that still has such a holding." },
       { kind: "fixed", text: "Two people with the same name are never folded into one row again: book customers without an app account group by name AND mobile — a different mobile or file number is a different person." },
       { kind: "changed", text: "“Give it its own account” is now offered for every file whose own number has no account yet and differs from the account's — including when it is the account's only file (people joined by the migration's same-name rule). Accounts without a login number of their own still ask you to set the number instead." },
+      { kind: "fixed", text: "Changing an account's mobile (pencil → profile) used to stamp the new number onto EVERY book file linked to that login — including a relative's file that carried its own, different number — erasing the one fact that told the two people apart. Now only the files that carried the old number (or none) follow; a file with its own number keeps it, so the popup can still offer to split it out." },
       { kind: "changed", text: "The book→app migration script no longer matches people by name unless run with --match-by-name: a book person whose mobile differs from (or is missing on) every app account gets their own account." },
     ],
   },
