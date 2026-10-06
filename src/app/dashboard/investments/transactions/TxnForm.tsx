@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Loader2, Pencil } from "lucide-react";
 import { saveInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
+import { PAYMENT_METHODS } from "@/lib/payment-methods";
 
 export type InvestorOption = { uid: string; label: string };
 export type TypeOption = { name: string; operator: string };
@@ -18,6 +19,8 @@ export type EditableTxn = {
   project_id: string | null;
   rashid_number: string | null;
   description: string | null;
+  /** Cash / Bank / Bkash / Nagad / Rocket (0034). */
+  payment_method?: string | null;
 };
 
 const inputCls =
@@ -60,6 +63,7 @@ export default function TxnForm({
       project_id: String(fd.get("project_id") ?? "") || null,
       rashid_number: String(fd.get("rashid_number") ?? ""),
       description: String(fd.get("description") ?? ""),
+      payment_method: String(fd.get("payment_method") ?? "") || null,
     };
     start(async () => {
       const res = await saveInvestorTransaction(input);
@@ -138,14 +142,25 @@ export default function TxnForm({
                 </div>
               </div>
 
-              <div>
-                <label className={labelCls} htmlFor="tx-project">Project <span className="font-normal text-fg-faint">(optional)</span></label>
-                <select id="tx-project" name="project_id" defaultValue={txn?.project_id ?? ""} className={inputCls}>
-                  <option value="">— None —</option>
-                  {projects.map((p) => (
-                    <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls} htmlFor="tx-project">Project <span className="font-normal text-fg-faint">(optional)</span></label>
+                  <select id="tx-project" name="project_id" defaultValue={txn?.project_id ?? ""} className={inputCls}>
+                    <option value="">— None —</option>
+                    {projects.map((p) => (
+                      <option key={p.project_id} value={p.project_id}>{p.project_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="tx-method">Payment method</label>
+                  <select id="tx-method" name="payment_method" defaultValue={txn?.payment_method ?? ""} className={inputCls}>
+                    <option value="">— Select —</option>
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>

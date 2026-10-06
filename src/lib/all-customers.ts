@@ -163,6 +163,7 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       operator: op.get(t.type) ?? "+", amount: Number(t.amount) || 0,
       project_id: t.project_id, project_name: t.project_id ? pname.get(t.project_id) ?? null : null,
       rashid_number: t.rashid_number, description: t.description,
+      payment_method: t.payment_method ?? null, created_by_name: t.created_by_name ?? null,
     });
     byUid.set(t.uid, list);
   }

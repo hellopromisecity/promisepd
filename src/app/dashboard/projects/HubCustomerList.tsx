@@ -6,6 +6,7 @@ import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Re
 import { Card, TableShell, thCls, tdCls } from "@/components/admin/ui";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
+import { PAYMENT_METHODS } from "@/lib/payment-methods";
 import {
   getHubCustomerDetail, listReferenceOfficers, listTxnTypes, createHubCustomer, updateHubCustomer,
   archiveHubHolding, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit,
@@ -402,6 +403,8 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [receipt, setReceipt] = useState("");
   const [desc, setDesc] = useState("");
+  // Cash / Bank / Bkash / Nagad / Rocket — how the money moved (0034)
+  const [method, setMethod] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -419,13 +422,13 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   // manager's choice: text the customer about this entry or stay silent
   const [sms, setSms] = useState(true);
 
-  function resetForm() { setAmount(""); setReceipt(""); setDesc(""); setEditingId(null); setErr(null); }
+  function resetForm() { setAmount(""); setReceipt(""); setDesc(""); setMethod(""); setEditingId(null); setErr(null); }
 
   function submit() {
     setErr(null);
     if (!(parseFloat(amount) > 0)) { setErr("Amount must be greater than 0."); return; }
     start(async () => {
-      const payload = { date, amount: parseFloat(amount), type, description: desc, receipt_no: receipt };
+      const payload = { date, amount: parseFloat(amount), type, description: desc, receipt_no: receipt, payment_method: method || null };
       const r = editingId
         ? await updateHubPayment(editingId, project.key, payload)
         : await addHubPayment(customer.id, project.key, { ...payload, sendSms: sms });
@@ -459,6 +462,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
     setAmount(String(p.amount));
     setDate(p.date ?? new Date().toISOString().slice(0, 10));
     setReceipt(p.receipt_no ?? "");
+    setMethod(p.payment_method ?? "");
     setDesc(note);
     setEditingId(p.id);
     setErr(null);
@@ -491,6 +495,12 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
               <div><label className={labelCls}>Date</label><input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} /></div>
               <div><label className={labelCls}>Receipt #</label><input className={inputCls} value={receipt} onChange={(e) => setReceipt(e.target.value)} /></div>
             </div>
+            <div><label className={labelCls}>Payment method</label>
+              <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value)}>
+                <option value="">— Select —</option>
+                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
             <div><label className={labelCls}>Note</label><textarea rows={3} className={`${inputCls} resize-y`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional — long messages wrap here" /></div>
             {!editingId && (
               <button type="button" onClick={() => setSms((v) => !v)} className="flex w-full items-center justify-between rounded-xl border border-border bg-bg-soft px-3 py-2.5 transition-colors hover:border-brand-blue/40">
@@ -519,8 +529,10 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
                     <span className="font-medium text-fg">{fmtDate(p.date)}</span>
                     {p.description && <span className="ml-2 text-xs text-fg-muted">{p.description}</span>}
                     {p.receipt_no && <span className="ml-2 text-[11px] text-fg-faint">#{p.receipt_no}</span>}
+                    {p.created_by_name && <span className="ml-2 text-[11px] text-fg-faint">by {p.created_by_name}</span>}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {p.payment_method && <span className="rounded-full bg-bg px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">{p.payment_method}</span>}
                     <span className={`font-bold tabular-nums ${p.kind === "withdrawal" ? "text-brand-red" : p.kind === "dividend" ? "text-emerald-600" : "text-brand-blue"}`}>{p.kind === "withdrawal" ? "−" : "+"}{fmt(p.amount)}</span>
                     <button onClick={() => startEdit(p)} title="Edit" className="rounded p-1 text-fg-faint opacity-0 transition-opacity hover:text-brand-blue group-hover:opacity-100"><Pencil className="h-3.5 w-3.5" /></button>
                     <button onClick={() => del(p)} title="Delete" className="rounded p-1 text-fg-faint opacity-0 transition-opacity hover:text-brand-red group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>

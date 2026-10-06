@@ -7,6 +7,7 @@ import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
 import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile, syncBookFromAppTxn, appProjectMatchesBook } from "@/lib/investor-write";
+import { normalizePaymentMethod, isMissingColumn } from "@/lib/payment-methods";
 
 /** `id` — the row an action created or touched, when the caller chains on it
  *  (e.g. "Create book file" → open that file's edit form). */
@@ -613,7 +614,7 @@ export async function bookAppHolding(uid: string, appProjectId: string): Promise
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!uid || !appProjectId) return { ok: false, error: "Missing account or project." };
     const [{ data: txnsD }, { data: typesD }] = await Promise.all([
-      admin.from("investor_transactions").select("transaction_id, type, amount, date, rashid_number, description").eq("uid", uid).eq("project_id", appProjectId).order("date", { ascending: true }),
+      admin.from("investor_transactions").select("*").eq("uid", uid).eq("project_id", appProjectId).order("date", { ascending: true }),
       admin.from("investment_types").select("name, operator"),
     ]);
     const op = new Map(((typesD ?? []) as { name: string; operator: string }[]).map((t) => [t.name, t.operator]));
@@ -636,6 +637,7 @@ export async function bookAppHolding(uid: string, appProjectId: string): Promise
         transaction_id: String(t.transaction_id), uid, project_id: appProjectId, type: String(t.type ?? ""),
         operator: op.get(String(t.type ?? "")) ?? "+", amount: Number(t.amount) || 0, date: bdDay(t.date),
         rashid_number: (t.rashid_number as string) ?? null, description: (t.description as string) ?? null,
+        payment_method: (t.payment_method as string) ?? null, created_by_name: (t.created_by_name as string) ?? null,
       }, "create");
     }
     const ids = txns.map((t) => String(t.transaction_id));
@@ -839,11 +841,15 @@ async function purgeHoldingCore(admin: Admin, id: string): Promise<void> {
 }
 
 // ── payments / transactions ──────────────────────────────────────
-export async function addHubPayment(customerId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string; sendSms?: boolean }): Promise<Result> {
+export async function addHubPayment(customerId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string; payment_method?: string | null; sendSms?: boolean }): Promise<Result> {
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!(Number(input.amount) > 0)) return { ok: false, error: "Amount must be greater than 0." };
+    // who is recording this, and how the money moved (Cash / Bank / Bkash / Nagad / Rocket)
+    const me = await getCurrentUser();
+    const method = normalizePaymentMethod(input.payment_method);
+    if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket)." };
     const type = input.type || "deposit";
     // resolve the investment type → operator (+/-), then the hub kind for totals.
     const { data: td } = await admin.from("investment_types").select("operator").eq("name", type).maybeSingle();
@@ -855,7 +861,9 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     const desc = input.description ? `${type} — ${input.description}` : type;
     const { data: mx } = await HP(admin).select("seq").eq("customer_id", customerId).order("seq", { ascending: false }).limit(1).maybeSingle();
     const seq = Number(rec(mx)?.seq ?? -1) + 1;
-    const { data: ins, error } = await HP(admin).insert({ customer_id: customerId, seq, date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null }).select("id").single();
+    const base = { customer_id: customerId, seq, date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null };
+    let { data: ins, error } = await HP(admin).insert({ ...base, payment_method: method, created_by_name: me?.name ?? null }).select("id").single();
+    if (error && isMissingColumn(error.message)) ({ data: ins, error } = await HP(admin).insert(base).select("id").single()); // pre-0034
     if (error) return { ok: false, error: error.message };
     await recomputeCustomer(admin, customerId);
     // Text the customer (BD numbers only; never throws) — same gateway as App
@@ -868,8 +876,10 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     // auto-creating the account (mobile + default password) if they have none,
     // plus the project membership for the PWA card. Never throws. The payment
     // row remembers its mirror (mirror_tx) so a later edit/delete syncs exactly.
-    const mtx = await mirrorBookPayment(admin, { id: customerId, name: cust?.name as string | null, investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description });
+    const mtx = await mirrorBookPayment(admin, { id: customerId, name: cust?.name as string | null, investor_uid: cust?.investor_uid as string | null, mobile, project_name: cust?.project_name as string }, { kind, type, amount: Number(input.amount), date: input.date, description: input.description, payment_method: method, created_by_name: me?.name ?? null });
     if (mtx) await writeMirrorTx(admin, rec(ins)?.id as string, mtx);
+    // book payments were the one money action the Audit log never recorded
+    await logAudit({ action: "create", entity: "hub_payment", entityId: (rec(ins)?.id as string) ?? null, detail: `Added ${type} ৳${Math.round(Number(input.amount)).toLocaleString("en-IN")} for ${cust?.name ?? "—"} · ${cust?.project_name ?? projectKey}${method ? ` · ${method}` : ""}${input.date ? ` · dated ${input.date}` : ""}` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction added." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
@@ -904,6 +914,7 @@ export async function deleteHubPayment(paymentId: string, projectKey: string): P
     await recomputeCustomer(admin, p.customer_id as string);
     // keep the app/PWA in step: drop the mirrored transaction too. Never throws.
     if (cust) await syncMirrorOnPaymentChange(admin, { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string }, { amount: Number(p.amount), date: (p.date as string) ?? null }, null, mirrorTx);
+    await logAudit({ action: "delete", entity: "hub_payment", entityId: paymentId, detail: `Removed ${p.kind ?? "payment"} ৳${Math.round(Number(p.amount) || 0).toLocaleString("en-IN")}${p.date ? ` dated ${p.date}` : ""} for ${cust?.name ?? "—"} · ${cust?.project_name ?? projectKey} — 30 days in the Archive` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/archive");
     return { ok: true, message: "Transaction removed — 30 days in the Archive." };
@@ -912,11 +923,13 @@ export async function deleteHubPayment(paymentId: string, projectKey: string): P
 
 /** Edit an existing transaction in place (amount / date / type / receipt / note),
  *  then re-roll the customer totals. No SMS is sent on an edit. */
-export async function updateHubPayment(paymentId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string }): Promise<Result> {
+export async function updateHubPayment(paymentId: string, projectKey: string, input: { date?: string; amount: number; type: string; description?: string; receipt_no?: string; payment_method?: string | null }): Promise<Result> {
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!(Number(input.amount) > 0)) return { ok: false, error: "Amount must be greater than 0." };
+    const method = normalizePaymentMethod(input.payment_method);
+    if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket)." };
     const { data: pd } = await HP(admin).select("customer_id, amount, date").eq("id", paymentId).maybeSingle();
     const p = rec(pd);
     if (!p) return { ok: false, error: "Transaction not found." };
@@ -925,24 +938,28 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
     const operator = (rec(td)?.operator as string) ?? "+";
     const kind = operator === "-" ? "withdrawal" : /profit|dividend|লভ্যাংশ/i.test(type) ? "dividend" : "deposit";
     const desc = input.description ? `${type} — ${input.description}` : type;
-    const { error } = await HP(admin).update({ date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null }).eq("id", paymentId);
+    const upd = { date: input.date || null, amount: r2(input.amount), kind, description: desc, receipt_no: input.receipt_no || null };
+    // payment method only when the form sent one (undefined = untouched); pre-0034 retries without it
+    let { error } = await HP(admin).update(input.payment_method === undefined ? upd : { ...upd, payment_method: method }).eq("id", paymentId);
+    if (error && isMissingColumn(error.message)) ({ error } = await HP(admin).update(upd).eq("id", paymentId));
     if (error) return { ok: false, error: error.message };
     await recomputeCustomer(admin, p.customer_id as string);
     // keep the app/PWA in step: rewrite the mirrored transaction too (found by
     // its stored mirror_tx; self-heals the link for older rows). Never throws.
     const mirrorTx = await readMirrorTx(admin, paymentId);
-    const { data: cd } = await HC(admin).select("mobile, investor_uid, project_name").eq("id", p.customer_id).maybeSingle();
+    const { data: cd } = await HC(admin).select("name, mobile, investor_uid, project_name").eq("id", p.customer_id).maybeSingle();
     const cust = rec(cd);
     if (cust) {
       const newTx = await syncMirrorOnPaymentChange(
         admin,
         { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string },
         { amount: Number(p.amount), date: (p.date as string) ?? null },
-        { kind, type, amount: Number(input.amount), date: input.date, description: input.description },
+        { kind, type, amount: Number(input.amount), date: input.date, description: input.description, payment_method: input.payment_method === undefined ? undefined : method },
         mirrorTx,
       );
       if (newTx !== mirrorTx) await writeMirrorTx(admin, paymentId, newTx);
     }
+    await logAudit({ action: "update", entity: "hub_payment", entityId: paymentId, detail: `Edited ${type} ৳${Math.round(Number(input.amount)).toLocaleString("en-IN")} for ${cust?.name ?? "—"} · ${cust?.project_name ?? projectKey}${method ? ` · ${method}` : ""}${input.date ? ` · dated ${input.date}` : ""}` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     return { ok: true, message: "Transaction updated." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }

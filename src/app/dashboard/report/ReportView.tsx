@@ -8,7 +8,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Trash2, Loader2, CheckSquare, Square, Inbox, Calendar, ChevronDown,
+  Trash2, Loader2, CheckSquare, Square, Inbox, Calendar, ChevronDown, Clock,
 } from "lucide-react";
 import { deleteReports } from "@/app/actions/admin-insights";
 import { confirmDialog } from "@/components/ui/Dialog";
@@ -28,6 +28,14 @@ const RANGES: { key: Range; label: string }[] = [
 
 const fmtDate = (d: string) =>
   new Date(d + (d.length === 10 ? "T00:00:00" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+// Submission clock time in Bangladesh — pinned to Asia/Dhaka so the server
+// (UTC) and the browser render the same string (no hydration mismatch).
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Dhaka" });
+const bdDay = (iso: string) => new Date(new Date(iso).getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10);
+/** "1:10 PM" when the report was filed on its own day, else "submitted 6 Oct, 1:10 PM". */
+const submittedAt = (r: Report) =>
+  !r.created_at ? "" : bdDay(r.created_at) === r.report_date ? fmtTime(r.created_at) : `submitted ${fmtDate(bdDay(r.created_at))}, ${fmtTime(r.created_at)}`;
 
 function inRange(dateStr: string, range: Range): boolean {
   if (range === "all") return true;
@@ -139,8 +147,12 @@ export default function ReportView({
                   {isSel ? <CheckSquare className="h-[18px] w-[18px] text-brand-blue" /> : <Square className="h-[18px] w-[18px]" />}
                 </button>
                 <button onClick={() => toggleExpand(r.id)} className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="text-xs font-semibold text-fg-muted">{fmtDate(r.report_date)}</span>
+                    {/* the MD wants the clock time too — when exactly it was filed */}
+                    {r.created_at && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-fg-faint"><Clock className="h-3 w-3" /> {submittedAt(r)}</span>
+                    )}
                   </div>
                   <p className={`mt-1 text-sm text-fg ${isOpen ? "whitespace-pre-wrap leading-relaxed" : "truncate"}`}>
                     {isOpen ? r.body : oneLine}

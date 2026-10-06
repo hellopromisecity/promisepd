@@ -25,6 +25,19 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.10",
+    date: "2026-10-06",
+    title: "Payment method, who recorded it, and the time on every report",
+    changes: [
+      { kind: "new", text: "Report: every submitted report now shows the clock time next to its date (“5 Oct 2026 · 1:10 PM”), the way the Audit log does — and “submitted 6 Oct, 9:02 AM” when a report was filed for an earlier day." },
+      { kind: "new", text: "Every transaction form — Transactionify's Add / Edit, the App Users and All Customers transactions editor, and the project book's Add transaction — gets a Payment method picker: Cash, Bank, Bkash, Nagad, Rocket. The value is saved on both sides of a mirrored pair (app ledger + project book)." },
+      { kind: "new", text: "Transactionify: under the date, who recorded the entry (“by Tarek Ahmed”, as in the Audit log); under the amount, how it was paid (Bank, Bkash…). Both are searchable and in the CSV export. Existing app-side entries get their recorder back-filled from the Audit log; book-side entries recorded before this release stay blank." },
+      { kind: "new", text: "The transaction editors' history lists show the method and the recorder on each line too." },
+      { kind: "new", text: "Project-book payments (add / edit / delete) are now written to the Audit log with the customer, project, amount and method — they were the one money action the log did not record." },
+      { kind: "changed", text: "Needs migration 0034 (two columns on investor_transactions and hub_customer_payments, plus the audit-log backfill). The app keeps working before it is run; the picker simply saves nothing until then." },
+    ],
+  },
+  {
     version: "2.5.9",
     date: "2026-10-06",
     title: "App-only holdings get the full controls · same name ≠ same person",

@@ -25,6 +25,7 @@ import {
 } from "@/lib/admin-guard";
 import { sendTransactionSms } from "@/lib/sms";
 import { DEFAULT_MEMBER_PASSWORD, syncBookFromAppTxn } from "@/lib/investor-write";
+import { normalizePaymentMethod, isMissingColumn } from "@/lib/payment-methods";
 
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
 
@@ -96,13 +97,15 @@ export type TxnInput = {
   project_id?: string | null;
   rashid_number?: string | null;
   description?: string | null;
+  /** Cash / Bank / Bkash / Nagad / Rocket — how the money moved (0034). */
+  payment_method?: string | null;
   /** false = don't text the customer for this entry (re-entries etc.). */
   sendSms?: boolean;
 };
 
 export async function saveInvestorTransaction(input: TxnInput): Promise<ActionResult<{ id: string }>> {
   return runAction(async () => {
-    await requireAdmin();
+    const me = await requireAdmin();
     const admin = getAdmin();
     if (!admin) throw new Error("Data unavailable");
 
@@ -133,6 +136,10 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       rashid_number: input.rashid_number?.trim() || null,
       description: input.description?.trim() || null,
     };
+    // Payment method: one of the five office channels, or none. The recorder's
+    // name is stamped on creation only (an edit never changes who added it).
+    const payment_method = normalizePaymentMethod(input.payment_method);
+    if (input.payment_method?.trim() && !payment_method) throw new ValidationError("Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket).");
 
     let id = input.transaction_id?.trim() || null;
     let prevUid: string | null = null;
@@ -145,7 +152,9 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
         .maybeSingle();
       if (!existing) throw new ValidationError("That transaction no longer exists.");
       prevUid = (existing as { uid: string }).uid;
-      const { error } = await admin.from("investor_transactions").update(row).eq("transaction_id", id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let { error } = await admin.from("investor_transactions").update({ ...row, payment_method } as any).eq("transaction_id", id);
+      if (error && isMissingColumn(error.message)) ({ error } = await admin.from("investor_transactions").update(row).eq("transaction_id", id)); // pre-0034
       if (error) throw new Error(error.message);
     } else {
       // Allocate a fresh sequential id and insert.  Retry on a unique-key
@@ -154,7 +163,9 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       let lastErr = "";
       for (let attempt = 0; attempt < 5 && !id; attempt++) {
         const candidate = await nextId(admin, "investor_transactions", "transaction_id", "TX", 100001);
-        const { error } = await admin.from("investor_transactions").insert({ transaction_id: candidate, ...row });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let { error } = await admin.from("investor_transactions").insert({ transaction_id: candidate, ...row, payment_method, created_by_name: me.name || null } as any);
+        if (error && isMissingColumn(error.message)) ({ error } = await admin.from("investor_transactions").insert({ transaction_id: candidate, ...row })); // pre-0034
         if (!error) {
           id = candidate;
           break;
@@ -194,13 +205,15 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       date: input.date,
       rashid_number: input.rashid_number,
       description: input.description,
+      payment_method,
+      created_by_name: creating ? me.name || null : undefined,
     }, creating ? "create" : "update");
 
     await logAudit({
       action: input.transaction_id ? "update" : "create",
       entity: "investor_transaction",
       entityId: id,
-      detail: `${input.transaction_id ? "Edited" : "Added"} ${type} ৳${amount} for ${uid}`,
+      detail: `${input.transaction_id ? "Edited" : "Added"} ${type} ৳${amount} for ${uid}${payment_method ? ` · ${payment_method}` : ""}`,
     });
     revalidatePath("/dashboard/investments/transactions");
     revalidatePath("/dashboard/investments/users");

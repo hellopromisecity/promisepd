@@ -54,6 +54,8 @@ export default async function InvestorTransactionsPage() {
     projectName: t.project_id ? maps.projectName.get(t.project_id) ?? t.project_id : null,
     rashid: t.rashid_number,
     description: t.description,
+    paymentMethod: t.payment_method ?? null,
+    createdBy: t.created_by_name ?? null,
   }));
 
   const investorOptions = investors.map((i) => ({ uid: i.uid, label: `${i.full_name || "Unnamed"} — ${localPhone(i.phone_number)}` }));

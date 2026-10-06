@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Wallet, X, Loader2, Plus, Pencil, Trash2, Check, ArrowDown, ArrowUp } from "lucide-react";
 import { saveInvestorTransaction, deleteInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
-import { taka, fmtDate, dateInput, initial, avatarTint, type AppUser, type TypeOpt, type ProjectOpt, type UserTxn } from "./shared";
+import { taka, fmtDate, dateInput, initial, avatarTint, PAYMENT_METHODS, type AppUser, type TypeOpt, type ProjectOpt, type UserTxn } from "./shared";
 
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand-blue/50";
 const labelCls = "mb-1 block text-xs font-semibold text-fg-muted";
@@ -65,6 +65,7 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
       project_id: String(fd.get("project_id") ?? "") || null,
       rashid_number: String(fd.get("rashid_number") ?? ""),
       description: String(fd.get("description") ?? ""),
+      payment_method: String(fd.get("payment_method") ?? "") || null,
     };
     start(async () => {
       const res = await saveInvestorTransaction(input);
@@ -142,6 +143,13 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
                   <select name="project_id" defaultValue={edit?.project_id ?? projectId ?? ""} className={inputCls}>
                     <option value="">— None (general) —</option>
                     {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Payment method</label>
+                  <select name="payment_method" defaultValue={edit?.payment_method ?? ""} className={inputCls}>
+                    <option value="">— Select —</option>
+                    {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -223,12 +231,13 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
                                   {t.project_name && <span className="truncate text-xs font-normal text-fg-muted">· {t.project_name}</span>}
                                 </p>
                                 <p className="mt-0.5 text-xs text-fg-faint">
-                                  {fmtDate(t.date)} · <span className="font-mono">{t.transaction_id}</span>{t.rashid_number ? ` · RN ${t.rashid_number}` : ""}
+                                  {fmtDate(t.date)} · <span className="font-mono">{t.transaction_id}</span>{t.rashid_number ? ` · RN ${t.rashid_number}` : ""}{t.created_by_name ? ` · by ${t.created_by_name}` : ""}
                                 </p>
                                 {t.description && <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{t.description}</p>}
                               </div>
                               <div className="flex shrink-0 flex-col items-end gap-1">
                                 <span className={`text-sm font-bold tabular-nums ${out ? "text-brand-red-dark" : "text-emerald-600"}`}>{out ? "−" : "+"}{taka(t.amount)}</span>
+                                {t.payment_method && <span className="text-[10px] font-semibold text-fg-muted">{t.payment_method}</span>}
                                 {confirmDel === t.transaction_id ? (
                                   <span className="flex items-center gap-1 text-[11px]">
                                     <span className="text-fg-muted">Delete?</span>

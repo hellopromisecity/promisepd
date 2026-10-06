@@ -1,5 +1,6 @@
 import "server-only";
 import { getAdmin } from "@/lib/admin-guard";
+import { isMissingColumn } from "@/lib/payment-methods";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -259,7 +260,7 @@ async function insertMirror(
   admin: Admin,
   uid: string,
   project_id: string | null,
-  m: { kind: string; type: string; amount: number; date: string | null; description?: string | null },
+  m: { kind: string; type: string; amount: number; date: string | null; description?: string | null; payment_method?: string | null; created_by_name?: string | null },
   types: { name: string; operator: string }[],
 ): Promise<string | null> {
   const amount = Math.round((Number(m.amount) || 0) * 100) / 100;
@@ -268,7 +269,10 @@ async function insertMirror(
   const date = m.date && /^\d{4}-\d{2}-\d{2}/.test(m.date) ? `${m.date.slice(0, 10)}T00:00:00+06:00` : new Date().toISOString();
   for (let attempt = 0; attempt < 5; attempt++) {
     const candidate = await nextId(admin, "investor_transactions", "transaction_id", "TX", 100001);
-    const { error } = await admin.from("investor_transactions").insert({ transaction_id: candidate, uid, type, amount, date, project_id, description: m.description ?? null } as any);
+    const base = { transaction_id: candidate, uid, type, amount, date, project_id, description: m.description ?? null };
+    // 0034 columns (payment method + recorder) — retried without them before the migration
+    let { error } = await admin.from("investor_transactions").insert({ ...base, payment_method: m.payment_method ?? null, created_by_name: m.created_by_name ?? null } as any);
+    if (error && isMissingColumn(error.message)) ({ error } = await admin.from("investor_transactions").insert(base as any));
     if (!error) return candidate;
     if (!/duplicate|unique/i.test(error.message)) throw new Error(error.message);
   }
@@ -283,7 +287,7 @@ async function insertMirror(
 export async function mirrorBookPayment(
   admin: Admin,
   hub: { id?: string | null; name?: string | null; investor_uid?: string | null; mobile?: string | null; project_name: string },
-  payment: { kind: string; type: string; amount: number; date?: string | null; description?: string | null },
+  payment: { kind: string; type: string; amount: number; date?: string | null; description?: string | null; payment_method?: string | null; created_by_name?: string | null },
 ): Promise<string | null> {
   try {
     const uid = await ensureInvestorForHub(admin, hub);
@@ -292,7 +296,7 @@ export async function mirrorBookPayment(
       admin.from("investment_types").select("name, operator"),
       projectIdForName(admin, hub.project_name, uid),
     ]);
-    const id = await insertMirror(admin, uid, project_id, { kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null }, (types ?? []) as any[]);
+    const id = await insertMirror(admin, uid, project_id, { kind: payment.kind, type: payment.type, amount: payment.amount, date: payment.date ?? null, description: payment.description ?? null, payment_method: payment.payment_method ?? null, created_by_name: payment.created_by_name ?? null }, (types ?? []) as any[]);
     if (project_id) await ensureMembership(admin, uid, project_id);
     await recomputeInvestorBalance(admin, uid);
     return id;
@@ -309,7 +313,7 @@ export async function syncMirrorOnPaymentChange(
   admin: Admin,
   hub: { investor_uid?: string | null; mobile?: string | null; project_name: string },
   old: { amount: number; date: string | null },
-  next: { kind: string; type: string; amount: number; date?: string | null; description?: string | null } | null,
+  next: { kind: string; type: string; amount: number; date?: string | null; description?: string | null; payment_method?: string | null } | null,
   mirrorTx?: string | null,
 ): Promise<string | null> {
   try {
@@ -335,11 +339,16 @@ export async function syncMirrorOnPaymentChange(
     let result: string | null = null;
     if (next) {
       if (!hit) {
-        result = await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null }, (types ?? []) as any[]);
+        result = await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null, payment_method: next.payment_method ?? null }, (types ?? []) as any[]);
       } else {
         const type = typeFor(next.kind, next.type, (types ?? []) as any[]);
         const date = next.date && /^\d{4}-\d{2}-\d{2}/.test(next.date) ? `${next.date.slice(0, 10)}T00:00:00+06:00` : (hit.date as string);
-        await admin.from("investor_transactions").update({ type, amount: Math.round((Number(next.amount) || 0) * 100) / 100, date, description: next.description ?? null } as any).eq("transaction_id", hit.transaction_id);
+        const upd = { type, amount: Math.round((Number(next.amount) || 0) * 100) / 100, date, description: next.description ?? null };
+        // payment method only when the caller sent one (undefined = leave as is); pre-0034 retries without it
+        const { error: uErr } = next.payment_method === undefined
+          ? await admin.from("investor_transactions").update(upd as any).eq("transaction_id", hit.transaction_id)
+          : await admin.from("investor_transactions").update({ ...upd, payment_method: next.payment_method } as any).eq("transaction_id", hit.transaction_id);
+        if (uErr && isMissingColumn(uErr.message)) await admin.from("investor_transactions").update(upd as any).eq("transaction_id", hit.transaction_id);
         result = hit.transaction_id;
       }
     } else if (hit) {
@@ -415,7 +424,7 @@ async function hubRowForAppProject(admin: Admin, uid: string, project_id: string
  *  ways. No SMS here (the app editor already texts). Never throws. */
 export async function syncBookFromAppTxn(
   admin: Admin,
-  txn: { transaction_id: string; uid: string; project_id: string | null; type: string; operator: string; amount: number; date?: string | null; rashid_number?: string | null; description?: string | null },
+  txn: { transaction_id: string; uid: string; project_id: string | null; type: string; operator: string; amount: number; date?: string | null; rashid_number?: string | null; description?: string | null; payment_method?: string | null; created_by_name?: string | null },
   mode: "create" | "update" | "delete",
 ): Promise<void> {
   try {
@@ -437,9 +446,16 @@ export async function syncBookFromAppTxn(
     const day = txn.date && /^\d{4}-\d{2}-\d{2}/.test(String(txn.date)) ? String(txn.date).slice(0, 10) : bdDay(txn.date ?? new Date().toISOString());
     const desc = txn.description ? `${txn.type} — ${txn.description}` : txn.type;
     const row = { date: day, amount: r2(txn.amount), kind, description: desc, receipt_no: txn.rashid_number || null };
+    // 0034 columns — payment method only when sent (undefined = untouched),
+    // recorder only on creation; both dropped again before the migration
+    const extras: Record<string, unknown> = {};
+    if (txn.payment_method !== undefined) extras.payment_method = txn.payment_method;
+    if (txn.created_by_name) extras.created_by_name = txn.created_by_name;
+    const hasExtras = Object.keys(extras).length > 0;
 
     if (payment) {
-      await (admin.from as any)("hub_customer_payments").update(row).eq("id", payment.id);
+      const { error: uErr } = await (admin.from as any)("hub_customer_payments").update({ ...row, ...extras }).eq("id", payment.id);
+      if (uErr && hasExtras && isMissingColumn(uErr.message)) await (admin.from as any)("hub_customer_payments").update(row).eq("id", payment.id);
       await recomputeHubCustomer(admin, payment.customer_id);
       return;
     }
@@ -450,7 +466,8 @@ export async function syncBookFromAppTxn(
     if (!hub) return;
     const { data: mx } = await (admin.from as any)("hub_customer_payments").select("seq").eq("customer_id", hub.id).order("seq", { ascending: false }).limit(1).maybeSingle();
     const seq = Number((mx as { seq?: number } | null)?.seq ?? -1) + 1;
-    const { error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, mirror_tx: txn.transaction_id });
+    let { error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, ...extras, mirror_tx: txn.transaction_id });
+    if (error && hasExtras && isMissingColumn(error.message)) ({ error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, mirror_tx: txn.transaction_id })); // pre-0034
     if (error) await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row }); // pre-0029 fallback
     await recomputeHubCustomer(admin, hub.id);
     await ensureMembership(admin, txn.uid, txn.project_id);
@@ -463,7 +480,7 @@ export async function syncBookFromAppTxn(
  *  membership so the PWA shows the project card. Returns how many were added. */
 export async function backfillHubToInvestor(admin: Admin, hubCustomerId: string, uid: string, projectName: string): Promise<number> {
   const [{ data: pays }, { data: types }, { data: existing }, project_id] = await Promise.all([
-    admin.from("hub_customer_payments").select("date, amount, kind, description").eq("customer_id", hubCustomerId).order("seq", { ascending: true }),
+    admin.from("hub_customer_payments").select("*").eq("customer_id", hubCustomerId).order("seq", { ascending: true }),
     admin.from("investment_types").select("name, operator"),
     admin.from("investor_transactions").select("amount, date, project_id").eq("uid", uid),
     projectIdForName(admin, projectName, uid),
@@ -476,7 +493,7 @@ export async function backfillHubToInvestor(admin: Admin, hubCustomerId: string,
     if (seen.has(`${project_id}|${amt}|${day}`)) continue; // already there
     const sep = String(p.description ?? "").indexOf(" — ");
     const type = sep >= 0 ? String(p.description).slice(0, sep).trim() : "";
-    const id = await insertMirror(admin, uid, project_id, { kind: p.kind, type, amount: p.amount, date: p.date, description: p.description }, (types ?? []) as any[]);
+    const id = await insertMirror(admin, uid, project_id, { kind: p.kind, type, amount: p.amount, date: p.date, description: p.description, payment_method: p.payment_method ?? null, created_by_name: p.created_by_name ?? null }, (types ?? []) as any[]);
     if (id) { added++; seen.add(`${project_id}|${amt}|${day}`); }
   }
   if (project_id) await ensureMembership(admin, uid, project_id);

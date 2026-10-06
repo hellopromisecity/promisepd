@@ -71,6 +71,10 @@ export type InvestorTransaction = {
   type: string;
   description: string | null;
   created_at: string;
+  /** Cash / Bank / Bkash / Nagad / Rocket (migration 0034; absent before it). */
+  payment_method?: string | null;
+  /** Who recorded the entry (migration 0034; backfilled from the audit log). */
+  created_by_name?: string | null;
 };
 
 export type UnsubscribeRequest = {

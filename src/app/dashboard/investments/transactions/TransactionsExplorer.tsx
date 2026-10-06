@@ -41,6 +41,10 @@ export type Row = {
   projectName: string | null;
   rashid: string | null;
   description: string | null;
+  /** Cash / Bank / Bkash / Nagad / Rocket (0034; null on older rows). */
+  paymentMethod: string | null;
+  /** Who in the office recorded it — as the Audit log shows (0034). */
+  createdBy: string | null;
 };
 
 const inputCls = "h-9 rounded-xl border border-border bg-bg-soft px-3 text-sm outline-none focus:border-brand-blue/50";
@@ -138,7 +142,7 @@ export default function TransactionsExplorer({
       if (flow === "in" && r.operator === "-") return false;
       if (flow === "out" && r.operator !== "-") return false;
       if (ql) {
-        const hay = `${r.transaction_id} ${r.uid} ${r.fid ?? ""} ${r.phone ?? ""} ${r.userName} ${r.rashid ?? ""} ${r.type} ${r.projectName ?? ""}`.toLowerCase();
+        const hay = `${r.transaction_id} ${r.uid} ${r.fid ?? ""} ${r.phone ?? ""} ${r.userName} ${r.rashid ?? ""} ${r.type} ${r.projectName ?? ""} ${r.paymentMethod ?? ""} ${r.createdBy ?? ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
@@ -240,10 +244,10 @@ export default function TransactionsExplorer({
   // ── exports (operate on the current filtered + sorted set) ──
   const rangeLabel = applied.from || applied.to ? `${applied.from || "start"}_${applied.to || "now"}` : "all-time";
   function exportCSV() {
-    const head = ["Date", "ID", "Receipt", "User", "File ID", "Mobile", "UID", "Type", "Direction", "Amount", "Project"];
+    const head = ["Date", "ID", "Receipt", "User", "File ID", "Mobile", "UID", "Type", "Direction", "Amount", "Method", "Project", "Added by"];
     const body = sorted.map((r) => [
       dayKey(r.date), r.transaction_id, r.rashid ?? "", r.userName, r.fid ?? "", r.phone ?? "", r.uid, r.type,
-      r.operator === "-" ? "out" : "in", r.amount, r.projectName ?? "",
+      r.operator === "-" ? "out" : "in", r.amount, r.paymentMethod ?? "", r.projectName ?? "", r.createdBy ?? "",
     ]);
     const csv = [head, ...body].map((row) => row.map((c) => { const v = String(c ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -418,13 +422,21 @@ export default function TransactionsExplorer({
                         <p className="font-semibold text-fg">{r.userName || "—"}</p>
                         {r.phone && <p className="text-[11px] text-fg-muted">{r.phone}</p>}
                       </td>
-                      <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>{fmtDate(r.date)}</td>
+                      <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>
+                        <p>{fmtDate(r.date)}</p>
+                        {/* who recorded it — the Audit log's actor, under the date */}
+                        {r.createdBy && <p className="text-[11px] text-fg-faint">by {r.createdBy}</p>}
+                      </td>
                       <td className={tdCls}><Badge tone={minus ? "danger" : "success"}>{r.type}</Badge></td>
-                      <td className={`${tdCls} whitespace-nowrap text-right font-bold ${minus ? "text-brand-red-dark" : "text-emerald-600"}`}>{minus ? "−" : "+"}{taka(r.amount)}</td>
+                      <td className={`${tdCls} whitespace-nowrap text-right font-bold ${minus ? "text-brand-red-dark" : "text-emerald-600"}`}>
+                        <p>{minus ? "−" : "+"}{taka(r.amount)}</p>
+                        {/* how the money moved — Cash / Bank / Bkash / Nagad / Rocket */}
+                        {r.paymentMethod && <p className="text-[11px] font-semibold text-fg-muted">{r.paymentMethod}</p>}
+                      </td>
                       <td className={`${tdCls} text-fg-muted`}>{r.projectName ?? "—"}</td>
                       <td className={tdCls}>
                         <div className="flex items-center justify-end gap-1">
-                          <TxnForm {...formProps} txn={{ transaction_id: r.transaction_id, uid: r.uid, type: r.type, amount: r.amount, date: (r.date || "").slice(0, 10), project_id: r.projectId, rashid_number: r.rashid, description: r.description }} />
+                          <TxnForm {...formProps} txn={{ transaction_id: r.transaction_id, uid: r.uid, type: r.type, amount: r.amount, date: (r.date || "").slice(0, 10), project_id: r.projectId, rashid_number: r.rashid, description: r.description, payment_method: r.paymentMethod }} />
                           <TxnDelete id={r.transaction_id} label={r.transaction_id} />
                         </div>
                       </td>

@@ -51,6 +51,10 @@ export type HubPayment = {
   amount: number;
   receipt_no: string | null;
   kind: string;
+  /** Cash / Bank / Bkash / Nagad / Rocket (migration 0034; null before). */
+  payment_method: string | null;
+  /** Who in the office recorded it (migration 0034). */
+  created_by_name: string | null;
 };
 
 const n = (v: unknown) => Number(v) || 0;
@@ -155,7 +159,10 @@ export async function hubCustomer(id: string): Promise<{ customer: HubCustomer; 
   const { data: p } = await admin.from("hub_customer_payments").select("*").eq("customer_id", id).order("seq", { ascending: true });
   return {
     customer: mapCustomer(c as Record<string, unknown>),
-    payments: ((p ?? []) as Record<string, unknown>[]).map((x) => ({ id: x.id as string, seq: n(x.seq), date: (x.date as string) ?? null, description: (x.description as string) ?? null, amount: n(x.amount), receipt_no: (x.receipt_no as string) ?? null, kind: (x.kind as string) ?? "deposit" })),
+    payments: ((p ?? []) as Record<string, unknown>[]).map((x) => ({
+      id: x.id as string, seq: n(x.seq), date: (x.date as string) ?? null, description: (x.description as string) ?? null, amount: n(x.amount), receipt_no: (x.receipt_no as string) ?? null, kind: (x.kind as string) ?? "deposit",
+      payment_method: (x.payment_method as string) ?? null, created_by_name: (x.created_by_name as string) ?? null,
+    })),
   };
 }
 
