@@ -14,9 +14,21 @@ function todayLocal(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function UserTxns({ user, types, projects }: { user: AppUser; types: TypeOpt[]; projects: ProjectOpt[] }) {
+export default function UserTxns({ user, types, projects, projectId, initialOpen, hideTrigger, onClose, onChanged }: {
+  user: AppUser; types: TypeOpt[]; projects: ProjectOpt[];
+  /** Show — and default the add form to — ONE project's transactions only
+   *  (the customer popup opens the editor per holding). */
+  projectId?: string | null;
+  /** Controlled use (no trigger button of its own): start open, tell the
+   *  opener when it closes, and after every successful add / edit / delete
+   *  (the opener may be holding stale data). */
+  initialOpen?: boolean; hideTrigger?: boolean; onClose?: () => void; onChanged?: () => void;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!initialOpen);
+  const close = () => { setOpen(false); onClose?.(); };
+  const shown = useMemo(() => (projectId ? user.txns.filter((t) => t.project_id === projectId) : user.txns), [user.txns, projectId]);
+  const scopeName = projectId ? projects.find((p) => p.project_id === projectId)?.project_name ?? null : null;
   const [edit, setEdit] = useState<UserTxn | null>(null); // null = adding
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -30,12 +42,12 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
   const sortedTxns = useMemo(() => {
     const dir = sortDir === "desc" ? -1 : 1;
-    return [...user.txns].sort((a, b) =>
+    return [...shown].sort((a, b) =>
       sortKey === "amount"
         ? ((Number(a.amount) || 0) - (Number(b.amount) || 0)) * dir
         : (new Date(a.date).getTime() - new Date(b.date).getTime()) * dir,
     );
-  }, [user.txns, sortKey, sortDir]);
+  }, [shown, sortKey, sortDir]);
   function toggleSort(key: "date" | "amount") {
     if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     else { setSortKey(key); setSortDir("desc"); } // date → latest first · amount → biggest first
@@ -59,6 +71,7 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
       if (!res.ok) return setError(res.error);
       setEdit(null);
       setFormKey((k) => k + 1);
+      onChanged?.();
       router.refresh();
     });
   }
@@ -70,6 +83,7 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
       if (!res.ok) return setError(res.error);
       setConfirmDel(null);
       if (edit?.transaction_id === id) setEdit(null);
+      onChanged?.();
       router.refresh();
     });
   }
@@ -78,28 +92,30 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Transactions"
-        className="grid h-9 w-9 place-items-center rounded-lg border border-emerald-500/30 bg-bg text-emerald-600 transition-all hover:-translate-y-0.5 hover:border-emerald-500/60 hover:shadow-sm"
-      >
-        <Wallet className="h-4 w-4" />
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Transactions"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-emerald-500/30 bg-bg text-emerald-600 transition-all hover:-translate-y-0.5 hover:border-emerald-500/60 hover:shadow-sm"
+        >
+          <Wallet className="h-4 w-4" />
+        </button>
+      )}
 
       {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !pending && close()}>
           <div className="flex max-h-[92vh] w-full max-w-4xl animate-[pop_.18s_ease-out] flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* header */}
             <div className="flex items-center justify-between gap-3 border-b border-border bg-bg-soft/50 p-4">
               <div className="flex items-center gap-2.5">
                 <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold ${tint.bg} ${tint.fg}`}>{initial(user.full_name)}</span>
                 <div>
-                  <h2 className="text-base font-bold text-fg">Transactions — {user.full_name}</h2>
-                  <p className="font-mono text-xs text-fg-muted">{user.uid} · balance {taka(user.balance)}</p>
+                  <h2 className="text-base font-bold text-fg">{scopeName ? `${scopeName} — ${user.full_name}` : `Transactions — ${user.full_name}`}</h2>
+                  <p className="font-mono text-xs text-fg-muted">{user.uid} · balance {taka(user.balance)}{scopeName ? <span className="font-sans"> · app entries of this project only</span> : null}</p>
                 </div>
               </div>
-              <button type="button" onClick={() => !pending && setOpen(false)} className="rounded-lg p-1 text-fg-muted transition-colors hover:bg-bg-soft hover:text-fg" aria-label="Close">
+              <button type="button" onClick={() => !pending && close()} className="rounded-lg p-1 text-fg-muted transition-colors hover:bg-bg-soft hover:text-fg" aria-label="Close">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -123,7 +139,7 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
                 </div>
                 <div>
                   <label className={labelCls}>Project <span className="font-normal text-fg-faint">(optional)</span></label>
-                  <select name="project_id" defaultValue={edit?.project_id ?? ""} className={inputCls}>
+                  <select name="project_id" defaultValue={edit?.project_id ?? projectId ?? ""} className={inputCls}>
                     <option value="">— None (general) —</option>
                     {projects.map((p) => <option key={p.project_id} value={p.project_id}>{p.project_name}</option>)}
                   </select>
@@ -187,11 +203,11 @@ export default function UserTxns({ user, types, projects }: { user: AppUser; typ
                     >
                       Amount {sortKey === "amount" && sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
                     </button>
-                    <span className="rounded-full bg-bg-soft px-2 py-0.5 text-xs font-semibold text-fg-muted">{user.txns.length}</span>
+                    <span className="rounded-full bg-bg-soft px-2 py-0.5 text-xs font-semibold text-fg-muted">{shown.length}</span>
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                  {user.txns.length === 0 ? (
+                  {shown.length === 0 ? (
                     <p className="p-8 text-center text-sm text-fg-muted">No transactions yet.</p>
                   ) : (
                     <ul className="divide-y divide-border/60">

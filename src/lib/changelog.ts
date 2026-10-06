@@ -25,6 +25,20 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.9",
+    date: "2026-10-06",
+    title: "App-only holdings get the full controls · same name ≠ same person",
+    changes: [
+      { kind: "new", text: "Customer popup: an “app” holding (money sitting in the app with no book file) now carries the same buttons as every other holding — Transactions (add / edit / delete each app entry of that project), Edit (creates the book file first, then opens it), Move to another app account, and Delete (to Archive → Transactions, restorable 30 days) — alongside Create book file. Until now its only button was Create book file, so a manager could not touch it." },
+      { kind: "new", text: "The popup now says WHY such a holding exists when it is the leftover of an archived book file — “Leftover of archived file 31210312 (Sharmin Akhter)” — and Create book file refuses to open a second file for it (restore the archived file, or move / delete the app money instead)." },
+      { kind: "fixed", text: "Archiving, moving (Link) or splitting a book file now takes ALL of its app mirrors along: the hard-linked ones by id, and the older migration-era ones paired by amount + day (then hard-linked for good). Only the hard-linked ones moved before, which is how ৳62,440 of Sharmin Akhter's Special Deposit stayed on Abu Yusuf's account as untouchable “app” money when her file was archived on 27 Sep — and the same for 14 other accounts since 10 Sep. Moving a file also no longer leaves a copy behind on the old account while minting a fresh one on the new." },
+      { kind: "new", text: "All Customers filter: “App-only (N)” lists every account that still has such a holding." },
+      { kind: "fixed", text: "Two people with the same name are never folded into one row again: book customers without an app account group by name AND mobile — a different mobile or file number is a different person." },
+      { kind: "changed", text: "“Give it its own account” is now offered for every file whose own number has no account yet and differs from the account's — including when it is the account's only file (people joined by the migration's same-name rule). Accounts without a login number of their own still ask you to set the number instead." },
+      { kind: "changed", text: "The book→app migration script no longer matches people by name unless run with --match-by-name: a book person whose mobile differs from (or is missing on) every app account gets their own account." },
+    ],
+  },
+  {
     version: "2.5.8",
     date: "2026-09-25",
     title: "Project charts get the Dashboard's filter, CSV and clickable towers",

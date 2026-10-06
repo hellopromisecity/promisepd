@@ -33,6 +33,11 @@ export type PersonHolding = {
   /** source "app" only: the investment_projects id the money sits under — what
    *  "Create book file" needs to turn this into a real book row. */
   app_project_id?: string | null;
+  /** source "app" only: this account's ARCHIVED book file in the same project,
+   *  when there is one — the app money is that file's leftover mirror (the
+   *  migration-era link was soft, so archiving the file left the mirror live).
+   *  Tells the manager WHY the holding exists and what to do about it. */
+  orphan_of?: { name: string; file_no: string | null } | null;
   paid: number;
   profit: number;
   balance: number;
@@ -194,13 +199,22 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   for (const i of investors) { const k = firstMobileKey(i.phone_number); if (k && !ownerByPhone.has(k)) ownerByPhone.set(k, { uid: i.uid, name: i.full_name || i.uid }); }
   const numberOwner = (c: HubCustomer) => { const o = ownerByPhone.get(firstMobileKey(c.mobile)); return o && o.uid !== c.investor_uid ? o : null; };
   const accPhoneKey = new Map(investors.map((i) => [i.uid, firstMobileKey(i.phone_number)]));
-  const rowsPerUid = new Map<string, number>();
-  for (const c of customers) if (c.investor_uid) rowsPerUid.set(c.investor_uid, (rowsPerUid.get(c.investor_uid) ?? 0) + 1);
+  // accounts with no login number of their own (migration placeholders) — the
+  // fix there is to SET the number, not to split a file off
+  const accPlaceholder = new Map(investors.map((i) => [i.uid, /^(book|del):/i.test(i.phone_number ?? "")]));
+  // A different number IS a different person: offer "give it its own account"
+  // for every file whose own number has no account yet — also when it is the
+  // account's only file (same-name people joined by the migration's name rule).
   const ownNumber = (c: HubCustomer) => {
     const k = firstMobileKey(c.mobile);
     if (!k || !c.investor_uid || ownerByPhone.has(k) || accPhoneKey.get(c.investor_uid) === k) return null;
-    return (rowsPerUid.get(c.investor_uid) ?? 0) > 1 ? (c.mobile ?? null) : null;
+    if (accPlaceholder.get(c.investor_uid)) return null;
+    return c.mobile ?? null;
   };
+  // archived book rows per account — an app-only holding in the same project
+  // is that file's leftover mirror, not fresh money
+  const archivedByUid = new Map<string, HubCustomer[]>();
+  for (const c of customersAll) if (c.deleted_at && c.investor_uid) { const l = archivedByUid.get(c.investor_uid) ?? []; l.push(c); archivedByUid.set(c.investor_uid, l); }
   const rowsByUid = new Map<string, HubCustomer[]>();
   const unlinked: HubCustomer[] = [];
   for (const c of customers) {
@@ -235,7 +249,12 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
       if (t.invested <= 0 && t.profit <= 0 && t.withdrawn <= 0) continue;
       const hp = appProjToHub.get(appProjId);
       if (!hp || covered.has(hp.key)) continue;
-      holdings.push({ id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type, source: "app", app_project_id: appProjId, paid: t.invested, profit: t.profit, balance: t.balance });
+      const orphan = (archivedByUid.get(i.uid) ?? []).find((r) => r.project_key === hp.key);
+      holdings.push({
+        id: `app:${i.uid}:${hp.key}`, project_key: hp.key, project_name: hp.name, project_type: hp.type, source: "app", app_project_id: appProjId,
+        orphan_of: orphan ? { name: orphan.name, file_no: orphan.file_no ?? null } : null,
+        paid: t.invested, profit: t.profit, balance: t.balance,
+      });
     }
 
     // display mobile: the account's number, unless it's a book:<uid> placeholder
@@ -260,16 +279,19 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
     });
   }
 
-  // ── leftover unlinked book customers (no account yet — e.g. the ambiguous
-  // same-name cases awaiting a manual Link) — grouped by name like before ──
+  // ── leftover unlinked book customers (no account yet — awaiting a manual
+  // Link) — grouped by name AND mobile: the same name on two different numbers
+  // (or with no number at all) is two people, never one row ──
   const byName = new Map<string, PersonRow>();
   for (const r of unlinked) {
     const nn = normName(r.name);
     if (!nn) continue;
-    let p = byName.get(nn);
+    const mk = firstMobileKey(r.mobile);
+    const gk = mk ? `${nn}|${mk}` : `${nn}|${r.id}`;
+    let p = byName.get(gk);
     if (!p) {
-      p = { id: `book:${nn}`, name: r.name || "—", mobile: null, joined: null, totalPaid: 0, totalProfit: 0, totalBalance: 0, projectKeys: [], projectNames: [], holdings: [] };
-      byName.set(nn, p);
+      p = { id: `book:${gk}`, name: r.name || "—", mobile: null, joined: null, totalPaid: 0, totalProfit: 0, totalBalance: 0, projectKeys: [], projectNames: [], holdings: [] };
+      byName.set(gk, p);
     }
     if (!p.mobile && r.mobile) p.mobile = r.mobile;
     if (r.joining_date && (!p.joined || r.joining_date < p.joined)) p.joined = r.joining_date;

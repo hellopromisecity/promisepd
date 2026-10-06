@@ -21,7 +21,7 @@ import { CustomerFormModal, TransactionModal, LinkModal, ReferencePicker, type H
 import UserView from "@/app/dashboard/investments/users/UserView";
 import UserTxns from "@/app/dashboard/investments/users/UserTxns";
 import { updateInvestor, resetMemberPassword, changeMemberMobile, setInvestorActive, setInvestorWithdrawn, type InvestorInput } from "@/app/actions/admin-investments";
-import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, bookAppHolding, giveOwnAccount, type CustomerInput } from "@/app/actions/hub";
+import { assignCustomerToProject, archivePerson, archiveHubHolding, getHubCustomerDetail, bookAppHolding, giveOwnAccount, moveAppHolding, archiveAppHolding, type CustomerInput } from "@/app/actions/hub";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 
@@ -31,7 +31,7 @@ const pdfMoney = (n: number) => "Tk " + Math.round(Number(n) || 0).toLocaleStrin
 const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
-type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying" | "withdrawn";
+type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying" | "withdrawn" | "apponly";
 
 export default function AllCustomersExplorer({
   people, projects, health, top, totals, investorTypes, investorProjects,
@@ -72,6 +72,8 @@ export default function AllCustomersExplorer({
 
   const hubProjects = useMemo(() => projects.filter((p) => p.type !== "investment"), [projects]);
   const maxBal = Math.max(1, ...top.map((t) => t.balance));
+  // accounts holding app money with no book file behind it (the "app" badge)
+  const appOnlyCount = useMemo(() => people.filter((p) => p.holdings.some((h) => h.source === "app")).length, [people]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -81,6 +83,7 @@ export default function AllCustomersExplorer({
       if (status === "verified" && !(app && p.is_verified)) return false;
       if (status === "unverified" && !(app && !p.is_verified)) return false;
       if (status === "withdrawn" && !p.is_withdrawn) return false;
+      if (status === "apponly" && !p.holdings.some((h) => h.source === "app")) return false;
       if (status === "paying" && !(p.totalPaid > 0)) return false;
       if (status === "nonpaying" && p.totalPaid > 0) return false;
       if (!term) return true;
@@ -246,6 +249,9 @@ export default function AllCustomersExplorer({
           <option value="unverified">Unverified ({health.unverified})</option>
           {/* manual marks only (three-dot menu → Mark as withdrawn) */}
           <option value="withdrawn">Withdrawn ({totals.withdrawn})</option>
+          {/* app money with no book file — leftovers of archived files, or
+              entered in the app before the app→book sync existed */}
+          <option value="apponly">App-only holding ({appOnlyCount})</option>
         </select>
         <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / page</option>)}
@@ -356,7 +362,7 @@ export default function AllCustomersExplorer({
         </div>
       </div>
 
-      {detail && <PersonModal person={detail} onClose={() => setDetail(null)} />}
+      {detail && <PersonModal person={detail} onClose={() => setDetail(null)} investorTypes={investorTypes} investorProjects={investorProjects} />}
       {linkBook && bookStub(linkBook) && <LinkModal customer={bookStub(linkBook)!} onClose={() => setLinkBook(null)} />}
       {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
     </div>
@@ -650,10 +656,18 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   );
 }
 
-function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => void }) {
+function PersonModal({ person, onClose, investorTypes, investorProjects }: { person: PersonRow; onClose: () => void; investorTypes: TypeOpt[]; investorProjects: ProjectOpt[] }) {
   const router = useRouter();
   const [txnH, setTxnH] = useState<PersonHolding | null>(null);
   const [linkH, setLinkH] = useState<PersonHolding | null>(null);
+  // app-only holdings (app money, no book file) get the same four controls,
+  // app-side: transactions editor, edit (via its new book file), move, delete
+  const [appTxnH, setAppTxnH] = useState<PersonHolding | null>(null);
+  const appTxnChanged = useRef(false);
+  const [moveH, setMoveH] = useState<PersonHolding | null>(null);
+  const [delAppTarget, setDelAppTarget] = useState<PersonHolding | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [editFromApp, setEditFromApp] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [delTarget, setDelTarget] = useState<PersonHolding | null>(null);
   const [delErr, setDelErr] = useState<string | null>(null);
@@ -693,6 +707,38 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
     setBookingId(null);
     if (r.ok) { toast(r.message || "Book file created.", "success"); onClose(); router.refresh(); }
     else toast(r.error, "error");
+  }
+
+  // Edit an app-only holding: price / file number / dates live on the book
+  // file, so create it first (paired 1:1 with the app entries), then open it
+  async function editApp(h: PersonHolding) {
+    if (!person.uid || !h.app_project_id) return;
+    const ok = await confirmDialog({
+      title: "Edit this holding",
+      message: `${h.project_name} has no book file yet — price, file number and dates live on the book file. Create it now from the ${fmt(h.paid)} already in the app (every entry paired 1:1, nothing double-counted) and open it for editing?`,
+      confirmText: "Create file & edit",
+    });
+    if (!ok) return;
+    setEditLoading(h.id);
+    const r = await bookAppHolding(person.uid, h.app_project_id);
+    if (!r.ok) { setEditLoading(null); toast(r.error, "error"); return; }
+    const d = r.id ? await getHubCustomerDetail(r.id) : null;
+    setEditLoading(null);
+    router.refresh();
+    if (d?.customer) { setEditFromApp(true); setEditH(d.customer); }
+    else { toast(r.message || "Book file created.", "success"); onClose(); }
+  }
+
+  // Delete an app-only holding: every app entry of that project goes to
+  // Archive → Transactions for 30 days (restorable one by one)
+  async function delAppHolding(h: PersonHolding) {
+    if (!person.uid || !h.app_project_id) return;
+    setArchivingId(h.id);
+    setDelErr(null);
+    const r = await archiveAppHolding(person.uid, h.app_project_id);
+    setArchivingId(null);
+    if (r.ok) { toast(r.message || "Moved to the Archive.", "success"); setDelAppTarget(null); onClose(); router.refresh(); }
+    else setDelErr(r.error);
   }
 
   async function openEdit(h: PersonHolding) {
@@ -748,7 +794,7 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
             <div className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-fg-muted">Holdings · {person.holdings.length} project{person.holdings.length > 1 ? "s" : ""}</div>
             <div className="space-y-1.5">
               {person.holdings.map((h, i) => (
-                <div key={h.id + i} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-sm">
+                <div key={h.id + i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-bg-soft px-3 py-2 text-sm">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 font-medium text-fg">
                       {h.project_name}
@@ -771,13 +817,34 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
                         {splittingId === h.id ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" /> : <AlertTriangle className="h-3 w-3 shrink-0" />} This file&apos;s number {h.own_number} has no app account — give it its own account?
                       </button>
                     )}
+                    {/* WHY an app-only holding exists: usually the leftover mirror of
+                        a book file that was archived (its migration-era link was
+                        soft, so the app copy stayed); otherwise app-entered money */}
+                    {h.source === "app" && (h.orphan_of ? (
+                      <div className="mt-0.5 flex items-start gap-1 text-[11px] font-semibold text-amber-700">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span>Leftover of archived file {h.orphan_of.file_no ?? "—"} ({h.orphan_of.name}) — the file went to the Archive, this app copy stayed. Restore the file there, or move / delete this.</span>
+                      </div>
+                    ) : (
+                      <div className="mt-0.5 text-[11px] text-fg-faint">In the app only — no book file yet. Create book file pairs every entry 1:1.</div>
+                    ))}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="font-bold tabular-nums text-fg">{fmt(h.balance)}</span>
-                    {h.source === "app" && h.app_project_id && person.uid && (
-                      <button onClick={() => bookApp(h)} disabled={bookingId === h.id} title="Create the book file for this app-only money — then edit / transactions / delete work here" className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-500/10 disabled:opacity-40">
-                        {bookingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />} Create book file
-                      </button>
+                    {h.source === "app" && h.app_project_id && person.uid && person.app && (
+                      <>
+                        <button onClick={() => bookApp(h)} disabled={bookingId === h.id} title="Create the book file for this app-only money (pairs every app entry 1:1)" className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-500/10 disabled:opacity-40">
+                          {bookingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />} <span className="hidden sm:inline">Create book file</span>
+                        </button>
+                        <button onClick={() => { appTxnChanged.current = false; setAppTxnH(h); }} title="Transactions — add / edit / delete this project's app entries" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-emerald-300 hover:text-emerald-600"><CreditCard className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => editApp(h)} disabled={editLoading === h.id} title="Edit this holding (creates its book file first, then opens it)" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-40">
+                          {editLoading === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+                        </button>
+                        <button onClick={() => setMoveH(h)} title="Move this app money to another app account" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-violet-300 hover:text-violet-600"><Link2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { setDelErr(null); setDelAppTarget(h); }} disabled={archivingId === h.id} title="Delete this app-only holding (to the 30-day Archive)" className="grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-faint hover:border-brand-red/40 hover:text-brand-red disabled:opacity-40">
+                          {archivingId === h.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      </>
                     )}
                     {h.source === "hub" && (
                       <>
@@ -808,7 +875,41 @@ function PersonModal({ person, onClose }: { person: PersonRow; onClose: () => vo
       {txnH && <TransactionModal customer={asHub(txnH)} project={hp(txnH)} onClose={() => setTxnH(null)} />}
       {/* a move changes this person's holdings — close the (now stale) popup */}
       {linkH && <LinkModal customer={asHub(linkH)} onClose={() => setLinkH(null)} onLinked={onClose} />}
-      {editH && <CustomerFormModal project={{ key: editH.project_key, name: editH.project_name, type: editH.project_type, sort: 0 }} customer={editH} onClose={() => setEditH(null)} />}
+      {/* a file created from app money: this popup is stale once the form closes */}
+      {editH && <CustomerFormModal project={{ key: editH.project_key, name: editH.project_name, type: editH.project_type, sort: 0 }} customer={editH} onClose={() => { setEditH(null); if (editFromApp) { setEditFromApp(false); onClose(); } }} />}
+      {/* app-only holding → the App Users transactions editor, scoped to that
+          project; any change makes this popup stale, so it closes with the editor */}
+      {appTxnH && person.app && (
+        <UserTxns
+          user={person.app} types={investorTypes} projects={investorProjects} projectId={appTxnH.app_project_id} initialOpen hideTrigger
+          onChanged={() => { appTxnChanged.current = true; }}
+          onClose={() => { setAppTxnH(null); if (appTxnChanged.current) { onClose(); router.refresh(); } }}
+        />
+      )}
+      {moveH && person.uid && moveH.app_project_id && (
+        <LinkModal
+          customer={asHub(moveH)} onClose={() => setMoveH(null)} onLinked={onClose}
+          override={{
+            title: "Move app money to another account",
+            subtitle: `${person.name} · ${moveH.project_name} · ${fmt(moveH.paid)} in the app, no book file`,
+            blurb: "Pick the account this money really belongs to. Every app entry of this project moves across — this account stops showing it, the other person's PWA starts showing it. Both balances are re-totalled.",
+            confirm: (uid, name) => ({ title: "Move app money", message: `Move ${person.name}'s ${moveH.project_name} app entries (${fmt(moveH.paid)}) to ${name} (${uid})?`, confirmText: "Move" }),
+            run: (uid) => moveAppHolding(person.uid!, moveH.app_project_id!, uid),
+          }}
+        />
+      )}
+      {delAppTarget && (
+        <TypeConfirm
+          kind="delete"
+          name={person.name}
+          title="Delete app-only holding"
+          message={`${person.name}'s “${delAppTarget.project_name}” app money (${fmt(delAppTarget.paid)}) leaves their account, All Customers and their app. Every entry waits in Archive → Transactions for 30 days — restorable one by one, gone for good after that. Nothing else on the account changes.`}
+          pending={archivingId === delAppTarget.id}
+          err={delErr}
+          onCancel={() => { if (archivingId !== delAppTarget.id) { setDelAppTarget(null); setDelErr(null); } }}
+          onConfirm={() => delAppHolding(delAppTarget)}
+        />
+      )}
       {delTarget && (
         <TypeConfirm
           kind="delete"

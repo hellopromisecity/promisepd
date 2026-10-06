@@ -535,7 +535,17 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   );
 }
 
-export function LinkModal({ customer, onClose, onLinked }: { customer: HubCustomer; onClose: () => void; onLinked?: () => void }) {
+/** Re-use the account picker for something other than linking a book row —
+ *  e.g. moving an APP-ONLY holding (no book row) to another account. */
+export type PickerOverride = {
+  title: string;
+  subtitle?: string;
+  blurb: string;
+  confirm: (uid: string, name: string) => { title: string; message: string; confirmText: string };
+  run: (uid: string) => Promise<{ ok: true; message?: string } | { ok: false; error: string }>;
+};
+
+export function LinkModal({ customer, onClose, onLinked, override }: { customer: HubCustomer; onClose: () => void; onLinked?: () => void; override?: PickerOverride }) {
   const router = useRouter();
   const [q, setQ] = useState(customer.name || "");
   const [hits, setHits] = useState<InvestorHit[] | null>(null);
@@ -545,22 +555,24 @@ export function LinkModal({ customer, onClose, onLinked }: { customer: HubCustom
   function pick(uid: string, name: string) {
     (async () => {
       const moving = !!customer.investor_uid;
-      const ok = await confirmDialog(moving
-        ? { title: "Move to another app account", message: `Move “${customer.name}”'s ${customer.project_name} holding from app ${customer.investor_uid} to ${name} (${uid})? Its mirrored transactions move across too — the old account stops showing this money, and ${name}'s PWA starts showing it.`, confirmText: "Move" }
-        : { title: "Link to app account", message: `Link “${customer.name}” to app account ${name}? Their book payments in ${customer.project_name} will sync into that account, so their PWA shows them.`, confirmText: "Link" });
+      const ok = await confirmDialog(override
+        ? override.confirm(uid, name)
+        : moving
+          ? { title: "Move to another app account", message: `Move “${customer.name}”'s ${customer.project_name} holding from app ${customer.investor_uid} to ${name} (${uid})? Its mirrored transactions move across too — the old account stops showing this money, and ${name}'s PWA starts showing it.`, confirmText: "Move" }
+          : { title: "Link to app account", message: `Link “${customer.name}” to app account ${name}? Their book payments in ${customer.project_name} will sync into that account, so their PWA shows them.`, confirmText: "Link" });
       if (!ok) return;
       start(async () => {
-        const r = await linkHubToInvestor(customer.id, uid);
+        const r = override ? await override.run(uid) : await linkHubToInvestor(customer.id, uid);
         if (r.ok) { toast(r.message || "Linked.", "success"); router.refresh(); onClose(); onLinked?.(); } else toast(r.error, "error");
       });
     })();
   }
 
   return (
-    <Modal title={customer.investor_uid ? "Move to another app account" : "Link to app account"} subtitle={`${customer.name} · ${customer.project_name}${customer.investor_uid ? ` · now linked to ${customer.investor_uid}` : ""}`} onClose={onClose}>
-      <p className="mb-2 text-xs text-fg-muted">{customer.investor_uid
+    <Modal title={override?.title ?? (customer.investor_uid ? "Move to another app account" : "Link to app account")} subtitle={override?.subtitle ?? `${customer.name} · ${customer.project_name}${customer.investor_uid ? ` · now linked to ${customer.investor_uid}` : ""}`} onClose={onClose}>
+      <p className="mb-2 text-xs text-fg-muted">{override?.blurb ?? (customer.investor_uid
         ? "Pick the account this holding really belongs to. Its transactions move across with it, so the old account stops showing money that was never theirs."
-        : "Connect this book customer to their app / investor account. Their payments then mirror into that account and show in their PWA — for people whose book & app numbers differ."}</p>
+        : "Connect this book customer to their app / investor account. Their payments then mirror into that account and show in their PWA — for people whose book & app numbers differ.")}</p>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search app users by name / UID / FID / mobile…" className={inputCls} />
       <div className="mt-3 max-h-[46vh] space-y-1.5 overflow-y-auto pr-1">
         {hits === null ? (

@@ -58,6 +58,14 @@ function appToHubName(appName: string): string {
   if (i) return i[1].trim();
   return appName;
 }
+/** Does an app project ("Investment (Special Deposit)", "Ahbab Palace-02
+ *  (1200sft)") fold onto this book project ("Special Deposit", "Ahbab
+ *  Palace-02")? The same name rule projectIdForName uses, exposed for callers
+ *  that hold both names and need no lookup. */
+export function appProjectMatchesBook(appName: string, bookName: string): boolean {
+  const want = normProj(appToHubName(appName));
+  return !!want && (normProj(bookName) === want || normProj(appToHubName(bookName)) === want);
+}
 
 /** Next sequential id, paged so it never collides past 1000 rows (see the
  *  transaction-id collision note in admin-investments.ts). */

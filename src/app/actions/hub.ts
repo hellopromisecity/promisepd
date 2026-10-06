@@ -6,9 +6,11 @@ import { getAdmin, logAudit } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
-import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile, syncBookFromAppTxn } from "@/lib/investor-write";
+import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile, syncBookFromAppTxn, appProjectMatchesBook } from "@/lib/investor-write";
 
-type Result = { ok: true; message?: string } | { ok: false; error: string };
+/** `id` — the row an action created or touched, when the caller chains on it
+ *  (e.g. "Create book file" → open that file's edit form). */
+type Result = { ok: true; message?: string; id?: string } | { ok: false; error: string };
 type Admin = NonNullable<ReturnType<typeof getAdmin>>;
 const r2 = (n: unknown) => Math.round((Number(n) || 0) * 100) / 100;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,6 +58,40 @@ async function readMirrorTx(admin: Admin, paymentId: string): Promise<string | n
 }
 async function writeMirrorTx(admin: Admin, paymentId: string, tx: string | null): Promise<void> {
   try { await HP(admin).update({ mirror_tx: tx }).eq("id", paymentId); } catch { /* pre-0029 */ }
+}
+
+/** EVERY app transaction that mirrors one book row: the mirror_tx-linked ones
+ *  by id, PLUS older payments (migration-era, mirror_tx null — 1,788 of the
+ *  2,881 live payments) paired to the account's not-yet-claimed transactions
+ *  in that project by amount + BD day. Each pairing is written back as
+ *  mirror_tx so it never has to be guessed again. Archiving, moving or
+ *  splitting a row by mirror_tx alone left those mirrors behind on the old
+ *  account, where All Customers then showed them as "app" money with no
+ *  controls (Abu Yusuf / Sharmin Akhter, 27 Sep). Never steals a transaction
+ *  another payment already claims. */
+async function mirrorIdsForRow(admin: Admin, hubId: string, uid: string, projectName: string): Promise<string[]> {
+  const { data: paysD } = await HP(admin).select("id, mirror_tx, amount, date").eq("customer_id", hubId);
+  const pays = (paysD ?? []) as { id: string; mirror_tx: string | null; amount: number; date: string | null }[];
+  const ids = new Set(pays.map((p) => p.mirror_tx).filter(Boolean) as string[]);
+  const unlinked = pays.filter((p) => !p.mirror_tx);
+  if (!unlinked.length) return [...ids];
+  const pid = await projectIdForName(admin, projectName, uid);
+  let q = admin.from("investor_transactions").select("transaction_id, amount, date").eq("uid", uid);
+  q = pid ? q.eq("project_id", pid) : (q.is("project_id", null) as typeof q);
+  const { data: txD } = await q;
+  const pool = ((txD ?? []) as { transaction_id: string; amount: number; date: string }[]).filter((t) => !ids.has(t.transaction_id));
+  if (!pool.length) return [...ids];
+  const { data: claimedD } = await HP(admin).select("mirror_tx").in("mirror_tx", pool.map((t) => t.transaction_id));
+  const claimed = new Set(((claimedD ?? []) as { mirror_tx: string }[]).map((c) => c.mirror_tx));
+  const free = pool.filter((t) => !claimed.has(t.transaction_id));
+  for (const p of unlinked) {
+    const i = free.findIndex((t) => Math.round(Number(t.amount)) === Math.round(Number(p.amount)) && bdDayOf(t.date) === String(p.date ?? "").slice(0, 10));
+    if (i < 0) continue;
+    const [t] = free.splice(i, 1);
+    ids.add(t.transaction_id);
+    await writeMirrorTx(admin, p.id, t.transaction_id);
+  }
+  return [...ids];
 }
 
 /** Real-estate project → the marketing point-item that referral earns.
@@ -360,8 +396,14 @@ export async function archiveHubHolding(id: string, projectKey: string): Promise
     if (!row) return { ok: false, error: "Holding not found." };
     if (row.deleted_at) return { ok: true, message: "Already archived." };
 
-    const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", id);
-    const mirrorIds = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
+    // mirror_tx-linked AND migration-era (paired by amount + day) — otherwise
+    // the unlinked ones stay live and resurface as "app" money on the account
+    let mirrorIds: string[];
+    if (row.investor_uid) mirrorIds = await mirrorIdsForRow(admin, id, row.investor_uid as string, String(row.project_name ?? ""));
+    else {
+      const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", id);
+      mirrorIds = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
+    }
     let mirrors: Record<string, unknown>[] = [];
     if (mirrorIds.length) {
       const { data: txs } = await admin.from("investor_transactions").select("*").in("transaction_id", mirrorIds);
@@ -577,6 +619,15 @@ export async function bookAppHolding(uid: string, appProjectId: string): Promise
     const op = new Map(((typesD ?? []) as { name: string; operator: string }[]).map((t) => [t.name, t.operator]));
     const txns = (txnsD ?? []) as Record<string, unknown>[];
     if (!txns.length) return { ok: false, error: "No app transactions found in this project." };
+    // This money may be the LEFTOVER of an ARCHIVED book file of this very
+    // account (its migration-era mirror had no hard link, so archiving the
+    // file left the mirror live). A fresh book row now would double the
+    // project ledger the moment that file is restored — point at it instead.
+    const { data: projD } = await admin.from("investment_projects").select("project_name").eq("project_id", appProjectId).maybeSingle();
+    const appName = String(rec(projD)?.project_name ?? "");
+    const { data: archD } = await HC(admin).select("name, file_no, project_name").eq("investor_uid", uid).not("deleted_at", "is", null);
+    const orphanOf = ((archD ?? []) as { name: string; file_no: string | null; project_name: string }[]).find((r) => appProjectMatchesBook(appName, r.project_name));
+    if (orphanOf) return { ok: false, error: `This is the leftover of an archived book file — ${orphanOf.name}${orphanOf.file_no ? ` (File ${orphanOf.file_no})` : ""}, ${orphanOf.project_name}. Restore that file from Archive → Projects, or move / delete this app money here; a second book file would double the ledger.` };
     // stored dates are UTC timestamps — "…T18:00:00+00:00" IS the next day in
     // Bangladesh, which is the day the office wrote in the ledger
     const bdDay = (d: unknown) => { const s = String(d ?? ""); if (!s.includes("T")) return s.slice(0, 10); const t = Date.parse(s); return Number.isFinite(t) ? new Date(t + 6 * 3600 * 1000).toISOString().slice(0, 10) : s.slice(0, 10); };
@@ -598,7 +649,7 @@ export async function bookAppHolding(uid: string, appProjectId: string): Promise
     if (c?.project_key) revalidatePath(`/dashboard/projects/${c.project_key}`);
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
-    return { ok: true, message: `Book file ready${c?.file_no ? ` (File ${c.file_no})` : ""} — ${rows.length} transaction${rows.length !== 1 ? "s" : ""} now in the ${c?.project_name ?? "book"} ledger.` };
+    return { ok: true, id: cid, message: `Book file ready${c?.file_no ? ` (File ${c.file_no})` : ""} — ${rows.length} transaction${rows.length !== 1 ? "s" : ""} now in the ${c?.project_name ?? "book"} ledger.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
@@ -714,8 +765,14 @@ async function splitToOwnAccount(admin: Admin, id: string): Promise<{ ok: true; 
   const { data: accD } = await admin.from("investor_accounts").select("uid, full_name, phone_number").eq("uid", oldUid).maybeSingle();
   const acc = rec(accD);
   if (acc && canonMobile(acc.phone_number as string | null) === rowCanon) return { ok: false, error: "This file already uses the account's own number — nothing to split." };
+  // A different number IS a different person — even when this is the account's
+  // only file. The exception: an account with no login number of its own
+  // (migration placeholder) — there the fix is to SET the number, not split.
   const { data: sib } = await HC(admin).select("id").eq("investor_uid", oldUid).neq("id", id).is("deleted_at", null).limit(1);
-  if (!(sib ?? []).length) return { ok: false, error: `${acc?.full_name ?? oldUid} has only this file — change the account's number (pencil → profile) instead of splitting.` };
+  const accPhone = String(acc?.phone_number ?? "");
+  if (!(sib ?? []).length && (!acc || /^(book|del):/i.test(accPhone) || !canonMobile(accPhone))) {
+    return { ok: false, error: `${acc?.full_name ?? oldUid} has no login number of their own and only this file — set the number on the account (pencil → profile) instead of splitting.` };
+  }
 
   await HC(admin).update({ investor_uid: null }).eq("id", id);
   const newUid = await ensureInvestorForHub(admin, { id, name: cur.name as string, mobile: cur.mobile as string, investor_uid: null }, { fid: (cur.file_no as string) || null });
@@ -724,24 +781,8 @@ async function splitToOwnAccount(admin: Admin, id: string): Promise<{ ok: true; 
     return { ok: false, error: "Couldn't create a login for that number — is it already used by another account?" };
   }
 
-  // this row's app transactions: mirror-linked by id, older unlinked ones by project + amount + day
-  const pid = await projectIdForName(admin, String(cur.project_name ?? ""), oldUid);
-  const { data: paysD } = await HP(admin).select("id, mirror_tx, amount, date, kind").eq("customer_id", id);
-  const pays = (paysD ?? []) as { id: string; mirror_tx: string | null; amount: number; date: string | null; kind: string }[];
-  const mids = new Set(pays.map((p) => p.mirror_tx).filter(Boolean) as string[]);
-  const unlinked = pays.filter((p) => !p.mirror_tx);
-  if (unlinked.length && pid) {
-    const { data: txD } = await admin.from("investor_transactions").select("transaction_id, amount, date").eq("uid", oldUid).eq("project_id", pid);
-    const pool = ((txD ?? []) as { transaction_id: string; amount: number; date: string }[]).filter((t) => !mids.has(t.transaction_id));
-    for (const p of unlinked) {
-      const i = pool.findIndex((t) => Math.round(Number(t.amount)) === Math.round(Number(p.amount)) && bdDayOf(t.date) === String(p.date ?? "").slice(0, 10));
-      if (i < 0) continue;
-      const [t] = pool.splice(i, 1);
-      mids.add(t.transaction_id);
-      await writeMirrorTx(admin, p.id, t.transaction_id);
-    }
-  }
-  const ids = [...mids];
+  // this row's app transactions: mirror-linked by id, older unlinked ones paired by project + amount + day
+  const ids = await mirrorIdsForRow(admin, id, oldUid, String(cur.project_name ?? ""));
   if (ids.length) await admin.from("investor_transactions").update({ uid: newUid } as never).in("transaction_id", ids);
   const newPid = await projectIdForName(admin, String(cur.project_name ?? ""), newUid);
   if (newPid) await ensureMembership(admin, newUid, newPid, Number(cur.total_price) || undefined);
@@ -1000,8 +1041,10 @@ export async function linkHubToInvestor(hubCustomerId: string, uid: string): Pro
     // new account now — carry them across, then re-total the account they left
     let moved = 0;
     if (oldUid) {
-      const { data: pays } = await HP(admin).select("mirror_tx").eq("customer_id", hubCustomerId).not("mirror_tx", "is", null);
-      const mids = ((pays ?? []) as { mirror_tx: string | null }[]).map((p) => p.mirror_tx).filter(Boolean) as string[];
+      // mirror_tx-linked AND migration-era mirrors (paired by amount + day) —
+      // otherwise the old account keeps them as orphan "app" money while the
+      // backfill below mints a second copy on the new one
+      const mids = await mirrorIdsForRow(admin, hubCustomerId, oldUid, cust.project_name as string);
       if (mids.length) {
         const { error } = await admin.from("investor_transactions").update({ uid } as never).in("transaction_id", mids);
         if (!error) moved = mids.length;
@@ -1024,5 +1067,108 @@ export async function linkHubToInvestor(hubCustomerId: string, uid: string): Pro
     return oldUid
       ? { ok: true, message: `Moved to ${accName} · ${moved} transaction${moved !== 1 ? "s" : ""} moved across${synced}.` }
       : { ok: true, message: `Linked to ${accName}${synced}.` };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ── app-only holdings (app transactions in a project with no book file) ──
+
+/** Does this account still belong in the app project — any transaction left,
+ *  or a live book row that folds onto it? Decides whether the PWA card
+ *  (the `investments` membership) stays after money moves out. */
+async function stillInAppProject(admin: Admin, uid: string, appProjectId: string, appName: string): Promise<boolean> {
+  const { data: left } = await admin.from("investor_transactions").select("transaction_id").eq("uid", uid).eq("project_id", appProjectId).limit(1);
+  if ((left ?? []).length) return true;
+  const { data: rows } = await HC(admin).select("project_name").eq("investor_uid", uid).is("deleted_at", null);
+  return ((rows ?? []) as { project_name: string }[]).some((r) => appProjectMatchesBook(appName, r.project_name));
+}
+
+/** MOVE an app-only holding — every app transaction of that project — from one
+ *  account to another (the money was entered under the wrong person, or a
+ *  book file's leftover mirror belongs to a relative who now has their own
+ *  account). Membership follows; both balances are re-totalled. */
+export async function moveAppHolding(fromUid: string, appProjectId: string, toUid: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!fromUid || !appProjectId || !toUid) return { ok: false, error: "Missing account or project." };
+    if (fromUid === toUid) return { ok: true, message: "Already on that account." };
+    const [{ data: fromD }, { data: toD }, { data: projD }] = await Promise.all([
+      IA(admin).select("uid, full_name").eq("uid", fromUid).maybeSingle(),
+      IA(admin).select("uid, full_name, deleted_at").eq("uid", toUid).maybeSingle(),
+      admin.from("investment_projects").select("project_name").eq("project_id", appProjectId).maybeSingle(),
+    ]);
+    const from = rec(fromD), to = rec(toD);
+    if (!to || to.deleted_at) return { ok: false, error: "That app account no longer exists." };
+    const appName = String(rec(projD)?.project_name ?? appProjectId);
+    const { data: txD } = await admin.from("investor_transactions").select("transaction_id, amount").eq("uid", fromUid).eq("project_id", appProjectId);
+    const txns = (txD ?? []) as { transaction_id: string; amount: number }[];
+    if (!txns.length) return { ok: false, error: "No app transactions found in this project." };
+    const ids = txns.map((t) => t.transaction_id);
+    const total = txns.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+    const { error } = await admin.from("investor_transactions").update({ uid: toUid } as never).in("transaction_id", ids);
+    if (error) return { ok: false, error: error.message };
+    await ensureMembership(admin, toUid, appProjectId);
+    if (!(await stillInAppProject(admin, fromUid, appProjectId, appName))) {
+      await admin.from("investments").delete().eq("uid", fromUid).eq("project_id", appProjectId);
+    }
+    await recomputeInvestorBalance(admin, fromUid);
+    await recomputeInvestorBalance(admin, toUid);
+    const toName = (to.full_name as string) || toUid;
+    await logAudit({ action: "link", entity: "investor", entityId: fromUid, detail: `Moved ${ids.length} app transaction(s) (৳${Math.round(total).toLocaleString("en-IN")}) in ${appName} from ${from?.full_name ?? fromUid} (${fromUid}) to ${toName} (${toUid})` });
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/investments/users");
+    revalidatePath("/dashboard/transactionify");
+    return { ok: true, message: `Moved to ${toName} · ${ids.length} transaction${ids.length !== 1 ? "s" : ""} (৳${Math.round(total).toLocaleString("en-IN")}) now on their account.` };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+/** DELETE an app-only holding — every app transaction of that project goes to
+ *  Archive → Transactions (30 days, restorable one by one), never straight to
+ *  the void: the recycle bin must exist (0031) or nothing is removed. The
+ *  PWA card goes too when nothing of that project remains on the account. */
+export async function archiveAppHolding(uid: string, appProjectId: string): Promise<Result> {
+  try {
+    const admin = await guard();
+    if (!admin) return { ok: false, error: "Database not configured." };
+    if (!uid || !appProjectId) return { ok: false, error: "Missing account or project." };
+    const [{ data: accD }, { data: projD }, { data: txD }] = await Promise.all([
+      IA(admin).select("full_name").eq("uid", uid).maybeSingle(),
+      admin.from("investment_projects").select("project_name").eq("project_id", appProjectId).maybeSingle(),
+      admin.from("investor_transactions").select("*").eq("uid", uid).eq("project_id", appProjectId),
+    ]);
+    const name = (rec(accD)?.full_name as string | null) ?? null;
+    const appName = String(rec(projD)?.project_name ?? appProjectId);
+    const txns = (txD ?? []) as Record<string, unknown>[];
+    if (!txns.length) return { ok: false, error: "No app transactions found in this project." };
+
+    // snapshot FIRST — a failed snapshot means nothing gets deleted
+    const snaps = txns.map((t) => ({
+      customer_name: name, project_key: null, project_name: appName, kind: "app",
+      amount: Number(t.amount) || 0, txn_date: (t.date as string) ?? null,
+      customer_id: null, investor_uid: uid, payment: null, mirror: t,
+    }));
+    const { error: aErr } = await AT(admin).insert(snaps);
+    if (aErr) return { ok: false, error: /relation|does not exist|schema cache/i.test(String(aErr.message)) ? "The transaction archive isn't set up (migration 0031) — nothing was deleted." : String(aErr.message) };
+
+    const ids = txns.map((t) => String(t.transaction_id));
+    const { error } = await admin.from("investor_transactions").delete().in("transaction_id", ids);
+    if (error) return { ok: false, error: error.message };
+    // a book payment that still points at one of these (another account's row
+    // mirrored here by mistake) loses its stale link — restore re-points it
+    try { await HP(admin).update({ mirror_tx: null }).in("mirror_tx", ids); } catch { /* pre-0029 */ }
+    if (!(await stillInAppProject(admin, uid, appProjectId, appName))) {
+      await admin.from("investments").delete().eq("uid", uid).eq("project_id", appProjectId);
+    }
+    await recomputeInvestorBalance(admin, uid);
+    const total = snaps.reduce((s, x) => s + x.amount, 0);
+    await logAudit({ action: "delete", entity: "investor_transaction", entityId: uid, detail: `Archived ${ids.length} app-only transaction(s) (৳${Math.round(total).toLocaleString("en-IN")}) in ${appName} for ${name ?? uid} — restorable 30 days` });
+    revalidatePath("/dashboard/projects/all");
+    revalidatePath("/dashboard/projects");
+    revalidatePath("/dashboard/investments/users");
+    revalidatePath("/dashboard/transactionify");
+    revalidatePath("/dashboard/archive");
+    return { ok: true, message: `${ids.length} transaction${ids.length !== 1 ? "s" : ""} (৳${Math.round(total).toLocaleString("en-IN")}) moved to Archive → Transactions — restorable for 30 days.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }

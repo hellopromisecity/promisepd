@@ -2,8 +2,8 @@
  * Move every project-book (hub) customer onto the app — one investor account
  * per unique person, so the whole company runs on one user system.
  *
- * Per unique book person (grouped by mobile; no-mobile rows fold into their
- * name's single mobile-group, else stand alone):
+ * Per unique book person (grouped by mobile; no-mobile rows stand alone —
+ * they fold into a same-named mobile group ONLY with --match-by-name):
  *
  *   • Already has an app account (explicit hub link or mobile match):
  *       – link their hub rows (hub_customers.investor_uid)
@@ -44,6 +44,13 @@ const APPLY = process.argv.includes("--confirm");
 // for a manual link — with this flag each gets their OWN fresh account (they
 // stay separate people; merge later via Link if the boss ever says they're one).
 const CREATE_AMBIGUOUS = process.argv.includes("--create-ambiguous");
+// 2026-10-06 (v2.5.9): a SAME NAME is NOT the same person. Without this flag
+// nobody is matched or folded by name any more — a book person whose mobile
+// differs from (or is missing on) every app account gets their OWN account,
+// and no-mobile rows never ride along with a same-named mobile group. (The
+// name rule had joined Sharmin Akhter's files to Abu Yusuf's login, among
+// others.) Pass --match-by-name to get the old behaviour back on purpose.
+const MATCH_BY_NAME = process.argv.includes("--match-by-name");
 const admin = createClient(URL, SERVICE, { auth: { autoRefreshToken: false, persistSession: false } });
 
 const DEFAULT_PASSWORD = "258025"; // ≥6 chars (login form + Supabase minimum)
@@ -173,7 +180,7 @@ let foldedNoMobile = 0;
 for (const h of noMobile) {
   const nm = normName(h.name);
   const cands = mobileGroupsByName.get(nm) ?? [];
-  if (cands.length === 1) { cands[0].rows.push(h); foldedNoMobile++; continue; }
+  if (MATCH_BY_NAME && cands.length === 1) { cands[0].rows.push(h); foldedNoMobile++; continue; }
   let g = namePersons.get(nm);
   if (!g) { g = { name: h.name, mobile: null, rows: [] }; namePersons.set(nm, g); }
   g.rows.push(h);
@@ -193,7 +200,7 @@ for (const p of persons) {
   const linkedUid = p.rows.map((r) => r.investor_uid).find(Boolean) ?? null;
   let acct = (linkedUid && accountByUid.get(linkedUid)) || accountByMobile.get(last10(firstMobile(p.mobile))) || null;
   let viaName = false;
-  if (!acct) {
+  if (!acct && MATCH_BY_NAME) {
     const names = [...new Set(p.rows.map((r) => normName(r.name)).filter(Boolean))];
     const hits = [...new Set(names.flatMap((nm) => accountsByName.get(nm) ?? []))];
     if (hits.length === 1) { acct = hits[0]; viaName = true; }
