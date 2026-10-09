@@ -23,6 +23,7 @@ import {
   runAction,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -51,14 +52,13 @@ export async function updateProfile(input: {
     const admin = getAdmin();
     if (!admin) throw new Error("Storage is not configured.");
 
-    const { error } = await admin
-      .from("profiles")
-      .update({
-        name,
-        username: username || null,
-        email: email || null,
-      })
-      .eq("id", me.id);
+    const { data: beforeMe } = await admin.from("profiles").select("name, username, email").eq("id", me.id).maybeSingle();
+    const patch = {
+      name,
+      username: username || null,
+      email: email || null,
+    };
+    const { error } = await admin.from("profiles").update(patch).eq("id", me.id);
 
     if (error) throw new Error("Could not save your profile.");
 
@@ -66,7 +66,7 @@ export async function updateProfile(input: {
       action: "update",
       entity: "profile",
       entityId: me.id,
-      detail: "Updated own profile details",
+      detail: withChanges("Edited own profile", diffDetail((beforeMe ?? null) as Record<string, unknown> | null, patch)),
     });
     revalidatePath(PATH);
     return { message: "Profile updated." };
@@ -161,6 +161,10 @@ export async function saveOrgSettings(input: {
     const admin = getAdmin();
     if (!admin) throw new Error("Storage is not configured.");
 
+    const { data: beforeOrg } = await admin.from("org_settings").select("key, value").in("key", ["site_name", "logo_url"]);
+    const prev: Record<string, unknown> = {};
+    for (const r of (beforeOrg ?? []) as { key: string; value: unknown }[]) prev[r.key] = (r.value as { value?: unknown } | null)?.value ?? null;
+
     const { error } = await admin.from("org_settings").upsert(
       [
         { key: "site_name", value: { value: siteName } },
@@ -174,7 +178,7 @@ export async function saveOrgSettings(input: {
     await logAudit({
       action: "update",
       entity: "settings",
-      detail: `Updated org settings (site name + logo)`,
+      detail: withChanges("Edited organisation settings", diffDetail(prev, { site_name: siteName, logo_url: logoUrl || null }, { site_name: "site name", logo_url: "logo" })),
     });
     revalidatePath(PATH);
     return { message: "Organisation settings saved." };

@@ -17,6 +17,7 @@ import {
   ValidationError,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 import { slugify } from "@/app/dashboard/blog/slug";
 
 export type BlogStatus = "draft" | "published" | "scheduled";
@@ -183,7 +184,7 @@ export async function updatePost(id: string, input: BlogPostInput): Promise<Acti
 
     const { data: existing, error: readErr } = await admin
       .from("blog_posts")
-      .select("published_at")
+      .select("*")
       .eq("id", id)
       .maybeSingle();
     if (readErr) throw readErr;
@@ -203,7 +204,14 @@ export async function updatePost(id: string, input: BlogPostInput): Promise<Acti
       throw error;
     }
 
-    await logAudit({ action: "update", entity: "blog_post", entityId: id, detail: `Updated “${payload.title}”` });
+    // field diff for the short fields; the long bodies just say how much they grew / shrank
+    const prev = existing as unknown as Record<string, unknown>;
+    const lines = [diffDetail(prev, payload as unknown as Record<string, unknown>, { published_at: "published at", cover_url: "cover", scheduled_at: "scheduled at", custom_schema: "custom schema" }, { skip: ["body", "body_en", "published_at"] })];
+    for (const k of ["body", "body_en"] as const) {
+      const a = String(prev[k] ?? ""), b = String((payload as unknown as Record<string, unknown>)[k] ?? "");
+      if (a !== b) lines.push(`${k === "body" ? "body" : "English body"}: changed (${a.length.toLocaleString("en-US")} → ${b.length.toLocaleString("en-US")} chars)`);
+    }
+    await logAudit({ action: "update", entity: "blog_post", entityId: id, detail: withChanges(`Edited article “${String(prev.title ?? payload.title)}”`, lines.filter(Boolean).join("\n")) });
     revalidateBlog();
     return { message: "Article saved." };
   });

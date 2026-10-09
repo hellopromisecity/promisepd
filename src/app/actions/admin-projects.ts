@@ -12,6 +12,7 @@
  *  We never touch the full unit grid here — that stays in code. */
 
 import { runAction, requireManager, getAdmin, logAudit, type ActionResult } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 import { PROJECTS } from "@/lib/site";
 import { revalidatePath } from "next/cache";
 
@@ -78,6 +79,8 @@ export async function upsertOverride(slug: string, input: OverrideInput): Promis
       buildings = { total, soldOut, nowBooking };
     }
 
+    const { data: beforeOv } = await admin.from("project_overrides").select("status, share_map, buildings").eq("slug", slug).maybeSingle();
+
     const { error } = await admin.from("project_overrides").upsert(
       {
         slug,
@@ -90,11 +93,21 @@ export async function upsertOverride(slug: string, input: OverrideInput): Promis
     );
     if (error) throw new Error(error.message);
 
+    // flatten the two JSON blocks so the log reads "shares sold: 40 → 42"
+    const flat = (r: { status?: unknown; share_map?: unknown; buildings?: unknown } | null | undefined) => {
+      const sm = (r?.share_map ?? null) as { total?: unknown; sold?: unknown; note?: unknown } | null;
+      const b = (r?.buildings ?? null) as { total?: unknown; soldOut?: unknown; nowBooking?: unknown } | null;
+      return {
+        status: r?.status ?? null,
+        shares_total: sm?.total ?? null, shares_sold: sm?.sold ?? null, shares_note: sm?.note ?? null,
+        buildings_total: b?.total ?? null, buildings_sold_out: b?.soldOut ?? null, buildings_now_booking: b?.nowBooking ?? null,
+      };
+    };
     await logAudit({
       action: "update",
       entity: "project",
       entityId: slug,
-      detail: `Override saved for "${project.name}"`,
+      detail: withChanges(`Edited public project card "${project.name}"`, diffDetail(flat(beforeOv as { status?: unknown; share_map?: unknown; buildings?: unknown } | null), flat({ status: status || null, share_map, buildings }))),
     });
 
     revalidatePath("/dashboard/projects");

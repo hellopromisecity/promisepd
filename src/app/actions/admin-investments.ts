@@ -19,6 +19,8 @@ import {
   requireAdmin,
   getAdmin,
   logAudit,
+  diffDetail,
+  withChanges,
   runAction,
   ValidationError,
   type ActionResult,
@@ -120,7 +122,7 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     // Validate FKs exist (friendlier than a raw FK error). We also grab the
     // investor's phone + the type's operator so a new transaction can text them.
     const [{ data: inv }, { data: ty }] = await Promise.all([
-      admin.from("investor_accounts").select("uid, phone_number").eq("uid", uid).maybeSingle(),
+      admin.from("investor_accounts").select("uid, full_name, phone_number").eq("uid", uid).maybeSingle(),
       admin.from("investment_types").select("name, operator").eq("name", type).maybeSingle(),
     ]);
     if (!inv) throw new ValidationError("That investor no longer exists.");
@@ -143,15 +145,17 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
 
     let id = input.transaction_id?.trim() || null;
     let prevUid: string | null = null;
+    let beforeTxn: Record<string, unknown> | null = null; // the row as it was, for the audit diff
     const creating = !id;
     if (id) {
       const { data: existing } = await admin
         .from("investor_transactions")
-        .select("uid")
+        .select("*")
         .eq("transaction_id", id)
         .maybeSingle();
       if (!existing) throw new ValidationError("That transaction no longer exists.");
       prevUid = (existing as { uid: string }).uid;
+      beforeTxn = existing as Record<string, unknown>;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let { error } = await admin.from("investor_transactions").update({ ...row, payment_method } as any).eq("transaction_id", id);
       if (error && isMissingColumn(error.message)) ({ error } = await admin.from("investor_transactions").update(row).eq("transaction_id", id)); // pre-0034
@@ -209,11 +213,22 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       created_by_name: creating ? me.name || null : undefined,
     }, creating ? "create" : "update");
 
+    // the log names the person and the project, and on an edit lists every
+    // field that changed (old → new) — the MD reads it, not a uid
+    const invName = (inv as { full_name?: string | null }).full_name || uid;
+    const projName = project_id ? (((await admin.from("investment_projects").select("project_name").eq("project_id", project_id).maybeSingle()).data as { project_name?: string } | null)?.project_name ?? project_id) : null;
+    const bdDayOf = (v: unknown) => { const t = Date.parse(String(v ?? "")); return Number.isFinite(t) ? new Date(t + 6 * 3600 * 1000).toISOString().slice(0, 10) : String(v ?? "").slice(0, 10); };
+    const headline = `${creating ? "Added" : "Edited"} ${type} ৳${Math.round(amount).toLocaleString("en-IN")} for ${invName} (${uid})${projName ? ` · ${projName}` : ""}${creating ? ` · dated ${input.date}` : ""}${creating && payment_method ? ` · ${payment_method}` : ""}${creating && input.rashid_number?.trim() ? ` · receipt ${input.rashid_number.trim()}` : ""}`;
+    const changes = creating ? "" : diffDetail(
+      beforeTxn ? { ...beforeTxn, date: bdDayOf(beforeTxn.date) } : null,
+      { uid, type, amount, date: input.date, project_id: projName ? project_id : null, rashid_number: row.rashid_number, description: row.description, payment_method },
+      { uid: "account", rashid_number: "receipt", project_id: "project", payment_method: "payment method" },
+    );
     await logAudit({
-      action: input.transaction_id ? "update" : "create",
+      action: creating ? "create" : "update",
       entity: "investor_transaction",
       entityId: id,
-      detail: `${input.transaction_id ? "Edited" : "Added"} ${type} ৳${amount} for ${uid}${payment_method ? ` · ${payment_method}` : ""}`,
+      detail: creating ? headline : withChanges(headline, changes),
     });
     revalidatePath("/dashboard/investments/transactions");
     revalidatePath("/dashboard/investments/users");
@@ -269,7 +284,15 @@ export async function deleteInvestorTransaction(transactionId: string): Promise<
     // drop the linked book payment too, so the project pages agree
     await syncBookFromAppTxn(admin, { transaction_id: transactionId, uid: (existing as { uid: string }).uid, project_id: null, type: "", operator: "+", amount: 0 }, "delete");
 
-    await logAudit({ action: "delete", entity: "investor_transaction", entityId: transactionId, detail: `Deleted transaction ${transactionId}` });
+    const [{ data: accDel }, { data: projDel }] = await Promise.all([
+      admin.from("investor_accounts").select("full_name").eq("uid", String(txn.uid)).maybeSingle(),
+      txn.project_id ? admin.from("investment_projects").select("project_name").eq("project_id", String(txn.project_id)).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+    const bdDayDel = (v: unknown) => { const t = Date.parse(String(v ?? "")); return Number.isFinite(t) ? new Date(t + 6 * 3600 * 1000).toISOString().slice(0, 10) : String(v ?? "").slice(0, 10); };
+    await logAudit({
+      action: "delete", entity: "investor_transaction", entityId: transactionId,
+      detail: `Deleted ${String(txn.type)} ৳${Math.round(Number(txn.amount) || 0).toLocaleString("en-IN")} (${transactionId}) of ${(accDel as { full_name?: string | null } | null)?.full_name ?? String(txn.uid)} (${String(txn.uid)})${projDel ? ` · ${(projDel as { project_name?: string }).project_name}` : ""} · dated ${bdDayDel(txn.date)} — 30 days in the Archive`,
+    });
     revalidatePath("/dashboard/investments/transactions");
     revalidatePath("/dashboard/investments/users");
     revalidatePath("/dashboard/transactionify");
@@ -295,19 +318,23 @@ export async function updateInvestor(uid: string, input: InvestorInput): Promise
     const name = input.full_name?.trim();
     if (!name || name.length < 2) throw new ValidationError("Name is required.");
 
-    const { error } = await admin
-      .from("investor_accounts")
-      .update({
-        full_name: name,
-        fid: input.fid?.trim() || null,
-        email: input.email?.trim() || null,
-        is_active: !!input.is_active,
-        is_verified: !!input.is_verified,
-      })
-      .eq("uid", uid);
+    // what it looked like before — so the log says exactly what changed
+    const { data: beforeD } = await admin.from("investor_accounts").select("full_name, fid, email, is_active, is_verified").eq("uid", uid).maybeSingle();
+    const before = (beforeD ?? null) as Record<string, unknown> | null;
+    const patch = {
+      full_name: name,
+      fid: input.fid?.trim() || null,
+      email: input.email?.trim() || null,
+      is_active: !!input.is_active,
+      is_verified: !!input.is_verified,
+    };
+    const { error } = await admin.from("investor_accounts").update(patch).eq("uid", uid);
     if (error) throw new Error(error.message);
 
-    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Updated investor ${name}` });
+    await logAudit({
+      action: "update", entity: "investor", entityId: uid,
+      detail: withChanges(`Edited app user ${String(before?.full_name ?? name)} (${uid})`, diffDetail(before, patch, { full_name: "name", fid: "File ID", is_active: "active", is_verified: "verified" })),
+    });
     revalidatePath("/dashboard/investments/users");
     return { message: "Investor saved." };
   });
@@ -380,7 +407,10 @@ export async function changeMemberMobile(uid: string, rawMobile: string): Promis
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (follow.length) await (admin.from as any)("hub_customers").update({ mobile: local }).in("id", follow);
 
-    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Changed mobile for ${acc.full_name ?? uid} → ${local}` });
+    const oldRaw = String(acc.phone_number ?? "");
+    const oldDigits = oldRaw.replace(/\D/g, "");
+    const oldLocal = /^(book|del):/i.test(oldRaw) || !oldDigits ? "none" : oldDigits.startsWith("880") ? "0" + oldDigits.slice(3) : oldDigits;
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `Changed mobile of ${acc.full_name ?? uid} (${uid})\nmobile: ${oldLocal} → ${local}${acc.profile_id ? "" : "\nlogin: none → created (default password)"}` });
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/investments/users");
     return { message: acc.profile_id ? "Number changed — they log in with the new number, same password." : `Number set — login created (new number + default password ${DEFAULT_MEMBER_PASSWORD}).` };
@@ -446,9 +476,11 @@ export async function setInvestorActive(uid: string, active: boolean): Promise<A
     const admin = getAdmin();
     if (!admin) throw new Error("Data unavailable");
     if (!uid) throw new ValidationError("Missing investor.");
+    const { data: accA } = await admin.from("investor_accounts").select("full_name, is_active").eq("uid", uid).maybeSingle();
     const { error } = await admin.from("investor_accounts").update({ is_active: !!active }).eq("uid", uid);
     if (error) throw new Error(error.message);
-    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `${active ? "Activated" : "Deactivated"} investor ${uid}` });
+    const a = accA as { full_name: string | null; is_active: boolean } | null;
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `${active ? "Activated" : "Deactivated"} app user ${a?.full_name ?? uid} (${uid})\nactive: ${a ? (a.is_active ? "yes" : "no") : "—"} → ${active ? "yes" : "no"}` });
     revalidatePath("/dashboard/investments/users");
     return { message: active ? "Investor activated." : "Investor deactivated." };
   });
@@ -468,7 +500,8 @@ export async function setInvestorWithdrawn(uid: string, withdrawn: boolean): Pro
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (admin.from as any)("investor_accounts").update({ withdrawn_at: withdrawn ? new Date().toISOString() : null }).eq("uid", uid);
     if (error) throw new Error(/withdrawn_at|column/i.test(String(error.message)) ? "Withdrawn marks need migration 0032 — run the SQL first." : String(error.message));
-    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `${withdrawn ? "Marked as withdrawn" : "Withdrawn mark removed"}: ${uid}` });
+    const { data: accW } = await admin.from("investor_accounts").select("full_name").eq("uid", uid).maybeSingle();
+    await logAudit({ action: "update", entity: "investor", entityId: uid, detail: `${withdrawn ? "Marked as withdrawn" : "Withdrawn mark removed"}: ${(accW as { full_name: string | null } | null)?.full_name ?? uid} (${uid})` });
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/investments/users");
     return { message: withdrawn ? "Marked as withdrawn." : "Withdrawn mark removed." };
@@ -603,16 +636,19 @@ export async function saveInvestmentProject(input: ProjectInput): Promise<Action
     };
 
     let id = input.project_id?.trim() || null;
+    let changes = "";
     if (id) {
+      const { data: beforeP } = await admin.from("investment_projects").select("*").eq("project_id", id).maybeSingle();
       const { error } = await admin.from("investment_projects").update(row).eq("project_id", id);
       if (error) throw new Error(error.message);
+      changes = diffDetail((beforeP ?? null) as Record<string, unknown> | null, row, { project_name: "name", project_address: "address", project_details: "details", total_amount_required: "total amount", per_user_share_amount: "share price", project_progress: "progress", start_date: "start", end_date: "end", hide_total_amount: "hide total", hide_share_price: "hide share price" });
     } else {
       id = await nextId(admin, "investment_projects", "project_id", "PJ-", 1001);
       const { error } = await admin.from("investment_projects").insert({ project_id: id, ...row });
       if (error) throw new Error(error.message);
     }
 
-    await logAudit({ action: input.project_id ? "update" : "create", entity: "investment_project", entityId: id, detail: `${input.project_id ? "Edited" : "Added"} project ${name}` });
+    await logAudit({ action: input.project_id ? "update" : "create", entity: "investment_project", entityId: id, detail: input.project_id ? withChanges(`Edited app project ${name} (${id})`, changes) : `Added app project ${name} (${id}) · ${status}${row.per_user_share_amount != null ? ` · share ৳${row.per_user_share_amount}` : ""}` });
     revalidatePath("/dashboard/investments/projects");
     if (input.project_id) revalidatePath(`/dashboard/investments/projects/${input.project_id}`);
     return { data: { id: id! }, message: "Project saved." };
@@ -657,6 +693,18 @@ export type ProjectInvestorInput = {
   end_date?: string | null;
 };
 
+const MEMBER_LABELS = { custom_share_price: "share price", discount: "discount", user_specific_start_date: "start", user_specific_end_date: "end", total_paid: "total paid" };
+
+/** "Name (uid) · Project name" — the log should read like the office talks,
+ *  not like a foreign key. */
+async function memberLabel(admin: Admin, uid: string, project_id: string): Promise<string> {
+  const [{ data: a }, { data: p }] = await Promise.all([
+    admin.from("investor_accounts").select("full_name").eq("uid", uid).maybeSingle(),
+    admin.from("investment_projects").select("project_name").eq("project_id", project_id).maybeSingle(),
+  ]);
+  return `${(a as { full_name?: string | null } | null)?.full_name || uid} (${uid}) · ${(p as { project_name?: string } | null)?.project_name ?? project_id}`;
+}
+
 function membershipRow(input: ProjectInvestorInput) {
   return {
     custom_share_price: input.custom_share_price != null && input.custom_share_price !== "" ? money(input.custom_share_price) : null,
@@ -693,7 +741,8 @@ export async function addInvestorToProject(input: ProjectInvestorInput): Promise
     const { error } = await admin.from("investments").insert({ uid, project_id, total_paid: 0, ...membershipRow(input) });
     if (error) throw new Error(/duplicate|unique/i.test(error.message) ? "This investor is already in the project." : error.message);
 
-    await logAudit({ action: "create", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Added ${uid} to ${project_id}` });
+    const set = diffDetail({}, membershipRow(input) as Record<string, unknown>, MEMBER_LABELS);
+    await logAudit({ action: "create", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Added ${await memberLabel(admin, uid, project_id)}${set ? `\n${set}` : ""}` });
     revalidatePath(`/dashboard/investments/projects/${project_id}`);
     return { message: "Investor added to project." };
   });
@@ -708,10 +757,12 @@ export async function updateProjectInvestor(input: ProjectInvestorInput): Promis
     const uid = input.uid?.trim();
     if (!project_id || !uid) throw new ValidationError("Missing membership.");
 
-    const { error } = await admin.from("investments").update(membershipRow(input)).eq("project_id", project_id).eq("uid", uid);
+    const { data: beforeM } = await admin.from("investments").select("*").eq("project_id", project_id).eq("uid", uid).maybeSingle();
+    const patch = membershipRow(input);
+    const { error } = await admin.from("investments").update(patch).eq("project_id", project_id).eq("uid", uid);
     if (error) throw new Error(error.message);
 
-    await logAudit({ action: "update", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Updated ${uid} in ${project_id}` });
+    await logAudit({ action: "update", entity: "investment", entityId: `${project_id}:${uid}`, detail: withChanges(`Edited membership of ${await memberLabel(admin, uid, project_id)}`, diffDetail((beforeM ?? null) as Record<string, unknown> | null, patch as Record<string, unknown>, MEMBER_LABELS)) });
     revalidatePath(`/dashboard/investments/projects/${project_id}`);
     return { message: "Investor updated." };
   });
@@ -724,10 +775,11 @@ export async function removeInvestorFromProject(project_id: string, uid: string)
     if (!admin) throw new Error("Data unavailable");
     if (!project_id?.trim() || !uid?.trim()) throw new ValidationError("Missing membership.");
 
+    const label = await memberLabel(admin, uid, project_id);
     const { error } = await admin.from("investments").delete().eq("project_id", project_id).eq("uid", uid);
     if (error) throw new Error(error.message);
 
-    await logAudit({ action: "delete", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Removed ${uid} from ${project_id}` });
+    await logAudit({ action: "delete", entity: "investment", entityId: `${project_id}:${uid}`, detail: `Removed ${label} (membership only — transactions untouched)` });
     revalidatePath(`/dashboard/investments/projects/${project_id}`);
     return { message: "Investor removed from project. Their transactions are unchanged." };
   });
@@ -752,12 +804,16 @@ export async function saveInvestmentType(input: TypeInput): Promise<ActionResult
     if (input.operator !== "+" && input.operator !== "-") throw new ValidationError("Pick + or −.");
     const classification = input.classification?.trim() || "other";
 
+    let typeChanges = "";
     if (input.original_name) {
+      const { data: beforeT } = await admin.from("investment_types").select("*").eq("name", input.original_name).maybeSingle();
+      const patch = { name, operator: input.operator, classification, is_active: !!input.is_active };
       const { error } = await admin
         .from("investment_types")
-        .update({ name, operator: input.operator, classification, is_active: !!input.is_active })
+        .update(patch)
         .eq("name", input.original_name);
       if (error) throw new Error(/duplicate|unique/i.test(error.message) ? "A type with that name already exists." : error.message);
+      typeChanges = diffDetail((beforeT ?? null) as Record<string, unknown> | null, patch, { is_active: "active" });
     } else {
       const next = await nextId(admin, "investment_types", "sort_order", "", 1).catch(() => "1");
       const { error } = await admin
@@ -766,7 +822,7 @@ export async function saveInvestmentType(input: TypeInput): Promise<ActionResult
       if (error) throw new Error(/duplicate|unique/i.test(error.message) ? "A type with that name already exists." : error.message);
     }
 
-    await logAudit({ action: input.original_name ? "update" : "create", entity: "investment_type", entityId: name, detail: `${input.original_name ? "Edited" : "Added"} type ${name}` });
+    await logAudit({ action: input.original_name ? "update" : "create", entity: "investment_type", entityId: name, detail: input.original_name ? withChanges(`Edited transaction type ${input.original_name}`, typeChanges) : `Added transaction type ${name} (${input.operator}, ${classification}${input.is_active ? "" : ", inactive"})` });
     revalidatePath("/dashboard/investments/types");
     return { message: "Type saved." };
   });

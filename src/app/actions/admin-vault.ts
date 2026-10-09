@@ -18,6 +18,7 @@ import {
   ValidationError,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 
 export type VaultCredential = {
   id: string;
@@ -101,10 +102,13 @@ export async function updateCredential(id: string, input: VaultInput): Promise<A
     if (!admin) throw new ValidationError("Database is not configured.");
 
     const row = buildRow(input);
+    const { data: beforeV } = await admin.from("vault_credentials").select("site_name, site_url, login_url, username, password, notes").eq("id", id).maybeSingle();
     const { error } = await admin.from("vault_credentials").update(row).eq("id", id);
     if (error) throw error;
 
-    await logAudit({ action: "update", entity: "vault_credential", entityId: id, detail: `Updated vault entry “${row.site_name}”` });
+    // diffDetail never prints a password — the key only ever reads "changed"
+    const before = (beforeV ?? null) as Record<string, unknown> | null;
+    await logAudit({ action: "update", entity: "vault_credential", entityId: id, detail: withChanges(`Edited vault entry “${String(before?.site_name ?? row.site_name)}”`, diffDetail(before, row, { site_name: "site", site_url: "site URL", login_url: "login URL" })) });
     revalidatePath("/dashboard/vault");
     return { message: "Credential updated." };
   });

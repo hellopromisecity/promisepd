@@ -13,22 +13,28 @@ const selCls =
 export default function AuditFilter({
   actions,
   entities,
+  limits,
   action,
   entity,
+  limit,
 }: {
   actions: string[];
   entities: string[];
+  limits: number[];
   action: string;
   entity: string;
+  limit: number;
 }) {
   const router = useRouter();
 
-  function navigate(next: { action?: string; entity?: string }) {
+  function navigate(next: { action?: string; entity?: string; n?: number }) {
     const params = new URLSearchParams();
     const a = next.action ?? action;
     const e = next.entity ?? entity;
+    const n = next.n ?? limit;
     if (a) params.set("action", a);
     if (e) params.set("entity", e);
+    if (n !== limits[0]) params.set("n", String(n));
     const qs = params.toString();
     router.push(qs ? `/dashboard/insights/audit?${qs}` : "/dashboard/insights/audit");
   }
@@ -71,6 +77,23 @@ export default function AuditFilter({
         {entities.map((en) => (
           <option key={en} value={en}>
             {en.replace(/_/g, " ")}
+          </option>
+        ))}
+      </select>
+
+      <label className="sr-only" htmlFor="audit-limit">
+        How many events to show
+      </label>
+      <select
+        id="audit-limit"
+        value={limit}
+        onChange={(e) => navigate({ n: Number(e.target.value) })}
+        className={selCls}
+        title="How far back to look"
+      >
+        {limits.map((n) => (
+          <option key={n} value={n}>
+            last {n}
           </option>
         ))}
       </select>

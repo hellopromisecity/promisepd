@@ -25,6 +25,18 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.0",
+    date: "2026-10-09",
+    title: "The Audit log tells the whole story",
+    changes: [
+      { kind: "fixed", text: "Audit log times are now Bangladesh time in 12-hour form (“9 Oct 2026, 5:17 PM”), the same clock as the Report page — they were shown six hours early in 24-hour UTC. “Logins today” counts from Bangladesh midnight." },
+      { kind: "new", text: "Every edit now records exactly WHAT changed, field by field, old → new: app users (name, File ID, email, active, verified), book customers (name, file no, mobile, district, price, joining date, last date to pay, shares / decimal / road / plot / block, reference officer), transactions (amount, date, type, project, receipt, note, payment method), marketing officers, follow-ups (with the assignee's name), point items, staff (salary, allowance, deduction, status, investor ID), roles (old → new), app projects, memberships, transaction types, finance entries (with account names) and accounts, articles (short fields, plus how much the body grew), vault entries (password only ever reads “changed”), organisation settings and public project cards. A save that changed nothing says so." },
+      { kind: "new", text: "Actions that were never logged now are: adding a customer (project, file, mobile, price, joining date, reference, app account), adding an existing app user to a project, archiving and restoring a customer (with the files hidden / brought back), restoring or permanently deleting a holding, and restoring or permanently deleting an archived transaction." },
+      { kind: "improved", text: "Every transaction line in the log names the customer and the project (“Added deposit ৳10,000 for Md Al Amin (U100123) · Promise City · dated 2026-10-06 · Bank”) instead of a bare UID; deletes record the amount, date and that the entry sits in the Archive." },
+      { kind: "improved", text: "The Entity filter now lists everything the system logs (customers, book payments, transactions, archive, marketing, finance, blog, vault, settings…), the Action filter adds Restore / Link / SMS, and a new “last 100 / 300 / 1000” picker looks further back. Field changes are shown one per line." },
+    ],
+  },
+  {
     version: "2.5.10",
     date: "2026-10-06",
     title: "Payment method, who recorded it, and the time on every report",

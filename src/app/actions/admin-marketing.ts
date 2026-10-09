@@ -16,6 +16,7 @@ import {
   AuthzError,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 import { isManager } from "@/lib/auth";
 import { FOLLOWUP_STATUSES, type FollowupStatus } from "@/app/dashboard/marketing/status";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
@@ -354,7 +355,7 @@ export async function updateFollowup(
     // Authorise against the existing row.
     const { data: existing, error: readErr } = await admin
       .from("client_followups")
-      .select("id, client_name, created_by, assigned_to")
+      .select("id, client_name, created_by, assigned_to, status, next_followup, note")
       .eq("id", rowId)
       .maybeSingle();
     if (readErr) throw new Error(readErr.message);
@@ -398,11 +399,16 @@ export async function updateFollowup(
       .eq("id", rowId);
     if (error) throw new Error(error.message);
 
+    // assigned_to is a profile id — show the person's name on both sides
+    const who = [existing.assigned_to, update.assigned_to].filter((v): v is string => !!v);
+    const { data: profs } = who.length ? await admin.from("profiles").select("id, name").in("id", who) : { data: [] as { id: string; name: string | null }[] };
+    const nameOf = new Map((profs ?? []).map((p) => [p.id as string, (p.name as string) || p.id]));
+    const withName = (r: Record<string, unknown>) => ("assigned_to" in r ? { ...r, assigned_to: r.assigned_to ? nameOf.get(String(r.assigned_to)) ?? r.assigned_to : null } : r);
     await logAudit({
       action: "update",
       entity: "client_followup",
       entityId: rowId,
-      detail: `Updated follow-up for ${existing.client_name} (${Object.keys(update).join(", ")})`,
+      detail: withChanges(`Edited follow-up for ${existing.client_name}`, diffDetail(withName(existing as unknown as Record<string, unknown>), withName(update as Record<string, unknown>), { next_followup: "next follow-up", assigned_to: "assigned to" })),
     });
     bothPaths();
     return { message: "Follow-up updated" };
@@ -474,9 +480,10 @@ export async function deleteFollowup(id: string): Promise<ActionResult> {
       }
     }
 
+    const { data: fu } = await admin.from("client_followups").select("client_name, status").eq("id", id).maybeSingle();
     const { error } = await admin.from("client_followups").delete().eq("id", id);
     if (error) throw new Error(error.message);
-    await logAudit({ action: "delete", entity: "client_followup", entityId: id });
+    await logAudit({ action: "delete", entity: "client_followup", entityId: id, detail: `Deleted follow-up for ${fu?.client_name ?? id}${fu?.status ? ` (status ${fu.status})` : ""}` });
     bothPaths();
     return { message: "Follow-up deleted." };
   });
@@ -548,21 +555,21 @@ export async function updateOfficer(id: string, input: OfficerInput): Promise<Ac
     if (!name) throw new Error("Officer name is required.");
     const type = VALID_TYPES.has(input.officer_type) ? input.officer_type : "MO";
 
-    const { error } = await admin
-      .from("marketing_officers")
-      .update({
-        name,
-        officer_type: type,
-        position: clean(input.position),
-        officer_code: clean(input.officer_code),
-        district: clean(input.district),
-        mobile: clean(input.mobile),
-        reference: clean(input.reference),
-      })
-      .eq("id", id);
+    const { data: beforeO } = await admin.from("marketing_officers").select("*").eq("id", id).maybeSingle();
+    const patch = {
+      name,
+      officer_type: type,
+      position: clean(input.position),
+      officer_code: clean(input.officer_code),
+      district: clean(input.district),
+      mobile: clean(input.mobile),
+      reference: clean(input.reference),
+    };
+    const { error } = await admin.from("marketing_officers").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
 
-    await logAudit({ action: "update", entity: "marketing_officer", entityId: id, detail: `Updated officer “${name}”` });
+    const before = (beforeO ?? null) as Record<string, unknown> | null;
+    await logAudit({ action: "update", entity: "marketing_officer", entityId: id, detail: withChanges(`Edited officer “${String(before?.name ?? name)}”`, diffDetail(before, patch, { officer_type: "type", officer_code: "code" })) });
     revalidateLeaderboard();
     return { message: "Officer updated." };
   });
@@ -704,10 +711,12 @@ export async function updatePointItem(
     if (input.income != null) patch.income = Math.max(0, round2(input.income));
     if (!Object.keys(patch).length) throw new Error("Nothing to update.");
 
+    const { data: beforeI } = await admin.from("marketing_point_items").select("*").eq("id", id).maybeSingle();
     const { error } = await admin.from("marketing_point_items").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
 
-    await logAudit({ action: "update", entity: "point_item", entityId: id, detail: `Updated point item (${JSON.stringify(patch)})` });
+    const before = (beforeI ?? null) as Record<string, unknown> | null;
+    await logAudit({ action: "update", entity: "point_item", entityId: id, detail: withChanges(`Edited point item “${String(before?.label ?? patch.label ?? id)}”`, diffDetail(before, patch as Record<string, unknown>, { afr: "AFR", income: "income ৳" })) });
     revalidatePath("/dashboard/marketing");
     return { message: "Point item updated." };
   });

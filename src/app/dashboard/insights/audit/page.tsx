@@ -32,20 +32,18 @@ type LogRow = {
 };
 
 /** Distinct values we offer in the filter selects.  Kept stable so the
- *  dropdowns don't shift around as data changes. */
-const ACTIONS = ["create", "update", "delete", "login", "logout", "export"];
+ *  dropdowns don't shift around as data changes — every entity the actions
+ *  write (grep `entity:` under src/app/actions to extend). */
+const ACTIONS = ["create", "update", "delete", "restore", "link", "login", "logout", "sms", "export"];
 const ENTITIES = [
-  "daily_report",
-  "transaction",
-  "finance_account",
-  "client_followup",
-  "attendance",
-  "blog_post",
-  "project",
-  "profile",
-  "org_setting",
-  "auth",
+  "auth", "daily_report", "attendance", "profile", "settings",
+  "investor", "investor_account", "investor_transaction", "investment", "investment_project", "investment_type", "unsubscribe_request",
+  "hub_customer", "hub_payment", "transaction_archive", "deposit_profit_push",
+  "marketing_officer", "marketing_points", "point_item", "client_followup",
+  "finance_entry", "finance_account", "finance_head",
+  "blog_post", "blog_category", "blog_project", "project", "vault_credential", "sms_config",
 ];
+const LIMITS = [100, 300, 1000];
 
 function actionTone(action: string): Tone {
   const a = action.toLowerCase();
@@ -56,19 +54,19 @@ function actionTone(action: string): Tone {
   return "neutral";
 }
 
-const fmtTime = (d: string) =>
-  new Date(d).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// Bangladesh wall-clock, 12-hour — "9 Oct 2026, 5:17 PM" — the same clock the
+// office looks at (the server runs in UTC, which read 6 hours early).
+const fmtTime = (d: string) => {
+  const t = new Date(d);
+  const date = t.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dhaka" });
+  const time = t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Dhaka" });
+  return `${date}, ${time}`;
+};
 
 export default async function AuditLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; entity?: string }>;
+  searchParams: Promise<{ action?: string; entity?: string; n?: string }>;
 }) {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
@@ -76,6 +74,7 @@ export default async function AuditLogPage({
   const sp = await searchParams;
   const action = (sp.action ?? "").trim();
   const entity = (sp.entity ?? "").trim();
+  const limit = LIMITS.includes(Number(sp.n)) ? Number(sp.n) : LIMITS[0];
 
   const admin = getAdmin();
   if (!admin) {
@@ -92,17 +91,18 @@ export default async function AuditLogPage({
   }
 
   // Total events + today's logins (independent of the active filter).
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayIso = startOfToday.toISOString();
+  // "Today" is the Bangladesh day, not the server's UTC day.
+  const bdNow = new Date();
+  bdNow.setUTCHours(bdNow.getUTCHours() + 6); // shift to Bangladesh wall-clock
+  const todayIso = new Date(Date.UTC(bdNow.getUTCFullYear(), bdNow.getUTCMonth(), bdNow.getUTCDate()) - 6 * 3600 * 1000).toISOString();
 
-  // Filtered rows, newest first, capped at 100 — built lazily so it can
-  // join the parallel batch below.
+  // Filtered rows, newest first, capped at the chosen limit — built lazily
+  // so it can join the parallel batch below.
   let query = admin
     .from("audit_logs")
     .select("id, actor_name, action, entity, detail, created_at")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(limit);
   if (action) query = query.eq("action", action);
   if (entity) query = query.eq("entity", entity);
 
@@ -142,9 +142,9 @@ export default async function AuditLogPage({
       </div>
 
       <Card className="flex flex-wrap items-center justify-between gap-3">
-        <AuditFilter actions={ACTIONS} entities={ENTITIES} action={action} entity={entity} />
+        <AuditFilter actions={ACTIONS} entities={ENTITIES} limits={LIMITS} action={action} entity={entity} limit={limit} />
         <span className="text-xs text-fg-faint">
-          {rows.length === 100 ? "Showing latest 100" : `${rows.length} event${rows.length === 1 ? "" : "s"}`}
+          {rows.length === limit ? `Showing latest ${limit}` : `${rows.length} event${rows.length === 1 ? "" : "s"}`}
         </span>
       </Card>
 
@@ -178,7 +178,8 @@ export default async function AuditLogPage({
                   <Badge tone={actionTone(r.action)}>{r.action}</Badge>
                 </td>
                 <td className={`${tdCls} capitalize text-fg-muted`}>{r.entity.replace(/_/g, " ")}</td>
-                <td className={`${tdCls} text-fg-muted`}>{r.detail || "—"}</td>
+                {/* field-by-field changes arrive as newline-separated lines */}
+                <td className={`${tdCls} whitespace-pre-line text-fg-muted`}>{r.detail || "—"}</td>
               </tr>
             ))}
           </tbody>

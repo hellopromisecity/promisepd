@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { getAdmin, logAudit } from "@/lib/admin-guard";
+import { getAdmin, logAudit, diffDetail, withChanges } from "@/lib/admin-guard";
 import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
@@ -268,6 +268,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
       const pid = await projectIdForName(admin, project.name, uid);
       if (pid) await ensureMembership(admin, uid, pid, input.total_price);
     }
+    await logAudit({ action: "create", entity: "hub_customer", entityId: cid, detail: `Added customer ${input.name.trim()} · ${project.name} · file ${input.file_no || "—"} · mobile ${input.mobile || "—"}${Number(input.total_price) > 0 ? ` · price ৳${Math.round(Number(input.total_price)).toLocaleString("en-IN")}` : ""}${input.joining_date ? ` · joined ${input.joining_date}` : ""}${input.reference ? ` · ref ${input.reference}` : ""}${uid ? ` · app account ${uid}` : " · no app login (no usable mobile)"}` });
     revalidatePath(`/dashboard/projects/${project.key}`);
     revalidatePath("/dashboard/projects/all");
     return { ok: true, message: uid ? "Customer added — app account ready (mobile + password)." : "Customer added (no usable mobile — app login can be added later)." };
@@ -283,11 +284,15 @@ export async function archivePerson(uid: string): Promise<Result> {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!uid) return { ok: false, error: "Missing user." };
+    const { data: accD } = await IA(admin).select("full_name, phone_number").eq("uid", uid).maybeSingle();
     const { error } = await IA(admin).update({ deleted_at: new Date().toISOString(), is_active: false }).eq("uid", uid);
     if (error) {
       return { ok: false, error: /deleted_at|column/i.test(String(error.message)) ? "Archive needs migration 0030 — run the SQL first." : String(error.message) };
     }
+    const { data: rowsD } = await HC(admin).select("project_name, file_no").eq("investor_uid", uid).is("deleted_at", null);
+    const files = ((rowsD ?? []) as { project_name: string; file_no: string | null }[]).map((r) => `${r.project_name}${r.file_no ? ` ${r.file_no}` : ""}`);
     await HC(admin).update({ deleted_at: new Date().toISOString() }).eq("investor_uid", uid);
+    await logAudit({ action: "delete", entity: "investor_account", entityId: uid, detail: `Archived customer ${rec(accD)?.full_name ?? uid} (${uid}) — login off, ${files.length} book file(s) hidden${files.length ? `: ${files.join(", ")}` : ""} · restorable 30 days` });
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
     return { ok: true, message: "Moved to the archive — restorable for 30 days." };
@@ -360,9 +365,12 @@ export async function restorePerson(uid: string): Promise<Result> {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
     if (!uid) return { ok: false, error: "Missing user." };
+    const { data: accR } = await IA(admin).select("full_name").eq("uid", uid).maybeSingle();
     const { error } = await IA(admin).update({ deleted_at: null, is_active: true }).eq("uid", uid);
     if (error) return { ok: false, error: String(error.message) };
+    const { data: rowsR } = await HC(admin).select("id").eq("investor_uid", uid).not("deleted_at", "is", null);
     await HC(admin).update({ deleted_at: null }).eq("investor_uid", uid);
+    await logAudit({ action: "restore", entity: "investor_account", entityId: uid, detail: `Restored customer ${rec(accR)?.full_name ?? uid} (${uid}) from the Archive — login back on, ${(rowsR ?? []).length} book file(s) back` });
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
     revalidatePath("/dashboard/archive");
@@ -457,6 +465,7 @@ export async function restoreHubHolding(id: string): Promise<Result> {
     }
     if (row.investor_uid) await recomputeInvestorBalance(admin, row.investor_uid as string);
     await recomputeCustomer(admin, id);
+    await logAudit({ action: "restore", entity: "hub_customer", entityId: id, detail: `Restored ${row.name}'s ${row.project_name} holding from the Archive (${mirrors.length} app transaction(s) back)` });
 
     revalidatePath(`/dashboard/projects/${row.project_key}`);
     revalidatePath("/dashboard/projects/all");
@@ -471,11 +480,12 @@ export async function purgeHubHolding(id: string, projectKey: string): Promise<R
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
-    const { data } = await HC(admin).select("id, deleted_at").eq("id", id).maybeSingle();
+    const { data } = await HC(admin).select("id, name, project_name, file_no, total_paid, deleted_at").eq("id", id).maybeSingle();
     const row = rec(data);
     if (!row) return { ok: false, error: "Holding not found." };
     if (!row.deleted_at) return { ok: false, error: "Only archived holdings can be deleted permanently." };
     await purgeHoldingCore(admin, id);
+    await logAudit({ action: "delete", entity: "hub_customer", entityId: id, detail: `PERMANENTLY deleted ${row.name}'s ${row.project_name} holding (file ${row.file_no ?? "—"}, paid ৳${Math.round(Number(row.total_paid) || 0).toLocaleString("en-IN")}) from the Archive — no restore` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/archive");
@@ -519,6 +529,7 @@ export async function restoreArchivedTxn(archiveId: string): Promise<Result> {
     if (payment?.customer_id) await recomputeCustomer(admin, String(payment.customer_id));
     if (row.investor_uid) await recomputeInvestorBalance(admin, String(row.investor_uid));
     await AT(admin).delete().eq("id", archiveId);
+    await logAudit({ action: "restore", entity: "transaction_archive", entityId: archiveId, detail: `Restored ${row.kind ?? "transaction"} ৳${Math.round(Number(row.amount) || 0).toLocaleString("en-IN")} of ${row.customer_name ?? "—"}${row.project_name ? ` · ${row.project_name}` : ""}${row.txn_date ? ` · dated ${String(row.txn_date).slice(0, 10)}` : ""} from the Archive` });
 
     revalidatePath("/dashboard/projects/all");
     revalidatePath("/dashboard/projects");
@@ -533,8 +544,11 @@ export async function purgeArchivedTxn(archiveId: string): Promise<Result> {
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
+    const { data: gone } = await AT(admin).select("kind, amount, customer_name, project_name, txn_date").eq("id", archiveId).maybeSingle();
+    const g = rec(gone);
     const { error } = await AT(admin).delete().eq("id", archiveId);
     if (error) return { ok: false, error: String(error.message) };
+    await logAudit({ action: "delete", entity: "transaction_archive", entityId: archiveId, detail: `PERMANENTLY deleted archived ${g?.kind ?? "transaction"} ৳${Math.round(Number(g?.amount) || 0).toLocaleString("en-IN")} of ${g?.customer_name ?? "—"}${g?.project_name ? ` · ${g.project_name}` : ""}${g?.txn_date ? ` · dated ${String(g.txn_date).slice(0, 10)}` : ""} — no restore` });
     revalidatePath("/dashboard/archive");
     return { ok: true, message: "Deleted permanently." };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
@@ -689,6 +703,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
     if (entryId) await HC(admin).update({ commission_entry_id: entryId }).eq("id", cid);
     const pid = await projectIdForName(admin, meta.name, uid);
     if (pid) await ensureMembership(admin, uid, pid, input.total_price);
+    await logAudit({ action: "create", entity: "hub_customer", entityId: cid, detail: `Added ${acc.full_name as string} (${uid}) to ${meta.name} · file ${input.file_no || (acc.fid as string) || "—"}${Number(input.total_price) > 0 ? ` · price ৳${Math.round(Number(input.total_price)).toLocaleString("en-IN")}` : ""}${input.joining_date ? ` · joined ${input.joining_date}` : ""}${input.reference ? ` · ref ${input.reference}` : ""}` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");
     return { ok: true, message: `Added to ${meta.name}.` };
@@ -699,7 +714,7 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
-    const { data } = await HC(admin).select("bio, commission_entry_id, mobile, investor_uid, name, project_name, total_price").eq("id", id).maybeSingle();
+    const { data } = await HC(admin).select("*").eq("id", id).maybeSingle();
     const cur = rec(data);
     if (!cur) return { ok: false, error: "Customer not found." };
     const bio = {
@@ -738,6 +753,19 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     }
     // a changed price changes the Remaining — recompute so the list is live
     await recomputeCustomer(admin, id);
+
+    // the log spells out every field that changed (old → new), bio fields included
+    const curBio = (cur.bio ?? {}) as Record<string, unknown>;
+    const newBio = bio as Record<string, unknown>;
+    const pick = (src: Record<string, unknown>, b: Record<string, unknown>) => ({
+      name: src.name, file_no: src.file_no, mobile: src.mobile, district: src.district, reference: src.reference, joining_date: src.joining_date, total_price: src.total_price,
+      expiry_date: b.expiry_date ?? null, shares: b.shares ?? null, decimal: b.decimal ?? null, road: b.road ?? null, plot: b.plot ?? null, block: b.block ?? null,
+    });
+    const after = pick({ name: input.name.trim(), file_no: input.file_no || null, mobile: input.mobile || null, district: input.district || null, reference: input.reference || null, joining_date: input.joining_date || null, total_price: r2(input.total_price) }, newBio);
+    await logAudit({
+      action: "update", entity: "hub_customer", entityId: id,
+      detail: withChanges(`Edited customer ${String(cur.name ?? "")} · ${String(cur.project_name ?? projectKey)} · file ${String(cur.file_no ?? "—")}`, diffDetail(pick(cur, curBio), after, { file_no: "file no", joining_date: "joining date", total_price: "price", expiry_date: "last date to pay", reference: "reference officer" })) + (splitNote ? `\nown app account set up for the new number` : ""),
+    });
 
     revalidatePath(`/dashboard/projects/${projectKey}`);
     revalidatePath("/dashboard/projects/all");
@@ -816,7 +844,10 @@ export async function deleteHubCustomer(id: string, projectKey: string): Promise
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
+    const { data: delD } = await HC(admin).select("name, project_name, file_no, total_paid").eq("id", id).maybeSingle();
+    const d = rec(delD);
     await purgeHoldingCore(admin, id);
+    await logAudit({ action: "delete", entity: "hub_customer", entityId: id, detail: `PERMANENTLY deleted ${d?.name ?? "customer"}'s ${d?.project_name ?? projectKey} holding (file ${d?.file_no ?? "—"}, paid ৳${Math.round(Number(d?.total_paid) || 0).toLocaleString("en-IN")}) — no archive, no restore` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
     // the All-Customers popup deletes holdings too — keep that view fresh
     revalidatePath("/dashboard/projects/all");

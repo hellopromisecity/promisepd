@@ -77,6 +77,49 @@ export async function logAudit(entry: {
   }
 }
 
+/** Field-by-field "label: old → new" lines for an audit detail — ONLY the
+ *  fields that actually changed, one per line (the Audit log renders the
+ *  newlines). Numbers compare numerically ("60000" = 60000 = "60000.00"),
+ *  blanks show as "—", booleans as yes / no, objects as JSON. A key that
+ *  looks like a secret (password / secret / token / pin) only ever says
+ *  "changed". Returns "" when nothing changed. The MD reads this log to see
+ *  exactly what each staff member did — so every save spells it out. */
+export function diffDetail(
+  before: Record<string, unknown> | null | undefined,
+  after: Record<string, unknown>,
+  labels: Record<string, string> = {},
+  opts: { skip?: string[]; maxLen?: number } = {},
+): string {
+  const skip = new Set(["id", "created_at", "updated_at", ...(opts.skip ?? [])]);
+  const maxLen = opts.maxLen ?? 90;
+  const norm = (v: unknown): string => {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "boolean") return v ? "yes" : "no";
+    if (typeof v === "number") return Number.isFinite(v) ? String(Math.round(v * 100) / 100) : "";
+    if (typeof v === "object") return JSON.stringify(v);
+    return String(v).trim();
+  };
+  const show = (s: string) => (s === "" ? "—" : s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s);
+  const lines: string[] = [];
+  for (const key of Object.keys(after)) {
+    if (skip.has(key)) continue;
+    const a = norm(before?.[key]);
+    const b = norm(after[key]);
+    if (a === b) continue;
+    if (a !== "" && b !== "" && !Number.isNaN(Number(a)) && !Number.isNaN(Number(b)) && Number(a) === Number(b)) continue;
+    const label = labels[key] ?? key.replace(/_/g, " ");
+    if (/password|secret|token|\bpin\b/i.test(key)) { lines.push(`${label}: changed`); continue; }
+    lines.push(`${label}: ${show(a)} → ${show(b)}`);
+  }
+  return lines.join("\n");
+}
+
+/** "<headline>\n<changes>", or "<headline> (no field changed)" when the save
+ *  touched nothing — the log still records that the attempt happened. */
+export function withChanges(headline: string, changes: string): string {
+  return changes ? `${headline}\n${changes}` : `${headline} (no field changed)`;
+}
+
 /** Standard shape Server Actions return to client forms. */
 export type ActionResult<T = undefined> =
   | { ok: true; data?: T; message?: string }

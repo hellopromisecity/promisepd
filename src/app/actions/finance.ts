@@ -13,6 +13,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAdmin, logAudit, requireAdmin, requireManager, runAction, type ActionResult } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 
 const KINDS = ["income", "expense"] as const;
 type Kind = (typeof KINDS)[number];
@@ -150,14 +151,24 @@ export async function updateEntry(id: string, input: EntryInput): Promise<Action
     const admin = getAdmin();
     if (!admin) throw new Error("Database unavailable.");
     if (!id) throw new Error("Missing entry.");
-    const { data: cur } = await admin.from("transactions").select("type, amount, category").eq("id", id).maybeSingle();
+    const { data: cur } = await admin.from("transactions").select("*").eq("id", id).maybeSingle();
     if (!cur) throw new Error("Entry not found.");
     const k = kindOf(String(cur.type));
     const row = await parseEntry(admin, k, input);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (admin.from as any)("transactions").update(row).eq("id", id);
     if (error) throw new Error(error.message);
-    await logAudit({ action: "update", entity: "finance_entry", entityId: id, detail: `${k} ${money(Number(cur.amount))} · ${cur.category} → ${money(row.amount)} · ${row.category}`, actor: me });
+    // account ids → names on both sides, so the log reads "account: Cash → bKash"
+    const prev = cur as unknown as Record<string, unknown>;
+    const accIds = [prev.account_id, row.account_id].filter((v): v is string => typeof v === "string" && !!v);
+    const { data: accs } = accIds.length ? await admin.from("finance_accounts").select("id, name").in("id", accIds) : { data: [] as { id: string; name: string }[] };
+    const accName = new Map((accs ?? []).map((a) => [a.id as string, a.name as string]));
+    const named = (r: Record<string, unknown>) => ({ ...r, account_id: r.account_id ? accName.get(String(r.account_id)) ?? r.account_id : null });
+    await logAudit({
+      action: "update", entity: "finance_entry", entityId: id,
+      detail: withChanges(`Edited ${k} ${money(Number(cur.amount))} · ${cur.category}`, diffDetail(named(prev), named(row as unknown as Record<string, unknown>), { txn_date: "date", head_detail: "head detail", account_id: "account", project_slug: "project", description: "note" }, { skip: ["type", "head_id"] })),
+      actor: me,
+    });
     revalidateFinance();
     return { message: "Entry updated." };
   });
@@ -214,9 +225,11 @@ export async function updateFinanceAccount(id: string, input: AccountInput): Pro
     if (!admin) throw new Error("Database unavailable.");
     if (!id) throw new Error("Missing account.");
     const row = parseAccount(input);
+    const { data: beforeA } = await admin.from("finance_accounts").select("*").eq("id", id).maybeSingle();
     const { error } = await admin.from("finance_accounts").update(row).eq("id", id);
     if (error) throw new Error(error.message);
-    await logAudit({ action: "update", entity: "finance_account", entityId: id, detail: `${row.name} (${row.type}) · opening ${money(row.opening_balance)}` });
+    const before = (beforeA ?? null) as Record<string, unknown> | null;
+    await logAudit({ action: "update", entity: "finance_account", entityId: id, detail: withChanges(`Edited account ${String(before?.name ?? row.name)}`, diffDetail(before, row as unknown as Record<string, unknown>, { opening_balance: "opening balance" })) });
     revalidateFinance();
     return { message: "Account updated." };
   });

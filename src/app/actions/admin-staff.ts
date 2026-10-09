@@ -18,6 +18,7 @@ import {
   ValidationError,
   type ActionResult,
 } from "@/lib/admin-guard";
+import { diffDetail, withChanges } from "@/lib/admin-guard";
 import type { Role } from "@/lib/auth";
 import { refForMember } from "@/lib/staff-directory";
 import { STAFF_ROSTER } from "@/lib/staff-roster";
@@ -125,7 +126,7 @@ export async function setRole(memberId: string, role: Role): Promise<ActionResul
       action: "update",
       entity: "profile",
       entityId: memberId,
-      detail: `Set role of ${target.name || "member"} to ${role}`,
+      detail: `Changed role of ${target.name || "member"}\nrole: ${target.role} → ${role}`,
     });
     revalidatePath("/dashboard/staff");
     return { message: "Role updated." };
@@ -248,18 +249,17 @@ export async function updateStaff(id: string, input: StaffInput): Promise<Action
       ? (input.status as StaffStatus)
       : "active";
 
-    const { error } = await admin
-      .from("profiles")
-      .update({
-        name,
-        email,
-        employee_code: input.employee_code?.trim() || null,
-        salary: money(input.salary),
-        allowance: money(input.allowance),
-        deduction: money(input.deduction),
-        status,
-      })
-      .eq("id", id);
+    const { data: beforeS } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    const patch = {
+      name,
+      email,
+      employee_code: input.employee_code?.trim() || null,
+      salary: money(input.salary),
+      allowance: money(input.allowance),
+      deduction: money(input.deduction),
+      status,
+    };
+    const { error } = await admin.from("profiles").update(patch).eq("id", id);
     if (error) {
       if (/duplicate key|unique/i.test(error.message)) {
         throw new ValidationError("That email is already in use.");
@@ -268,13 +268,15 @@ export async function updateStaff(id: string, input: StaffInput): Promise<Action
     }
 
     // Investor-ID link — new column, written around the generated types.
+    const investor_ref = input.investor_ref?.trim() || null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin.from("profiles") as any).update({ investor_ref: input.investor_ref?.trim() || null }).eq("id", id);
+    await (admin.from("profiles") as any).update({ investor_ref }).eq("id", id);
 
     // Keep the auth user's contact email in sync when one is set.
     if (email) await admin.auth.admin.updateUserById(id, { email }).catch(() => {});
 
-    await logAudit({ action: "update", entity: "profile", entityId: id, detail: `Updated staff ${name}` });
+    const before = (beforeS ?? null) as Record<string, unknown> | null;
+    await logAudit({ action: "update", entity: "profile", entityId: id, detail: withChanges(`Edited staff ${String(before?.name ?? name)}`, diffDetail(before, { ...patch, investor_ref }, { employee_code: "employee code", investor_ref: "investor ID" })) });
     revalidatePath("/dashboard/staff");
     return { message: "Staff member saved." };
   });
