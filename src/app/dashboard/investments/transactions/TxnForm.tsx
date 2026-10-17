@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, X, Loader2, Pencil } from "lucide-react";
 import { saveInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
 import { PAYMENT_METHODS } from "@/lib/payment-methods";
+import { toast } from "@/components/ui/Toast";
 
 export type InvestorOption = { uid: string; label: string };
 export type TypeOption = { name: string; operator: string };
@@ -68,6 +69,8 @@ export default function TxnForm({
     start(async () => {
       const res = await saveInvestorTransaction(input);
       if (!res.ok) return setError(res.error);
+      // the message carries the SMS outcome — a failed text must not look like a success
+      if (res.message) toast(res.message, /FAILED/.test(res.message) ? "error" : "success");
       setOpen(false);
       router.refresh();
     });

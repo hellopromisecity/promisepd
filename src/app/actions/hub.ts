@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin, logAudit, diffDetail, withChanges } from "@/lib/admin-guard";
-import { sendTransactionSms, sendBulkSms } from "@/lib/sms";
+import { sendTransactionSms, sendBulkSms, smsRecipientFor, smsNote } from "@/lib/sms";
 import { hubCustomer, hubProjectCustomers, hubProjectMeta, type HubCustomer, type HubPayment } from "@/lib/hub";
 import { getProfitConfig, accruedProfitByCustomer } from "@/lib/deposit-profit";
 import { mirrorBookPayment, backfillHubToInvestor, ensureInvestorForHub, ensureMembership, projectIdForName, syncMirrorOnPaymentChange, recomputeInvestorBalance, canonMobile, syncBookFromAppTxn, appProjectMatchesBook } from "@/lib/investor-write";
@@ -900,8 +900,13 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     // Text the customer (BD numbers only; never throws) — same gateway as App
     // Users. The manager can switch the SMS off for this entry (e.g. re-adding
     // a corrected amount — the customer shouldn't be texted twice).
+    let sms = "";
     if (input.sendSms !== false) {
-      await sendTransactionSms({ phone: mobile, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
+      // the app account's CURRENT number first (the owner keeps that one up to
+      // date — change it and the texts follow), else the number on the book row
+      const to = await smsRecipientFor({ investor_uid: cust?.investor_uid as string | null, mobile });
+      const r = await sendTransactionSms({ phone: to, operator, amount: Number(input.amount), txId: input.receipt_no || (rec(ins)?.id as string)?.slice(0, 8) || "TXN" });
+      sms = smsNote(r);
     }
     // Mirror into the buyer's app / investor account so their PWA updates too —
     // auto-creating the account (mobile + default password) if they have none,
@@ -912,7 +917,7 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     // book payments were the one money action the Audit log never recorded
     await logAudit({ action: "create", entity: "hub_payment", entityId: (rec(ins)?.id as string) ?? null, detail: `Added ${type} ৳${Math.round(Number(input.amount)).toLocaleString("en-IN")} for ${cust?.name ?? "—"} · ${cust?.project_name ?? projectKey}${method ? ` · ${method}` : ""}${input.date ? ` · dated ${input.date}` : ""}` });
     revalidatePath(`/dashboard/projects/${projectKey}`);
-    return { ok: true, message: "Transaction added." };
+    return { ok: true, message: `Transaction added.${sms}` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
@@ -997,7 +1002,7 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
 }
 
 // ── deposit profit push (bulk SMS to a scheme's members) ─────────
-type PushResult = { ok: true; message?: string; sent?: number; skipped?: number } | { ok: false; error: string };
+type PushResult = { ok: true; message?: string; sent?: number; skipped?: number; failed?: number } | { ok: false; error: string };
 
 /** Fill a template with one member's figures. Placeholders (case-insensitive):
  *  {name} {profit} {paid} {remain}. Amounts are grouped (BD lakh) integers. */
@@ -1024,16 +1029,17 @@ export async function pushDepositProfit(projectKey: string, template: string): P
     const cfg = await getProfitConfig(projectKey);
     const profits = await accruedProfitByCustomer(customers.map((c) => c.id), cfg);
 
-    let sent = 0, skipped = 0;
+    let sent = 0, skipped = 0, failed = 0;
     const BATCH = 20; // send in parallel batches so a big scheme finishes in time
     for (let i = 0; i < customers.length; i += BATCH) {
       const slice = customers.slice(i, i + BATCH);
-      const results = await Promise.all(slice.map((c) => sendBulkSms(c.mobile, fillTemplate(tpl, c, profits.get(c.id) || 0), "profit")));
-      for (const r of results) { if (r) sent++; else skipped++; }
+      // each customer's text goes to their app account's CURRENT number, else the book number
+      const results = await Promise.all(slice.map(async (c) => sendBulkSms(await smsRecipientFor({ investor_uid: c.investor_uid, mobile: c.mobile }), fillTemplate(tpl, c, profits.get(c.id) || 0), "profit")));
+      for (const r of results) { if (r.ok) sent++; else if (r.skipped) skipped++; else failed++; }
     }
 
-    await logAudit({ action: "sms", entity: "deposit_profit_push", entityId: projectKey, detail: `Profit push to ${projectKey}: sent ${sent}, skipped ${skipped} (no mobile)` });
-    return { ok: true, sent, skipped, message: `Sent to ${sent} customer${sent !== 1 ? "s" : ""}${skipped ? ` · ${skipped} skipped (no valid mobile)` : ""}.` };
+    await logAudit({ action: "sms", entity: "deposit_profit_push", entityId: projectKey, detail: `Profit push to ${projectKey}: sent ${sent}, failed ${failed}, skipped ${skipped} (no mobile)` });
+    return { ok: true, sent, skipped, failed, message: `Sent to ${sent} customer${sent !== 1 ? "s" : ""}${failed ? ` · ${failed} FAILED at the gateway (see SMS page)` : ""}${skipped ? ` · ${skipped} skipped (no valid mobile)` : ""}.` };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 

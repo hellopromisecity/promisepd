@@ -11,7 +11,13 @@ export const dynamic = "force-dynamic";
 
 const bdt = (n: number) => "৳" + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const fmtDay = (d: string) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch { return d; } };
-const fmtWhen = (iso: string) => { try { return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return iso; } };
+// Bangladesh wall-clock, 12-hour (the server runs in UTC)
+const fmtWhen = (iso: string) => {
+  try {
+    const t = new Date(iso);
+    return `${t.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "Asia/Dhaka" })}, ${t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Dhaka" })}`;
+  } catch { return iso; }
+};
 const local = (p: string | null) => { const d = (p || "").replace(/\D/g, ""); return d.startsWith("880") ? "0" + d.slice(3) : (p || "—"); };
 
 export default async function SmsPage() {
@@ -42,11 +48,20 @@ export default async function SmsPage() {
         </div>
       )}
 
+      {/* the gateway said no, or could not be reached — customers did NOT get those texts */}
+      {s.failed7d > 0 && s.lastFailure && (
+        <div className="rounded-xl border border-brand-red/40 bg-brand-red-tint px-4 py-3 text-sm text-brand-red-dark">
+          <b>{s.failed7d} SMS failed in the last 7 days</b> ({s.failedToday} today) — those customers did not get a text.
+          Last failure {fmtWhen(s.lastFailure.at)} to {local(s.lastFailure.recipient)}: <span className="font-mono text-xs">{s.lastFailure.error}</span>.
+          A failed send is also written to the Audit log.
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Balance (est.)" value={bdt(s.estBalance)} sub={`checkpoint ${bdt(s.balance)}`} icon={Wallet} tone="success" />
         <StatCard label="Remaining SMS" value={s.remainingSms.toLocaleString("en-IN")} sub={`at ${bdt(s.rate)} / SMS`} icon={Smartphone} tone="info" />
-        <StatCard label="Sent · 30 days" value={s.sent30d.toLocaleString("en-IN")} sub={`${s.sentToday} today · ${s.sent7d} in 7d`} icon={Send} tone="warning" />
+        <StatCard label="Sent · 30 days" value={s.sent30d.toLocaleString("en-IN")} sub={`${s.sentToday} today · ${s.sent7d} in 7d${s.failed30d ? ` · ${s.failed30d} failed` : ""}`} icon={Send} tone={s.failed7d ? "danger" : "warning"} />
         <StatCard label="Cost · 30 days" value={bdt(s.cost30d)} sub={`7-day ${bdt(s.cost7d)}`} icon={TrendingDown} tone="neutral" />
       </div>
 
@@ -93,19 +108,26 @@ export default async function SmsPage() {
             </div>
           </div>
           {s.recent.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-fg-muted">No SMS sent yet — they'll appear here as the app texts customers.</p>
+            <p className="px-5 py-10 text-center text-sm text-fg-muted">No SMS sent yet — they&apos;ll appear here as the app texts customers.</p>
           ) : (
             <div className="max-h-[42vh] overflow-y-auto">
               {s.recent.map((r, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-2.5 text-sm last:border-0">
-                  <div className="min-w-0">
-                    <span className="font-medium text-fg">{local(r.recipient)}</span>
-                    <span className="ml-2 rounded-full bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">{r.kind}</span>
+                <div key={i} className={`border-b border-border/60 px-5 py-2.5 text-sm last:border-0 ${r.status === "failed" ? "bg-brand-red-tint/40" : ""}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="font-medium text-fg">{local(r.recipient)}</span>
+                      <span className="ml-2 rounded-full bg-bg-soft px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">{r.kind}</span>
+                      {r.status === "failed"
+                        ? <span className="ml-1.5 rounded-full bg-brand-red px-1.5 py-0.5 text-[10px] font-bold text-white">failed</span>
+                        : <span className="ml-1.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600">sent</span>}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-xs text-fg-muted">
+                      <span>{r.segments} SMS</span>
+                      <span className="tabular-nums">{fmtWhen(r.created_at)}</span>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 text-xs text-fg-muted">
-                    <span>{r.segments} SMS</span>
-                    <span className="tabular-nums">{fmtWhen(r.created_at)}</span>
-                  </div>
+                  {r.status === "failed" && r.error && <p className="mt-0.5 font-mono text-[11px] text-brand-red-dark">{r.error}</p>}
+                  {r.status !== "failed" && r.message && <p className="mt-0.5 truncate text-[11px] text-fg-faint">{r.message}</p>}
                 </div>
               ))}
             </div>

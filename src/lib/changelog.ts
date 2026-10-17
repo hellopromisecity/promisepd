@@ -25,6 +25,18 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.1",
+    date: "2026-10-17",
+    title: "SMS are going out again",
+    changes: [
+      { kind: "fixed", text: "No customer had received a transaction SMS for weeks although the KhudeBarta balance was fine: the app called the gateway by a bare IP address (118.67.213.114) that KhudeBarta retired — the server refused every connection — and the sending code swallowed the error and still logged the text as sent, so the SMS page showed normal usage. The gateway is now called by its hostname (portal.khudebarta.com, with today's IP only as a fallback); an old server setting still pointing at the dead IP is ignored." },
+      { kind: "fixed", text: "The app now reads the gateway's answer: Status 0 with a Message_ID means accepted; anything else (wrong key, unknown client, bad number) is a failure with its reason. A network hiccup is retried once, then the next address is tried." },
+      { kind: "new", text: "The manager sees the outcome immediately: after adding a transaction the toast says “SMS sent to 01767…”, “SMS FAILED: cannot reach portal.khudebarta.com (…)” or “no SMS (no valid Bangladeshi mobile)”. A failed send is also written to the Audit log (entity sms gateway)." },
+      { kind: "changed", text: "Which number gets the text: the customer's app account's CURRENT number first (change it under Edit → profile and the texts follow), else the number written on the book file. Both the project-book Add transaction and the Profit push follow this rule; app-side transactions always used the account number." },
+      { kind: "new", text: "SMS page: a red banner when sends failed in the last 7 days (count, last reason, number), a sent / failed badge on every recent text with the message or the error, failed sends excluded from the balance estimate, times in Bangladesh 12-hour form. Needs migration 0035 (status / error / message_id / message on sms_log); the app works before it too." },
+    ],
+  },
+  {
     version: "2.6.0",
     date: "2026-10-09",
     title: "The Audit log tells the whole story",

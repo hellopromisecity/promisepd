@@ -25,7 +25,7 @@ import {
   ValidationError,
   type ActionResult,
 } from "@/lib/admin-guard";
-import { sendTransactionSms } from "@/lib/sms";
+import { sendTransactionSms, smsNote } from "@/lib/sms";
 import { DEFAULT_MEMBER_PASSWORD, syncBookFromAppTxn } from "@/lib/investor-write";
 import { normalizePaymentMethod, isMissingColumn } from "@/lib/payment-methods";
 
@@ -187,13 +187,16 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
 
     // New transaction → text the investor (BD numbers only; never throws) —
     // unless the manager switched the SMS off for this entry.
+    let sms = "";
     if (creating && input.sendSms !== false) {
-      await sendTransactionSms({
+      // the account's CURRENT number — the manager sees "SMS sent to…" or "SMS FAILED: …"
+      const r = await sendTransactionSms({
         phone: (inv as { phone_number: string | null }).phone_number,
         operator: (ty as { operator: string }).operator ?? "+",
         amount,
         txId: id!,
       });
+      sms = smsNote(r);
     }
 
     // Book copy: the transaction also lands in the project BOOK, so the
@@ -233,7 +236,7 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     revalidatePath("/dashboard/investments/transactions");
     revalidatePath("/dashboard/investments/users");
     revalidatePath("/dashboard/transactionify");
-    return { data: { id: id! }, message: "Transaction saved." };
+    return { data: { id: id! }, message: `Transaction saved.${sms}` };
   });
 }
 

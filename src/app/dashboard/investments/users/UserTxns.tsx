@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Wallet, X, Loader2, Plus, Pencil, Trash2, Check, ArrowDown, ArrowUp } from "lucide-react";
 import { saveInvestorTransaction, deleteInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
+import { toast } from "@/components/ui/Toast";
 import { taka, fmtDate, dateInput, initial, avatarTint, PAYMENT_METHODS, type AppUser, type TypeOpt, type ProjectOpt, type UserTxn } from "./shared";
 
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand-blue/50";
@@ -70,6 +71,8 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
     start(async () => {
       const res = await saveInvestorTransaction(input);
       if (!res.ok) return setError(res.error);
+      // the message carries the SMS outcome — a failed text must not look like a success
+      if (res.message) toast(res.message, /FAILED/.test(res.message) ? "error" : "success");
       setEdit(null);
       setFormKey((k) => k + 1);
       onChanged?.();

@@ -432,7 +432,8 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
       const r = editingId
         ? await updateHubPayment(editingId, project.key, payload)
         : await addHubPayment(customer.id, project.key, { ...payload, sendSms: sms });
-      if (r.ok) { toast(r.message || "Saved.", "success"); resetForm(); await reload(); router.refresh(); } else setErr(r.error);
+      // the message carries the SMS outcome — a failed text must not look like a success
+      if (r.ok) { toast(r.message || "Saved.", /FAILED/.test(r.message ?? "") ? "error" : "success"); resetForm(); await reload(); router.refresh(); } else setErr(r.error);
     });
   }
 
