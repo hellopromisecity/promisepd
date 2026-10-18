@@ -129,7 +129,9 @@ export async function resetOverride(slug: string): Promise<ActionResult> {
     const admin = getAdmin();
     if (!admin) throw new Error("Data unavailable. Supabase isn't configured.");
 
-    const { error } = await admin.from("project_overrides").delete().eq("slug", slug);
+    // Clear the availability fields only — the row also carries the page text
+    // edited under Dashboard → Website (facts.page_text), which must survive.
+    const { error } = await admin.from("project_overrides").update({ status: null, share_map: null, buildings: null, unit_map: null }).eq("slug", slug);
     if (error) throw new Error(error.message);
 
     await logAudit({

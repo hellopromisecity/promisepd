@@ -26,9 +26,13 @@ import {
   Landmark,
   TrendingUp,
   TrendingDown,
+  Globe,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/auth";
+import { PROJECTS } from "@/lib/site";
+import { PROJECT_EN } from "@/lib/site.en";
 
 const RANK: Record<Role, number> = { member: 0, staff: 1, manager: 2, admin: 3 };
 const meets = (role: Role, min: Role) => RANK[role] >= RANK[min];
@@ -72,6 +76,12 @@ export const ADMIN_NAV: NavEntry[] = [
   { label: "Staff", href: "/dashboard/staff", icon: Users, min: "manager" },
   { label: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck, min: "manager" },
   { label: "Blog", href: "/dashboard/blog", icon: Newspaper, min: "manager" },
+  // Website — the public project pages' text, editable per language
+  // (2026-10-18: "Ahbab Palace 2 is 4,500 / sqft now, the site says 4,000").
+  {
+    label: "Website", icon: Globe,
+    children: PROJECTS.map((p) => ({ label: PROJECT_EN[p.slug]?.name ?? p.name, href: `/dashboard/website/${p.slug}`, icon: Building2, min: "manager" as Role })),
+  },
   { label: "Projectify", href: "/dashboard/projects", icon: Building, min: "manager" },
   // Marketing split into two top-level items 2026-07-29 (was one group).
   { label: "Marketing", href: "/dashboard/marketing", icon: Megaphone, min: "manager" },

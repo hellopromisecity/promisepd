@@ -25,6 +25,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.2",
+    date: "2026-10-18",
+    title: "Website — edit the project pages from the dashboard",
+    changes: [
+      { kind: "new", text: "Sidebar → Website: one entry per public project page (Promise City, Fuzala Tower, Fuzala Complex, Ahbab Palace 01 / 02). Managers edit the page's text there — name, status, location, price, size, short and long description, details paragraphs, highlights, payment rows and note, plot prices and categories, share note, floor-plan link and video ids — on a Bangla tab and an English tab, starting from what the site shows now." },
+      { kind: "new", text: "Save & publish updates promisepd.com at once (the project page, the homepage cards and the page's search/social preview), no developer needed — e.g. Ahbab Palace 02's “৳ ৪,০০০ / বর্গফুট” can become ৳ ৪,৫০০ in a minute. Only fields that differ from the built-in text are stored, so untouched text keeps following code updates; “Back to built-in” drops a language's edits." },
+      { kind: "new", text: "Every save is in the Audit log field by field (“price: ৳ ৪,০০০ / বর্গফুট → ৳ ৪,৫০০ / বর্গফুট”), with who saved it and when, also shown on the Website page." },
+      { kind: "changed", text: "Photos, the floor-by-floor unit map and the navbar's dropdown labels still live in the code; availability (sold / open shares, buildings) stays under Projectify. No database migration needed — the text sits in the existing project_overrides row." },
+    ],
+  },
+  {
     version: "2.6.1",
     date: "2026-10-17",
     title: "SMS are going out again",

@@ -38,15 +38,19 @@ const enDigits = (s: string) =>
 export default function ProjectDetail({
   project,
   locale = "bn",
+  en,
 }: {
   project: Project;
   locale?: Locale;
+  /** English overlays with the dashboard's saved text applied (Dashboard →
+   *  Website). Omitted = the built-in site.en.ts copy. */
+  en?: { px?: (typeof PROJECT_EN)[string]; pd?: (typeof PROJECT_DETAIL_EN)[string] };
 }) {
   const isEn = locale === "en";
   const t = DICT[locale].projDetail;
   const lp = (href: string) => localizedPath(href, locale);
-  const px = isEn ? PROJECT_EN[project.slug] : null;
-  const pd = isEn ? PROJECT_DETAIL_EN[project.slug] : null;
+  const px = isEn ? (en ? en.px : PROJECT_EN[project.slug]) : null;
+  const pd = isEn ? (en ? en.pd : PROJECT_DETAIL_EN[project.slug]) : null;
 
   const name = px?.name ?? project.name;
   const status = px?.status ?? project.status;

@@ -2,6 +2,11 @@ import Hero from "@/components/Hero";
 import About from "@/components/About";
 import Divisions from "@/components/Divisions";
 import Projects from "@/components/Projects";
+import { homeProjects } from "@/lib/project-content";
+
+/** ISR safety net for the project cards: a dashboard save revalidates the
+ *  homepage at once; failing that, it refreshes within a minute. */
+export const revalidate = 60;
 import Stats from "@/components/Stats";
 import WhyUs from "@/components/WhyUs";
 import Testimonials from "@/components/Testimonials";
@@ -9,7 +14,9 @@ import Contact from "@/components/Contact";
 import Newsletter from "@/components/Newsletter";
 import WaveDivider from "@/components/WaveDivider";
 
-export default function Page() {
+export default async function Page() {
+  // project cards with the dashboard's saved text (Dashboard → Website) applied
+  const { projects, en } = await homeProjects();
   return (
     <>
       <Hero />
@@ -50,7 +57,7 @@ export default function Page() {
         height={140}
       />
 
-      <Projects />
+      <Projects projects={projects} en={en} />
 
       <WaveDivider
         variant="blob"

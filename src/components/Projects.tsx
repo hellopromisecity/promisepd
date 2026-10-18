@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { MapPin, Ruler, Check, ArrowRight } from "lucide-react";
 import AnimatedBlobs from "./AnimatedBlobs";
-import { PROJECTS } from "@/lib/site";
+import { PROJECTS, type Project } from "@/lib/site";
 import { PROJECT_EN } from "@/lib/site.en";
 import { DICT, localizedPath } from "@/lib/i18n";
 import { useLocale } from "./LocaleProvider";
@@ -27,13 +27,13 @@ const TABS: { key: Tab; bn: string; en: string }[] = [
   { key: "completed", bn: "সম্পন্ন", en: "Completed" },
 ];
 
-export default function Projects() {
+export default function Projects({ projects = PROJECTS, en = PROJECT_EN }: { projects?: Project[]; en?: typeof PROJECT_EN }) {
   const locale = useLocale();
   const isEn = locale === "en";
   const t = DICT[locale].home;
   const [tab, setTab] = useState<Tab>("all");
-  const count = (k: Tab) => (k === "all" ? PROJECTS.length : PROJECTS.filter((p) => STATUS_TAB[p.status] === k).length);
-  const shown = tab === "all" ? PROJECTS : PROJECTS.filter((p) => STATUS_TAB[p.status] === tab);
+  const count = (k: Tab) => (k === "all" ? projects.length : projects.filter((p) => STATUS_TAB[p.status] === k).length);
+  const shown = tab === "all" ? projects : projects.filter((p) => STATUS_TAB[p.status] === tab);
   return (
     <section
       id="projects"
@@ -129,7 +129,7 @@ export default function Projects() {
               <Link
                 href={localizedPath(`/projects/${project.slug}`, locale)}
                 className="relative block h-48 overflow-hidden"
-                aria-label={isEn ? PROJECT_EN[project.slug].name : project.name}
+                aria-label={isEn ? en[project.slug].name : project.name}
               >
                 <Image
                   src={project.cover}
@@ -147,18 +147,18 @@ export default function Projects() {
                         STATUS_DOT[project.accent] ?? STATUS_DOT.red
                       }`}
                     />
-                    {isEn ? PROJECT_EN[project.slug].status : project.status}
+                    {isEn ? en[project.slug].status : project.status}
                   </span>
                 </div>
 
                 <div className="absolute inset-x-0 bottom-0 p-6">
                   <h3 className="text-2xl sm:text-3xl font-bold text-white drop-shadow-md">
-                    {isEn ? PROJECT_EN[project.slug].name : project.name}
+                    {isEn ? en[project.slug].name : project.name}
                   </h3>
                   {project.size && (
                     <span className="mt-1 inline-flex items-center gap-1 text-xs text-white/95">
                       <Ruler className="h-3 w-3" />
-                      {isEn ? PROJECT_EN[project.slug].size : project.size}
+                      {isEn ? en[project.slug].size : project.size}
                     </span>
                   )}
                 </div>
@@ -168,24 +168,24 @@ export default function Projects() {
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="flex items-center gap-1.5 text-sm text-fg-muted min-w-0">
                     <MapPin className="h-4 w-4 text-brand-red shrink-0" />
-                    {isEn ? PROJECT_EN[project.slug].location : project.location}
+                    {isEn ? en[project.slug].location : project.location}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-[10px] uppercase tracking-wider text-fg-faint">
                       {t.fromPrice}
                     </div>
                     <div className="text-lg sm:text-xl font-bold text-grad-rb whitespace-nowrap">
-                      {isEn ? PROJECT_EN[project.slug].price : project.price}
+                      {isEn ? en[project.slug].price : project.price}
                     </div>
                   </div>
                 </div>
 
                 <p className="mt-4 text-sm text-fg-muted leading-relaxed">
-                  {isEn ? PROJECT_EN[project.slug].description : project.description}
+                  {isEn ? en[project.slug].description : project.description}
                 </p>
 
                 <ul className="mt-5 space-y-2">
-                  {(isEn ? PROJECT_EN[project.slug].highlights : project.highlights).map((h) => (
+                  {(isEn ? en[project.slug].highlights : project.highlights).map((h) => (
                     <li
                       key={h}
                       className="flex items-center gap-2 text-xs text-fg-soft"
