@@ -7,6 +7,7 @@ import {
   type InvestorAccount, type InvestmentProject, type InvestmentType, type InvestorTransaction,
 } from "@/lib/investments";
 import { loadAllCustomers } from "@/lib/all-customers";
+import { hubAllCustomers } from "@/lib/hub";
 import { smsStats } from "@/lib/sms-stats";
 import DashboardView, { type DashboardData } from "./DashboardView";
 
@@ -44,13 +45,27 @@ async function recentLeads() {
 
 export default async function AdminDashboard() {
   const admin = getAdmin();
-  const [members, leads, recentLeadsList, blogCount, sms] = await Promise.all([
+  const [members, leads, recentLeadsList, blogCount, sms, bookRows] = await Promise.all([
     tableCount("profiles"),
     tableCount("contact_submissions"),
     recentLeads(),
     publishedBlogCount(),
     smsStats(),
+    hubAllCustomers(),
   ]);
+
+  // Real-estate sales ledger — the SAME rule the project pages use for their
+  // Payable / Dues cards (RealEstateInsights), summed over every live book row
+  // of a real-estate project: a file counts once it has a contract price;
+  // Remaining is live (price − paid + refunds), never below zero.
+  const estate = bookRows.filter((c) => !c.deleted_at && c.project_type !== "deposit" && c.total_price > 0);
+  const totalSale = estate.reduce((s, c) => s + c.total_price, 0);
+  const totalDue = estate.reduce((s, c) => s + Math.max(0, c.total_remaining), 0);
+  const sales: DashboardData["sales"] = {
+    totalSale, totalDue, pricedFiles: estate.length,
+    fullyPaid: estate.filter((c) => c.total_remaining <= 0).length,
+    collectedPct: totalSale > 0 ? Math.min(100, ((totalSale - totalDue) / totalSale) * 100) : 0,
+  };
 
   // ---- real investment data (one set of fetches, computed in-process) ----
   let inv: DashboardData["investment"] = {
@@ -134,6 +149,7 @@ export default async function AdminDashboard() {
           sent30d: sms.sent30d, sentToday: sms.sentToday, sent7d: sms.sent7d, cost30d: sms.cost30d, cost7d: sms.cost7d,
         }
       : null,
+    sales,
   };
 
   return <DashboardView data={data} />;

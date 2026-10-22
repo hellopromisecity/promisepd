@@ -8,7 +8,7 @@ import { computeFlow, downloadFlowCsv } from "@/components/admin/flow";
 import {
   Wallet, TrendingUp, Users, UserRound, Building2, ArrowUpRight, ArrowRight, Plus, Trophy,
   Receipt, MessageSquare, ArrowDownRight,
-  Smartphone, Send, TrendingDown,
+  Smartphone, TrendingDown,
 } from "lucide-react";
 
 export type DashboardData = {
@@ -29,6 +29,9 @@ export type DashboardData = {
     estBalance: number; balance: number; remainingSms: number; rate: number;
     sent30d: number; sentToday: number; sent7d: number; cost30d: number; cost7d: number;
   } | null;
+  /** Real-estate sales across every project (the project pages' Payable / Dues,
+   *  summed): contract value of all priced files, and what is still to collect. */
+  sales: { totalSale: number; totalDue: number; pricedFiles: number; fullyPaid: number; collectedPct: number };
 };
 
 const compact = (n: number) => {
@@ -135,15 +138,21 @@ export default function DashboardView({ data }: { data: DashboardData }) {
         <Kpi i={3} on={on} value={d.projects} format={(v) => Math.round(v).toLocaleString("en-US")} label="Projects" sub="real estate + deposit" icon={Building2} tone="amber" href="/dashboard/projects" />
       </div>
 
-      {/* SMS at a glance — same card design as above; each opens the SMS page */}
-      {data.sms && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Kpi i={4} on={on} value={data.sms.estBalance} format={bdt} label="SMS balance (est.)" sub={`checkpoint ${bdt(data.sms.balance)}`} icon={Wallet} tone="emerald" href="/dashboard/sms" />
-          <Kpi i={5} on={on} value={data.sms.remainingSms} format={(v) => Math.round(v).toLocaleString("en-IN")} label="Remaining SMS" sub={`at ${bdt(data.sms.rate)} / SMS`} icon={Smartphone} tone="blue" href="/dashboard/sms" />
-          <Kpi i={6} on={on} value={data.sms.sent30d} format={(v) => Math.round(v).toLocaleString("en-IN")} label="Sent · 30 days" sub={`${data.sms.sentToday} today · ${data.sms.sent7d} in 7d`} icon={Send} tone="amber" href="/dashboard/sms" />
-          <Kpi i={7} on={on} value={data.sms.cost30d} format={bdt} label="Cost · 30 days" sub={`7-day ${bdt(data.sms.cost7d)}`} icon={TrendingDown} tone="violet" href="/dashboard/sms" />
-        </div>
-      )}
+      {/* SMS balance at a glance (opens the SMS page) + the sales ledger:
+          Total sale = contract value of every priced real-estate file,
+          Total due = what is still to collect on them — the project pages'
+          Payable / Dues summed across all projects (2026-10-22, replacing the
+          "Sent · 30 days" / "Cost · 30 days" cards, which live on the SMS page). */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {data.sms && (
+          <>
+            <Kpi i={4} on={on} value={data.sms.estBalance} format={bdt} label="SMS balance (est.)" sub={`checkpoint ${bdt(data.sms.balance)}`} icon={Wallet} tone="emerald" href="/dashboard/sms" />
+            <Kpi i={5} on={on} value={data.sms.remainingSms} format={(v) => Math.round(v).toLocaleString("en-IN")} label="Remaining SMS" sub={`at ${bdt(data.sms.rate)} / SMS`} icon={Smartphone} tone="blue" href="/dashboard/sms" />
+          </>
+        )}
+        <Kpi i={6} on={on} value={data.sales.totalSale} format={compact} label="Total sale" sub={`${data.sales.pricedFiles} priced files · ${data.sales.fullyPaid} fully paid`} icon={Receipt} tone="amber" href="/dashboard/projects" />
+        <Kpi i={7} on={on} value={data.sales.totalDue} format={compact} label="Total due" sub={data.sales.totalSale > 0 ? `${Math.round(100 - data.sales.collectedPct)}% still to collect` : "no contract prices yet"} icon={TrendingDown} tone="violet" href="/dashboard/projects" />
+      </div>
 
       {/* capital flow */}
       <FlowChart flow={flow.bars} on={on} subtitle={applied.label} count={flow.count} onExport={exportFlowCsv} />

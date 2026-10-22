@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.3",
+    date: "2026-10-22",
+    title: "Dashboard: Total sale and Total due",
+    changes: [
+      { kind: "new", text: "Two new cards on the Dashboard's second row — Total sale (the contract value of every priced real-estate file across all projects, with how many files are priced and fully paid) and Total due (what is still to collect, with the share left). Same rule as the project pages' Payable / Dues, summed over Fuzala Tower, Fuzala Complex, Promise City and Ahbab Palace 01 / 02; deposit schemes are not sales." },
+      { kind: "changed", text: "They replace the “Sent · 30 days” and “Cost · 30 days” cards, which stay on the SMS page. Total collected remains under Final balance." },
+    ],
+  },
+  {
     version: "2.6.2",
     date: "2026-10-18",
     title: "Website — edit the project pages from the dashboard",
