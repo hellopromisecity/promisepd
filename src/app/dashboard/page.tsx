@@ -58,11 +58,20 @@ export default async function AdminDashboard() {
   // Payable / Dues cards (RealEstateInsights), summed over every live book row
   // of a real-estate project: a file counts once it has a contract price;
   // Remaining is live (price − paid + refunds), never below zero.
-  const estate = bookRows.filter((c) => !c.deleted_at && c.project_type !== "deposit" && c.total_price > 0);
+  const live = bookRows.filter((c) => !c.deleted_at);
+  const estateAll = live.filter((c) => c.project_type !== "deposit");
+  const estate = estateAll.filter((c) => c.total_price > 0);
   const totalSale = estate.reduce((s, c) => s + c.total_price, 0);
   const totalDue = estate.reduce((s, c) => s + Math.max(0, c.total_remaining), 0);
+  // collected = every taka paid in on the five real-estate projects (priced
+  // files AND files still without a contract price — the project pages'
+  // "collection" figure); deposit schemes are savings, not sales, so their
+  // money is shown separately and never mixed into sale / collected / due
+  const collectedEstate = estateAll.reduce((s, c) => s + c.total_paid, 0);
+  const collectedDeposit = live.filter((c) => c.project_type === "deposit").reduce((s, c) => s + c.total_paid, 0);
   const sales: DashboardData["sales"] = {
-    totalSale, totalDue, pricedFiles: estate.length,
+    totalSale, totalDue, collectedEstate, collectedDeposit,
+    pricedFiles: estate.length, unpricedFiles: estateAll.length - estate.length,
     fullyPaid: estate.filter((c) => c.total_remaining <= 0).length,
     collectedPct: totalSale > 0 ? Math.min(100, ((totalSale - totalDue) / totalSale) * 100) : 0,
   };

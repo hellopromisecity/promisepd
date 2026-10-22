@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.4",
+    date: "2026-10-22",
+    title: "Dashboard sales row: sale → collected → due",
+    changes: [
+      { kind: "changed", text: "The Dashboard's second row now reads Total sale → Total collected → Total due, then SMS balance. All three sales cards cover the five real-estate projects only (Fuzala Tower, Fuzala Complex, Promise City, Ahbab Palace 01 / 02): sale = contract value of priced files, collected = every taka paid in on those projects (files without a price included, as on the project pages), due = what is still to collect on priced files. Deposit schemes are savings, not sales — their collection is shown apart on the collected card, and they have no dues. The all-projects collected figure stays under Final balance." },
+      { kind: "changed", text: "The Remaining SMS card folds into the SMS balance card's sub-line (“3,014 SMS left at ৳0.58”)." },
+    ],
+  },
+  {
     version: "2.6.3",
     date: "2026-10-22",
     title: "Dashboard: Total sale and Total due",
