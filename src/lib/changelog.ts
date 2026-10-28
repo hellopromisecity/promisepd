@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.6",
+    date: "2026-10-28",
+    title: "Avg / month shows Out too",
+    changes: [
+      { kind: "improved", text: "The flow charts' Avg / month chip now reads In · Out · Net, so the monthly pace of withdrawals is visible alongside money in and money kept." },
+    ],
+  },
+  {
     version: "2.6.5",
     date: "2026-10-28",
     title: "Flow charts: Avg / month",

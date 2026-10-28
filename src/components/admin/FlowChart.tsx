@@ -76,7 +76,7 @@ export default function FlowChart({ flow, on, title = "Capital flow", subtitle, 
           <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-600">Net {compactTaka(totIn - totOut)}</span>
           {avgMonths > 0 && (
             <span className="rounded-full bg-brand-blue-tint px-2.5 py-1 font-semibold text-brand-blue" title={`Averaged over ${monthsLabel} month${avgMonths > 1 ? "s" : ""} of the selected range`}>
-              Avg / month: In {compactTaka(totIn / avgMonths)} · Net {compactTaka((totIn - totOut) / avgMonths)}
+              Avg / month: In {compactTaka(totIn / avgMonths)} · Out {compactTaka(totOut / avgMonths)} · Net {compactTaka((totIn - totOut) / avgMonths)}
             </span>
           )}
           {headerExtra}
