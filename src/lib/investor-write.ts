@@ -313,7 +313,7 @@ export async function syncMirrorOnPaymentChange(
   admin: Admin,
   hub: { investor_uid?: string | null; mobile?: string | null; project_name: string },
   old: { amount: number; date: string | null },
-  next: { kind: string; type: string; amount: number; date?: string | null; description?: string | null; payment_method?: string | null } | null,
+  next: { kind: string; type: string; amount: number; date?: string | null; description?: string | null; payment_method?: string | null; created_by_name?: string | null } | null,
   mirrorTx?: string | null,
 ): Promise<string | null> {
   try {
@@ -339,7 +339,10 @@ export async function syncMirrorOnPaymentChange(
     let result: string | null = null;
     if (next) {
       if (!hit) {
-        result = await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null, payment_method: next.payment_method ?? null }, (types ?? []) as any[]);
+        // an old payment that never had an app copy gets one now — stamped with
+        // the editor, the person putting it into the app (v2.6.7: it used to go in
+        // nameless, which is why some Transactionify rows showed no "by …")
+        result = await insertMirror(admin, uid, project_id, { kind: next.kind, type: next.type, amount: next.amount, date: next.date ?? null, description: next.description ?? null, payment_method: next.payment_method ?? null, created_by_name: next.created_by_name ?? null }, (types ?? []) as any[]);
       } else {
         const type = typeFor(next.kind, next.type, (types ?? []) as any[]);
         const date = next.date && /^\d{4}-\d{2}-\d{2}/.test(next.date) ? `${next.date.slice(0, 10)}T00:00:00+06:00` : (hit.date as string);
@@ -349,6 +352,9 @@ export async function syncMirrorOnPaymentChange(
           ? await admin.from("investor_transactions").update(upd as any).eq("transaction_id", hit.transaction_id)
           : await admin.from("investor_transactions").update({ ...upd, payment_method: next.payment_method } as any).eq("transaction_id", hit.transaction_id);
         if (uErr && isMissingColumn(uErr.message)) await admin.from("investor_transactions").update(upd as any).eq("transaction_id", hit.transaction_id);
+        // a copy that never recorded who added it (migration-era / pre-0034) takes
+        // the editor's name — the only actor we know; a name already there stays
+        if (next.created_by_name) await admin.from("investor_transactions").update({ created_by_name: next.created_by_name } as any).eq("transaction_id", hit.transaction_id).is("created_by_name", null);
         result = hit.transaction_id;
       }
     } else if (hit) {
@@ -446,16 +452,20 @@ export async function syncBookFromAppTxn(
     const day = txn.date && /^\d{4}-\d{2}-\d{2}/.test(String(txn.date)) ? String(txn.date).slice(0, 10) : bdDay(txn.date ?? new Date().toISOString());
     const desc = txn.description ? `${txn.type} — ${txn.description}` : txn.type;
     const row = { date: day, amount: r2(txn.amount), kind, description: desc, receipt_no: txn.rashid_number || null };
-    // 0034 columns — payment method only when sent (undefined = untouched),
-    // recorder only on creation; both dropped again before the migration
+    // 0034 columns — payment method only when sent (undefined = untouched).
+    // The recorder's name goes on a row being created, and on an existing one
+    // only when it never recorded who added it (migration-era / pre-0034): an
+    // edit never overwrites the original recorder. Both dropped again before
+    // the migration.
     const extras: Record<string, unknown> = {};
     if (txn.payment_method !== undefined) extras.payment_method = txn.payment_method;
-    if (txn.created_by_name) extras.created_by_name = txn.created_by_name;
-    const hasExtras = Object.keys(extras).length > 0;
+    const by = txn.created_by_name || null;
 
     if (payment) {
+      const hasExtras = Object.keys(extras).length > 0;
       const { error: uErr } = await (admin.from as any)("hub_customer_payments").update({ ...row, ...extras }).eq("id", payment.id);
       if (uErr && hasExtras && isMissingColumn(uErr.message)) await (admin.from as any)("hub_customer_payments").update(row).eq("id", payment.id);
+      if (by) await (admin.from as any)("hub_customer_payments").update({ created_by_name: by }).eq("id", payment.id).is("created_by_name", null);
       await recomputeHubCustomer(admin, payment.customer_id);
       return;
     }
@@ -466,8 +476,10 @@ export async function syncBookFromAppTxn(
     if (!hub) return;
     const { data: mx } = await (admin.from as any)("hub_customer_payments").select("seq").eq("customer_id", hub.id).order("seq", { ascending: false }).limit(1).maybeSingle();
     const seq = Number((mx as { seq?: number } | null)?.seq ?? -1) + 1;
-    let { error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, ...extras, mirror_tx: txn.transaction_id });
-    if (error && hasExtras && isMissingColumn(error.message)) ({ error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, mirror_tx: txn.transaction_id })); // pre-0034
+    const ins = by ? { ...extras, created_by_name: by } : extras;
+    const hasIns = Object.keys(ins).length > 0;
+    let { error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, ...ins, mirror_tx: txn.transaction_id });
+    if (error && hasIns && isMissingColumn(error.message)) ({ error } = await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row, mirror_tx: txn.transaction_id })); // pre-0034
     if (error) await (admin.from as any)("hub_customer_payments").insert({ customer_id: hub.id, seq, ...row }); // pre-0029 fallback
     await recomputeHubCustomer(admin, hub.id);
     await ensureMembership(admin, txn.uid, txn.project_id);

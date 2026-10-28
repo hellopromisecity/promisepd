@@ -25,6 +25,16 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.7",
+    date: "2026-10-28",
+    title: "Transactionify: edited old payments now name the editor",
+    changes: [
+      { kind: "fixed", text: "Some withdrawals (and a few deposits) in Transactionify showed no “by <name>” line. They were app rows created the moment a manager edited an old book payment from the July migration that had no app copy yet — the edit created the copy but never stamped who did it. Editing such a payment now records the editor on both the book payment and its app copy." },
+      { kind: "improved", text: "Editing any transaction that never recorded who added it (migration-era, or entered before 2.5.10) fills in the editor's name on both sides; a name that is already there is never overwritten." },
+      { kind: "changed", text: "Migration 0036 (one-time SQL) names the author on the rows already affected, read back from the audit log." },
+    ],
+  },
+  {
     version: "2.6.6",
     date: "2026-10-28",
     title: "Avg / month shows Out too",

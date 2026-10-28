@@ -963,6 +963,7 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
   try {
     const admin = await guard();
     if (!admin) return { ok: false, error: "Database not configured." };
+    const me = await getCurrentUser();
     if (!(Number(input.amount) > 0)) return { ok: false, error: "Amount must be greater than 0." };
     const method = normalizePaymentMethod(input.payment_method);
     if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket)." };
@@ -979,9 +980,15 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
     let { error } = await HP(admin).update(input.payment_method === undefined ? upd : { ...upd, payment_method: method }).eq("id", paymentId);
     if (error && isMissingColumn(error.message)) ({ error } = await HP(admin).update(upd).eq("id", paymentId));
     if (error) return { ok: false, error: error.message };
+    // a payment that never recorded who added it (migration-era / pre-0034)
+    // takes the editor's name — the only actor we know; a name there stays
+    if (me?.name) await HP(admin).update({ created_by_name: me.name }).eq("id", paymentId).is("created_by_name", null);
     await recomputeCustomer(admin, p.customer_id as string);
     // keep the app/PWA in step: rewrite the mirrored transaction too (found by
-    // its stored mirror_tx; self-heals the link for older rows). Never throws.
+    // its stored mirror_tx; self-heals the link for older rows). A migration-era
+    // payment with no app copy yet gets one here, stamped with the editor —
+    // before v2.6.7 that copy went in nameless (no "by …" in Transactionify).
+    // Never throws.
     const mirrorTx = await readMirrorTx(admin, paymentId);
     const { data: cd } = await HC(admin).select("name, mobile, investor_uid, project_name").eq("id", p.customer_id).maybeSingle();
     const cust = rec(cd);
@@ -990,7 +997,7 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
         admin,
         { investor_uid: cust.investor_uid as string | null, mobile: cust.mobile as string | null, project_name: cust.project_name as string },
         { amount: Number(p.amount), date: (p.date as string) ?? null },
-        { kind, type, amount: Number(input.amount), date: input.date, description: input.description, payment_method: input.payment_method === undefined ? undefined : method },
+        { kind, type, amount: Number(input.amount), date: input.date, description: input.description, payment_method: input.payment_method === undefined ? undefined : method, created_by_name: me?.name ?? null },
         mirrorTx,
       );
       if (newTx !== mirrorTx) await writeMirrorTx(admin, paymentId, newTx);

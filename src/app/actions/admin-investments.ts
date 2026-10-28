@@ -139,7 +139,8 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       description: input.description?.trim() || null,
     };
     // Payment method: one of the five office channels, or none. The recorder's
-    // name is stamped on creation only (an edit never changes who added it).
+    // name is stamped on creation; an edit only fills it in when the row never
+    // recorded who added it (pre-0034 / migration-era) — never overwrites it.
     const payment_method = normalizePaymentMethod(input.payment_method);
     if (input.payment_method?.trim() && !payment_method) throw new ValidationError("Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket).");
 
@@ -160,6 +161,9 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       let { error } = await admin.from("investor_transactions").update({ ...row, payment_method } as any).eq("transaction_id", id);
       if (error && isMissingColumn(error.message)) ({ error } = await admin.from("investor_transactions").update(row).eq("transaction_id", id)); // pre-0034
       if (error) throw new Error(error.message);
+      // a row that never recorded who added it takes the editor's name (never overwrites one)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (me.name) await admin.from("investor_transactions").update({ created_by_name: me.name } as any).eq("transaction_id", id).is("created_by_name", null);
     } else {
       // Allocate a fresh sequential id and insert.  Retry on a unique-key
       // violation in case two admins add at the very same moment (each
@@ -213,7 +217,7 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
       rashid_number: input.rashid_number,
       description: input.description,
       payment_method,
-      created_by_name: creating ? me.name || null : undefined,
+      created_by_name: me.name || null, // on an edit the book copy only takes it when it never had one
     }, creating ? "create" : "update");
 
     // the log names the person and the project, and on an edit lists every
