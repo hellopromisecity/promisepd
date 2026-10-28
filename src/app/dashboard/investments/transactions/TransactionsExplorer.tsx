@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { thCls, tdCls, Badge, EmptyState } from "@/components/admin/ui";
 import FlowChart from "@/components/admin/FlowChart";
-import { downloadFlowCsv } from "@/components/admin/flow";
+import { downloadFlowCsv, monthsOfDays } from "@/components/admin/flow";
 import TxnForm, { type InvestorOption, type TypeOption, type ProjectOption } from "./TxnForm";
 import TxnDelete from "./TxnDelete";
 
@@ -160,7 +160,7 @@ export default function TransactionsExplorer({
   // Short range → daily bars, medium → weekly, long → monthly; every bucket
   // in the range is emitted (even empty ones) so the bars are evenly spaced.
   const chart = useMemo(() => {
-    const empty = { gran: "month" as "day" | "week" | "month", bars: [] as { label: string; in: number; out: number }[] };
+    const empty = { gran: "month" as "day" | "week" | "month", bars: [] as { label: string; in: number; out: number }[], months: 0 };
     if (!filtered.length) return empty;
     let fromS = applied.from;
     let toS = applied.to;
@@ -212,7 +212,9 @@ export default function TransactionsExplorer({
         push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, d.toLocaleDateString("en-GB", { month: "short" }));
       }
     }
-    return { gran, bars };
+    // months covered by the range → the chart's "Avg / month" chip
+    const months = gran === "month" ? Math.max(1, bars.length) : monthsOfDays(span);
+    return { gran, bars, months };
   }, [filtered, applied]);
 
   // ── sort + paginate ──
@@ -335,7 +337,8 @@ export default function TransactionsExplorer({
         title={chart.gran === "day" ? "Daily flow" : chart.gran === "week" ? "Weekly flow" : "Monthly flow"}
         subtitle={applied.from && applied.to ? `${applied.from} → ${applied.to}` : "last 12 months"}
         count={stats.count}
-        onExport={() => downloadFlowCsv(chart.bars, `transactions-flow-${applied.from && applied.to ? `${applied.from}-${applied.to}` : "last-12-months"}.csv`)}
+        months={chart.months}
+        onExport={() => downloadFlowCsv(chart.bars, `transactions-flow-${applied.from && applied.to ? `${applied.from}-${applied.to}` : "last-12-months"}.csv`, chart.months)}
         gradientId="txnFlowIn"
       />
 

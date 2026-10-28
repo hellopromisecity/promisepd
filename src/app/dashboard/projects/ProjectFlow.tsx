@@ -23,7 +23,8 @@ export default function ProjectFlow({ txns, slug }: { txns: FlowTxn[]; slug: str
       title={title}
       subtitle={applied.label}
       count={flow.count}
-      onExport={() => downloadFlowCsv(flow.bars, `${slug}-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`)}
+      months={flow.months}
+      onExport={() => downloadFlowCsv(flow.bars, `${slug}-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`, flow.months)}
       headerExtra={<DateRangeFilter compact applied={applied} onApply={setApplied} />}
       gradientId="projFlowIn"
       height={210}

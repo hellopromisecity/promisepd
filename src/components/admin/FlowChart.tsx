@@ -18,12 +18,15 @@ export const compactTaka = (n: number) => {
   return `৳${Math.round(v).toLocaleString("en-US")}`;
 };
 
-export default function FlowChart({ flow, on, title = "Capital flow", subtitle, count, onExport, headerExtra, gradientId = "flowIn", height = 230 }: {
+export default function FlowChart({ flow, on, title = "Capital flow", subtitle, count, months, onExport, headerExtra, gradientId = "flowIn", height = 230 }: {
   flow: FlowBar[];
   on: boolean;
   title?: string;
   subtitle: string;
   count?: number;
+  /** Calendar months the shown range covers — drives the "Avg / month" chip
+   *  (In and Net per month for whatever filter is active). */
+  months?: number;
   onExport?: () => void;
   /** Extra control in the header (e.g. a date-range filter), before the CSV button. */
   headerExtra?: React.ReactNode;
@@ -44,6 +47,10 @@ export default function FlowChart({ flow, on, title = "Capital flow", subtitle, 
 
   const totIn = flow.reduce((s, f) => s + f.in, 0);
   const totOut = flow.reduce((s, f) => s + f.out, 0);
+  // "Avg / month" — the owner's quick read of the pace (2026-10-28): how much
+  // came in, and how much stayed, per month of the selected range
+  const avgMonths = months && months > 0 ? months : 0;
+  const monthsLabel = avgMonths ? (avgMonths % 1 ? avgMonths.toFixed(1) : String(avgMonths)) : "";
 
   function onMove(e: React.MouseEvent) {
     const svg = ref.current; if (!svg) return;
@@ -67,6 +74,11 @@ export default function FlowChart({ flow, on, title = "Capital flow", subtitle, 
           <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> In {compactTaka(totIn)}</span>
           <span className="inline-flex items-center gap-1.5 font-semibold text-brand-red"><span className="h-2.5 w-2.5 rounded-full bg-brand-red" /> Out {compactTaka(totOut)}</span>
           <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-600">Net {compactTaka(totIn - totOut)}</span>
+          {avgMonths > 0 && (
+            <span className="rounded-full bg-brand-blue-tint px-2.5 py-1 font-semibold text-brand-blue" title={`Averaged over ${monthsLabel} month${avgMonths > 1 ? "s" : ""} of the selected range`}>
+              Avg / month: In {compactTaka(totIn / avgMonths)} · Net {compactTaka((totIn - totOut) / avgMonths)}
+            </span>
+          )}
           {headerExtra}
           {onExport && (
             <button type="button" onClick={onExport} title="Export this period (CSV)" className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 font-semibold text-fg-muted transition-colors hover:border-emerald-500/40 hover:text-emerald-600">

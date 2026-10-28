@@ -4,7 +4,12 @@
 
 export type FlowTxn = { date: string; op: string; amount: number };
 export type FlowBar = { label: string; in: number; out: number };
-export type FlowResult = { gran: "day" | "week" | "month"; bars: FlowBar[]; count: number; inTotal: number; outTotal: number };
+/** `months` = how many calendar months the shown range covers (fractional for
+ *  daily / weekly views), so "Avg / month" follows whatever filter is active. */
+export type FlowResult = { gran: "day" | "week" | "month"; bars: FlowBar[]; count: number; inTotal: number; outTotal: number; months: number };
+
+/** Months spanned by a day-count (30.44 days each), never below one. */
+export const monthsOfDays = (days: number) => Math.max(1, (days + 1) / 30.4375);
 
 export const FLOW_PRESETS = [
   { id: "12m", label: "Last 12 months" },
@@ -35,7 +40,7 @@ export const bdDay = (iso: string) => (iso ? new Date(new Date(iso).getTime() + 
  *  the span (≤45d daily, ≤180d weekly, else monthly); empty range → last 12
  *  calendar months ending today, with empty edge months trimmed. */
 export function computeFlow(txns: FlowTxn[], from: string, to: string): FlowResult {
-  const empty: FlowResult = { gran: "month", bars: [], count: 0, inTotal: 0, outTotal: 0 };
+  const empty: FlowResult = { gran: "month", bars: [], count: 0, inTotal: 0, outTotal: 0, months: 0 };
   if (!txns.length) return empty;
   const defaulted = !from || !to; // no explicit range → we may trim empty edges
   let fromS = from, toS = to;
@@ -77,23 +82,30 @@ export function computeFlow(txns: FlowTxn[], from: string, to: string): FlowResu
     const d = new Date(fromD.getFullYear(), fromD.getMonth(), 1), end = new Date(toD.getFullYear(), toD.getMonth(), 1);
     for (; d <= end; d.setMonth(d.getMonth() + 1)) push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, d.toLocaleDateString("en-GB", { month: "short" }));
   }
+  // months covered: one per bar on the monthly view (after trimming, so the
+  // average is over months that actually had activity at the edges), else the
+  // day span in 30.44-day months
+  const monthsFor = (b: FlowBar[]) => (gran === "month" ? Math.max(1, b.length) : monthsOfDays(span));
   if (defaulted) {
     // Trim empty edge buckets so the default view starts and ends on real
     // activity — no hollow months on either side of the graph.
     let s = 0, e = bars.length;
     while (s < e && bars[s].in === 0 && bars[s].out === 0) s++;
     while (e > s && bars[e - 1].in === 0 && bars[e - 1].out === 0) e--;
-    return { gran, bars: bars.slice(s, e), count, inTotal, outTotal };
+    const trimmed = bars.slice(s, e);
+    return { gran, bars: trimmed, count, inTotal, outTotal, months: trimmed.length ? monthsFor(trimmed) : 0 };
   }
-  return { gran, bars, count, inTotal, outTotal };
+  return { gran, bars, count, inTotal, outTotal, months: monthsFor(bars) };
 }
 
-/** Download the buckets (+ a TOTAL row) as a UTF-8 CSV. */
-export function downloadFlowCsv(bars: FlowBar[], filename: string) {
+/** Download the buckets (+ TOTAL and, when `months` is known, AVG / MONTH rows) as a UTF-8 CSV. */
+export function downloadFlowCsv(bars: FlowBar[], filename: string, months?: number) {
   const head = ["Period", "In (BDT)", "Out (BDT)", "Net (BDT)"];
   const inTotal = bars.reduce((s, b) => s + b.in, 0), outTotal = bars.reduce((s, b) => s + b.out, 0);
   const rows = bars.map((b) => [b.label, b.in, b.out, b.in - b.out]);
-  const csv = [head, ...rows, ["TOTAL", inTotal, outTotal, inTotal - outTotal]].map((r) => r.join(",")).join("\n");
+  const tail: (string | number)[][] = [["TOTAL", inTotal, outTotal, inTotal - outTotal]];
+  if (months && months > 0) tail.push([`AVG / MONTH (${months % 1 ? months.toFixed(1) : months} months)`, Math.round(inTotal / months), Math.round(outTotal / months), Math.round((inTotal - outTotal) / months)]);
+  const csv = [head, ...rows, ...tail].map((r) => r.join(",")).join("\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);

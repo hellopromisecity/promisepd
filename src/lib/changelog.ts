@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.5",
+    date: "2026-10-28",
+    title: "Flow charts: Avg / month",
+    changes: [
+      { kind: "new", text: "Every money-flow chart — the Dashboard's Capital flow, Transactionify's flow and each project page's Monthly flow — gets a fourth figure next to In / Out / Net: “Avg / month: In ৳… · Net ৳…”, the average money in and money kept per month of whatever range is selected (last 12 months, this year, last year, 7 / 30 days, custom). Daily and weekly views average over the days shown as 30.44-day months; hover the chip to see how many months it covers." },
+      { kind: "improved", text: "The chart's CSV export ends with an AVG / MONTH row under TOTAL." },
+    ],
+  },
+  {
     version: "2.6.4",
     date: "2026-10-22",
     title: "Dashboard sales row: sale → collected → due",

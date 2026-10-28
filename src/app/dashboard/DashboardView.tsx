@@ -109,7 +109,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   // ── date-range filter → drives the capital-flow card ──
   const [applied, setApplied] = useState<AppliedRange>(DEFAULT_RANGE);
   const flow = useMemo(() => computeFlow(d.txns, applied.from, applied.to), [d.txns, applied]);
-  const exportFlowCsv = () => downloadFlowCsv(flow.bars, `capital-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`);
+  const exportFlowCsv = () => downloadFlowCsv(flow.bars, `capital-flow-${applied.label.replace(/[^\w]+/g, "-")}.csv`, flow.months);
 
   return (
     <div className="space-y-6">
@@ -159,7 +159,7 @@ export default function DashboardView({ data }: { data: DashboardData }) {
       </div>
 
       {/* capital flow */}
-      <FlowChart flow={flow.bars} on={on} subtitle={applied.label} count={flow.count} onExport={exportFlowCsv} />
+      <FlowChart flow={flow.bars} on={on} subtitle={applied.label} count={flow.count} months={flow.months} onExport={exportFlowCsv} />
 
       {/* funding + top investors */}
       <div className="grid gap-4 lg:grid-cols-2">
