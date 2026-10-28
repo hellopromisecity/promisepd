@@ -45,6 +45,9 @@ export type Row = {
   paymentMethod: string | null;
   /** Who in the office recorded it — as the Audit log shows (0034). */
   createdBy: string | null;
+  /** The moment it was entered (created_at) — shown under the date as Dhaka
+   *  12-hour time, the same clock the Audit log uses. */
+  createdAt: string | null;
 };
 
 const inputCls = "h-9 rounded-xl border border-border bg-bg-soft px-3 text-sm outline-none focus:border-brand-blue/50";
@@ -59,6 +62,9 @@ function compact(n: number): string {
 }
 const taka = (n: number) => `৳${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
 const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Dhaka" }) : "—");
+const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Dhaka" });
+/** "2026-10-28 11:48 AM" (Dhaka) for the CSV — blank when the row has no stamp. */
+const fmtStamp = (iso: string | null) => (iso && !Number.isNaN(Date.parse(iso)) ? `${dayKey(iso)} ${fmtTime(iso)}` : "");
 // BD calendar day of a timestamp — identical on the server (UTC) and the
 // browser (BD), so dates never mismatch during hydration. A raw slice(0,10)
 // read midnight-stored rows (T18:00Z) as the previous day on the server.
@@ -86,6 +92,19 @@ function presetRange(id: string): { from: string; to: string } {
   if (id === "this_year") return { from: `${y}-01-01`, to: iso(now) };
   if (id === "last_year") return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31` };
   return { from: "", to: "" };
+}
+
+/** When the entry was made, Dhaka 12-hour like the Audit log (the owner's ask,
+ *  2026-10-28: "date-r niche exact time-o"). Entered on the transaction's own
+ *  day → just the clock ("11:48 AM"); on another day (a back-dated entry, or a
+ *  row that came in with the July book import) → "added 28 Oct 2026, 11:48 AM"
+ *  so the two dates are never confused. Nothing when the row has no stamp. */
+function EnteredAt({ r }: { r: Row }) {
+  if (!r.createdAt || Number.isNaN(Date.parse(r.createdAt))) return null;
+  const clock = fmtTime(r.createdAt);
+  const sameDay = dayKey(r.createdAt) === dayKey(r.date);
+  const label = sameDay ? clock : `added ${new Date(r.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dhaka" })}, ${clock}`;
+  return <p className="text-[11px] text-fg-faint" title={sameDay ? "Time it was entered (Dhaka)" : "Entered on a different day than the transaction date (Dhaka)"}>{label}</p>;
 }
 
 export default function TransactionsExplorer({
@@ -246,9 +265,9 @@ export default function TransactionsExplorer({
   // ── exports (operate on the current filtered + sorted set) ──
   const rangeLabel = applied.from || applied.to ? `${applied.from || "start"}_${applied.to || "now"}` : "all-time";
   function exportCSV() {
-    const head = ["Date", "ID", "Receipt", "User", "File ID", "Mobile", "UID", "Type", "Direction", "Amount", "Method", "Project", "Added by"];
+    const head = ["Date", "Added at", "ID", "Receipt", "User", "File ID", "Mobile", "UID", "Type", "Direction", "Amount", "Method", "Project", "Added by"];
     const body = sorted.map((r) => [
-      dayKey(r.date), r.transaction_id, r.rashid ?? "", r.userName, r.fid ?? "", r.phone ?? "", r.uid, r.type,
+      dayKey(r.date), fmtStamp(r.createdAt), r.transaction_id, r.rashid ?? "", r.userName, r.fid ?? "", r.phone ?? "", r.uid, r.type,
       r.operator === "-" ? "out" : "in", r.amount, r.paymentMethod ?? "", r.projectName ?? "", r.createdBy ?? "",
     ]);
     const csv = [head, ...body].map((row) => row.map((c) => { const v = String(c ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
@@ -427,6 +446,8 @@ export default function TransactionsExplorer({
                       </td>
                       <td className={`${tdCls} whitespace-nowrap text-fg-muted`}>
                         <p>{fmtDate(r.date)}</p>
+                        {/* the exact moment it was entered — Dhaka, 12-hour, like the Audit log */}
+                        <EnteredAt r={r} />
                         {/* who recorded it — the Audit log's actor, under the date */}
                         {r.createdBy && <p className="text-[11px] text-fg-faint">by {r.createdBy}</p>}
                       </td>

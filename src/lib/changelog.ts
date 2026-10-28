@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.8",
+    date: "2026-10-28",
+    title: "Transactionify: exact entry time under the date",
+    changes: [
+      { kind: "new", text: "Every row in Transactionify now shows the exact moment it was entered, right under the date, in Dhaka time with AM/PM — the same clock the Audit log uses (e.g. 11:48 AM). When the entry was made on a different day than the transaction's date (a back-dated entry, or a row that came in with the July book import) the line reads “added 28 Oct 2026, 11:48 AM”, so the two dates are never confused." },
+      { kind: "improved", text: "The CSV export gains an “Added at” column with the same Dhaka timestamp." },
+    ],
+  },
+  {
     version: "2.6.7",
     date: "2026-10-28",
     title: "Transactionify: edited old payments now name the editor",

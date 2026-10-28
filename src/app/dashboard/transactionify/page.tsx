@@ -56,6 +56,7 @@ export default async function TransactionifyPage() {
     description: t.description,
     paymentMethod: t.payment_method ?? null,
     createdBy: t.created_by_name ?? null,
+    createdAt: t.created_at ?? null,
   }));
 
   const investorOptions = investors.map((i) => ({ uid: i.uid, label: `${i.full_name || "Unnamed"} — ${localPhone(i.phone_number)}` }));
