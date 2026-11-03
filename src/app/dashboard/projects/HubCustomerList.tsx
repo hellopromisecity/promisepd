@@ -6,7 +6,7 @@ import { Search, Download, X, Loader2, ArrowUpDown, Phone, MapPin, UserCheck, Re
 import { Card, TableShell, thCls, tdCls } from "@/components/admin/ui";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
-import { PAYMENT_METHODS } from "@/lib/payment-methods";
+import PaymentMethodPicker from "@/components/admin/PaymentMethodPicker";
 import {
   getHubCustomerDetail, listReferenceOfficers, listTxnTypes, createHubCustomer, updateHubCustomer,
   archiveHubHolding, addHubPayment, updateHubPayment, deleteHubPayment, pushDepositProfit,
@@ -403,7 +403,7 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [receipt, setReceipt] = useState("");
   const [desc, setDesc] = useState("");
-  // Cash / Bank / Bkash / Nagad / Rocket — how the money moved (0034)
+  // how the money moved (0034): Cash / Bkash / Nagad / Rocket or a bank name
   const [method, setMethod] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -497,10 +497,8 @@ export function TransactionModal({ customer, project, onClose }: { customer: Hub
               <div><label className={labelCls}>Receipt #</label><input className={inputCls} value={receipt} onChange={(e) => setReceipt(e.target.value)} /></div>
             </div>
             <div><label className={labelCls}>Payment method</label>
-              <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value)}>
-                <option value="">— Select —</option>
-                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              {/* Cash or Bank, then the channel (v2.6.9) */}
+              <PaymentMethodPicker value={method} onChange={setMethod} />
             </div>
             <div><label className={labelCls}>Note</label><textarea rows={3} className={`${inputCls} resize-y`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional — long messages wrap here" /></div>
             {!editingId && (

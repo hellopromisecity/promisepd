@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Loader2, Pencil } from "lucide-react";
 import { saveInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
-import { PAYMENT_METHODS } from "@/lib/payment-methods";
+import PaymentMethodPicker from "@/components/admin/PaymentMethodPicker";
 import { toast } from "@/components/ui/Toast";
 
 export type InvestorOption = { uid: string; label: string };
@@ -20,7 +20,7 @@ export type EditableTxn = {
   project_id: string | null;
   rashid_number: string | null;
   description: string | null;
-  /** Cash / Bank / Bkash / Nagad / Rocket (0034). */
+  /** Payment channel — Cash / Bkash / Nagad / Rocket or a bank name (0034). */
   payment_method?: string | null;
 };
 
@@ -156,13 +156,9 @@ export default function TxnForm({
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls} htmlFor="tx-method">Payment method</label>
-                  <select id="tx-method" name="payment_method" defaultValue={txn?.payment_method ?? ""} className={inputCls}>
-                    <option value="">— Select —</option>
-                    {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                  <label className={labelCls} htmlFor="tx-method-group">Payment method</label>
+                  {/* Cash or Bank, then the channel (v2.6.9) */}
+                  <PaymentMethodPicker idPrefix="tx-method" defaultValue={txn?.payment_method ?? ""} />
                 </div>
               </div>
 

@@ -142,7 +142,7 @@ export async function saveInvestorTransaction(input: TxnInput): Promise<ActionRe
     // name is stamped on creation; an edit only fills it in when the row never
     // recorded who added it (pre-0034 / migration-era) — never overwrites it.
     const payment_method = normalizePaymentMethod(input.payment_method);
-    if (input.payment_method?.trim() && !payment_method) throw new ValidationError("Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket).");
+    if (input.payment_method?.trim() && !payment_method) throw new ValidationError("Pick a valid payment method (Cash / Bkash / Nagad / Rocket, or one of the office's banks).");
 
     let id = input.transaction_id?.trim() || null;
     let prevUid: string | null = null;

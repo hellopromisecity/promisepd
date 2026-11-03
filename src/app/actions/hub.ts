@@ -880,7 +880,7 @@ export async function addHubPayment(customerId: string, projectKey: string, inpu
     // who is recording this, and how the money moved (Cash / Bank / Bkash / Nagad / Rocket)
     const me = await getCurrentUser();
     const method = normalizePaymentMethod(input.payment_method);
-    if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket)." };
+    if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash / Bkash / Nagad / Rocket, or one of the office's banks)." };
     const type = input.type || "deposit";
     // resolve the investment type → operator (+/-), then the hub kind for totals.
     const { data: td } = await admin.from("investment_types").select("operator").eq("name", type).maybeSingle();
@@ -966,7 +966,7 @@ export async function updateHubPayment(paymentId: string, projectKey: string, in
     const me = await getCurrentUser();
     if (!(Number(input.amount) > 0)) return { ok: false, error: "Amount must be greater than 0." };
     const method = normalizePaymentMethod(input.payment_method);
-    if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash, Bank, Bkash, Nagad, Rocket)." };
+    if (input.payment_method?.trim() && !method) return { ok: false, error: "Pick a valid payment method (Cash / Bkash / Nagad / Rocket, or one of the office's banks)." };
     const { data: pd } = await HP(admin).select("customer_id, amount, date").eq("id", paymentId).maybeSingle();
     const p = rec(pd);
     if (!p) return { ok: false, error: "Transaction not found." };

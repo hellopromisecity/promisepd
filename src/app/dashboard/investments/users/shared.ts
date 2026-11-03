@@ -10,7 +10,7 @@ export type UserTxn = {
   project_name: string | null;
   rashid_number: string | null;
   description: string | null;
-  /** Cash / Bank / Bkash / Nagad / Rocket (migration 0034; null on older rows). */
+  /** Payment channel — Cash / Bkash / Nagad / Rocket or a bank name (migration 0034; null on older rows). */
   payment_method?: string | null;
   /** Who in the office recorded the entry (migration 0034). */
   created_by_name?: string | null;
