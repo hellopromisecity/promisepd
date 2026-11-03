@@ -7,7 +7,7 @@ const selectCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5
 
 /** Two-step payment method (the owner's ask, 2026-11-03): first Cash or Bank,
  *  then the channel under it — Cash → Cash / Bkash / Nagad / Rocket, Bank →
- *  the office's six accounts (Kamrul DBBL, PPD DBBL, Sonali Bank, Bank Asia,
+ *  the office's six accounts (MD SIR DBBL, PPD DBBL, Sonali Bank, Bank Asia,
  *  Islami Bank, Al Arafah Bank). Only the channel name is stored.
  *
  *  Uncontrolled (`defaultValue` + a hidden input named `name`, for forms read

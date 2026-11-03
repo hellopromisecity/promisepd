@@ -30,7 +30,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Manage types in the popup · Cash or Bank, then the channel",
     changes: [
       { kind: "new", text: "In a customer's Transactions popup (All Customers and App Users) the Type field has a Manage link: add a new type (name and + / −) or remove one without leaving the form. A new type is selected at once and appears wherever types are offered. Removing is refused for system types and for a type already used by a transaction — set those inactive on the Types page instead. Admins only." },
-      { kind: "changed", text: "Payment method is now two steps on every transaction form: Cash or Bank first, then the channel — Cash → Cash / Bkash / Nagad / Rocket; Bank → Kamrul DBBL, PPD DBBL, Sonali Bank, Bank Asia, Islami Bank, Al Arafah Bank. Only the channel name is stored and shown (Transactionify, history, CSV). Older rows that just say “Bank” stay valid and open with “which bank?” ready to be completed." },
+      { kind: "changed", text: "Payment method is now two steps on every transaction form: Cash or Bank first, then the channel — Cash → Cash / Bkash / Nagad / Rocket; Bank → MD SIR DBBL, PPD DBBL, Sonali Bank, Bank Asia, Islami Bank, Al Arafah Bank. Only the channel name is stored and shown (Transactionify, history, CSV). Older rows that just say “Bank” stay valid and open with “which bank?” ready to be completed." },
     ],
   },
   {

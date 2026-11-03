@@ -2,14 +2,14 @@
  *  owner's ask): Cash or Bank first, then the channel under it —
  *    Cash → Cash / Bkash / Nagad / Rocket
  *    Bank → one of the office's six accounts
- *  The ledger stores only the channel name ("Nagad", "Kamrul DBBL"). Plain
+ *  The ledger stores only the channel name ("Nagad", "MD SIR DBBL"). Plain
  *  "Bank" is still accepted: rows recorded before the banks were listed carry
  *  it, and so does a row where Bank was picked without naming the bank.
  *  Shared by the picker (options) and the server actions (validation), so a
  *  typo can never land in the ledger. */
 export const PAYMENT_GROUPS = [
   { key: "Cash", label: "Cash", channels: ["Cash", "Bkash", "Nagad", "Rocket"] },
-  { key: "Bank", label: "Bank", channels: ["Kamrul DBBL", "PPD DBBL", "Sonali Bank", "Bank Asia", "Islami Bank", "Al Arafah Bank"] },
+  { key: "Bank", label: "Bank", channels: ["MD SIR DBBL", "PPD DBBL", "Sonali Bank", "Bank Asia", "Islami Bank", "Al Arafah Bank"] },
 ] as const;
 export type PaymentGroup = (typeof PAYMENT_GROUPS)[number]["key"];
 
@@ -17,11 +17,16 @@ export type PaymentGroup = (typeof PAYMENT_GROUPS)[number]["key"];
 export const PAYMENT_METHODS: readonly string[] = [...PAYMENT_GROUPS.flatMap((g) => [...g.channels]), "Bank"];
 export type PaymentMethod = string;
 
+/** Earlier spellings of a channel → its current name (the MD's DBBL account
+ *  went live as "Kamrul DBBL" for a few hours on 2026-11-03). */
+const ALIASES: Record<string, string> = { "kamrul dbbl": "MD SIR DBBL" };
+
 /** Canonical label for a typed / stored value ("bkash" → "Bkash",
  *  "sonali  bank" → "Sonali Bank"); null when empty or not a known channel. */
 export function normalizePaymentMethod(v: string | null | undefined): PaymentMethod | null {
   const s = (v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
   if (!s) return null;
+  if (ALIASES[s]) return ALIASES[s];
   return PAYMENT_METHODS.find((m) => m.toLowerCase() === s) ?? null;
 }
 
