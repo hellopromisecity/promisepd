@@ -11,11 +11,11 @@ export type TeamMember = { id: string; name: string; role: string; avatarUrl: st
 export type RangeKey = "month" | "lastmonth" | "year" | "lastyear" | "all";
 
 export const RANGES: { key: RangeKey; label: string }[] = [
+  { key: "all", label: "Lifetime" }, // the default (owner, 2026-11-03)
   { key: "month", label: "This month" },
   { key: "lastmonth", label: "Last month" },
   { key: "year", label: "This year" },
   { key: "lastyear", label: "Last year" },
-  { key: "all", label: "Lifetime" },
 ];
 
 export type MemberStats = {

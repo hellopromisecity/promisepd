@@ -13,8 +13,9 @@ import {
   type Tone,
 } from "@/components/admin/ui";
 import RoleSelect from "./RoleSelect";
-import { AddStaffButton, StaffRowActions, CreateLoginButton, type StaffMember } from "./StaffManager";
-import { STAFF_ROSTER, canonicalMobile, roleFromTitle } from "@/lib/staff-roster";
+import { AddStaffButton, StaffRowActions, CreateLoginButton, RemoveRosterButton, RestoreRosterButton, type StaffMember } from "./StaffManager";
+import { canonicalMobile, roleFromTitle } from "@/lib/staff-roster";
+import { readRemovedRoster, removedIdSet, activeRoster } from "@/lib/staff-roster-removed";
 
 export const dynamic = "force-dynamic";
 
@@ -140,8 +141,11 @@ export default async function StaffPage() {
   // sheet has no uniqueness guard — the DB does, the code list doesn't),
   // so a person accidentally listed twice can't double-render or collide
   // on React keys.  Keep the first occurrence.
+  // roster employees an admin removed (trash next to "Create login") —
+  // remembered in org_settings, restorable from the line under the table
+  const removedList = await readRemovedRoster(admin);
   const seenRoster = new Set<string>();
-  const uniqueRoster = STAFF_ROSTER.filter((e) => {
+  const uniqueRoster = activeRoster(removedIdSet(removedList)).filter((e) => {
     const c = canonicalMobile(e.mobile) || e.idNo;
     if (seenRoster.has(c)) return false;
     seenRoster.add(c);
@@ -287,9 +291,13 @@ export default async function StaffPage() {
                           } satisfies StaffMember}
                         />
                       ) : (
-                        <CreateLoginButton
-                          prefill={{ name: m.name, mobile: m.mobile, employee_code: m.code, role: roleFromTitle(m.designation ?? "") }}
-                        />
+                        <div className="flex items-center gap-1">
+                          <CreateLoginButton
+                            prefill={{ name: m.name, mobile: m.mobile, employee_code: m.code, role: roleFromTitle(m.designation ?? "") }}
+                          />
+                          {/* off the roster — remembered in org_settings, restorable below (v2.7.1) */}
+                          <RemoveRosterButton idNo={m.code} name={m.name} />
+                        </div>
                       )}
                     </td>
                   )}
@@ -298,6 +306,18 @@ export default async function StaffPage() {
             })}
           </tbody>
         </TableShell>
+      )}
+
+      {removedList.length > 0 && (
+        <div className="rounded-2xl border border-dashed border-border bg-bg-soft/60 px-4 py-3 text-xs text-fg-muted">
+          <span className="mr-2 font-semibold text-fg">Removed from roster:</span>
+          {removedList.map((r) => (
+            <span key={r.idNo} className="mr-3 inline-flex items-center gap-1.5">
+              {r.name} <span className="font-mono text-fg-faint">{r.idNo}</span>
+              {canManageStaff && <RestoreRosterButton idNo={r.idNo} name={r.name} />}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

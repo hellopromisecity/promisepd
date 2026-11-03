@@ -9,8 +9,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UserPlus, Pencil, Trash2, Loader2, X, Check, KeyRound } from "lucide-react";
-import { createStaff, updateStaff, deleteStaff, type StaffInput } from "@/app/actions/admin-staff";
+import { UserPlus, Pencil, Trash2, Loader2, X, Check, KeyRound, Undo2 } from "lucide-react";
+import { createStaff, updateStaff, deleteStaff, removeRosterEntry, restoreRosterEntry, type StaffInput } from "@/app/actions/admin-staff";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 import type { Role } from "@/lib/auth";
@@ -62,6 +62,52 @@ export function CreateLoginButton({ prefill }: { prefill: StaffPrefill }) {
       </button>
       {open && <StaffFormModal mode="create" prefill={prefill} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+/** Roster row with no login → take the person off the roster (the owner's
+ *  ask, 2026-11-03). Remembered in org_settings; restorable from the
+ *  "Removed from roster" line at the bottom of the Staff page. */
+export function RemoveRosterButton({ idNo, name }: { idNo: string; name: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  function onRemove() {
+    confirmDialog({
+      title: "Remove from roster?",
+      message: `Take ${name} (${idNo}) off the staff roster? They disappear from Staff and Attendance; you can restore them from the bottom of this page.`,
+      confirmText: "Remove",
+      danger: true,
+    }).then((ok) => {
+      if (!ok) return;
+      startTransition(async () => {
+        const res = await removeRosterEntry(idNo);
+        if (res.ok) { toast(res.message || "Removed from the roster.", "success"); router.refresh(); }
+        else toast(res.error, "error");
+      });
+    });
+  }
+  return (
+    <button onClick={onRemove} disabled={pending} title="Remove from roster" aria-label="Remove from roster" className="grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:bg-brand-red-tint hover:text-brand-red disabled:opacity-50">
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+    </button>
+  );
+}
+
+export function RestoreRosterButton({ idNo, name }: { idNo: string; name: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      onClick={() => startTransition(async () => {
+        const res = await restoreRosterEntry(idNo);
+        if (res.ok) { toast(res.message || `${name} is back on the roster.`, "success"); router.refresh(); }
+        else toast(res.error, "error");
+      })}
+      disabled={pending}
+      className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-fg-muted hover:border-brand-blue/40 hover:text-brand-blue disabled:opacity-50"
+    >
+      {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />} Restore
+    </button>
   );
 }
 

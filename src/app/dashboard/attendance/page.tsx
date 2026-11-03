@@ -15,6 +15,7 @@ import {
   type Tone,
 } from "@/components/admin/ui";
 import { buildStaffDirectory, refForMember, type StaffAccount } from "@/lib/staff-directory";
+import { readRemovedRoster, removedIdSet } from "@/lib/staff-roster-removed";
 import SelfCheck from "./SelfCheck";
 import AttendanceControls from "./AttendanceControls";
 import AttendanceRoster, { type RosterRow } from "./AttendanceRoster";
@@ -137,7 +138,8 @@ export default async function AttendancePage({
     ]);
     if (pres.error?.code === "42703") pres = await selProfiles("id, name, mobile, role");
     const accounts = (pres.error ? [] : pres.data ?? []) as unknown as StaffAccount[];
-    const directory = buildStaffDirectory(accounts);
+    // people an admin removed from the Staff page stay off the hajira too
+    const directory = buildStaffDirectory(accounts, removedIdSet(await readRemovedRoster(admin)));
     const attRows = (attRes.data ?? []) as { staff_ref: string | null; status: string }[];
 
     const importLink = (

@@ -21,7 +21,8 @@ import {
 import { diffDetail, withChanges } from "@/lib/admin-guard";
 import type { Role } from "@/lib/auth";
 import { refForMember } from "@/lib/staff-directory";
-import { STAFF_ROSTER } from "@/lib/staff-roster";
+import { STAFF_ROSTER, canonicalMobile } from "@/lib/staff-roster";
+import { readRemovedRoster, writeRemovedRoster, type RemovedRosterEntry } from "@/lib/staff-roster-removed";
 
 const ROLES: Role[] = ["member", "staff", "manager", "admin"];
 const ATTENDANCE_STATUSES = ["present", "late", "absent", "leave", "holiday"] as const;
@@ -724,5 +725,62 @@ export async function importAttendance(formData: FormData): Promise<ActionResult
       },
       message: `Imported ${rowsToWrite.length} day(s) of attendance.`,
     };
+  });
+}
+
+// ── Roster removals (people with no login) ────────────────────────
+/** Take a roster employee who has NO login off the Staff page (the owner's
+ *  ask, 2026-11-03). The roster is code, so the removal is remembered in
+ *  org_settings; Staff, Attendance and the import page all filter through
+ *  it. Someone who already has an account is deleted via deleteStaff. */
+export async function removeRosterEntry(idNo: string): Promise<ActionResult> {
+  return runAction(async () => {
+    const me = await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    const entry = STAFF_ROSTER.find((e) => e.idNo.trim().toUpperCase() === (idNo ?? "").trim().toUpperCase());
+    if (!entry) throw new ValidationError("That roster entry doesn't exist.");
+
+    // a person with a login is removed through their account, never silently
+    const canon = canonicalMobile(entry.mobile);
+    const { data: acc } = await admin
+      .from("profiles")
+      .select("id, name")
+      .or(`employee_code.eq.${entry.idNo}${canon ? `,mobile.eq.${canon}` : ""}`)
+      .neq("role", "member")
+      .limit(1)
+      .maybeSingle();
+    if (acc) throw new ValidationError(`${entry.name} already has a login — delete the account with the trash icon on their row instead.`);
+
+    const list = await readRemovedRoster(admin);
+    if (list.some((e) => e.idNo.trim().toUpperCase() === entry.idNo.trim().toUpperCase())) return { message: `${entry.name} is already off the roster.` };
+    const next: RemovedRosterEntry[] = [...list, { idNo: entry.idNo, name: entry.name, mobile: entry.mobile, removed_by: me.name, removed_at: new Date().toISOString() }];
+    await writeRemovedRoster(admin, next);
+
+    await logAudit({ action: "delete", entity: "staff_roster", entityId: entry.idNo, detail: `Removed ${entry.name} (${entry.idNo}, ${entry.title}) from the staff roster — no login existed` });
+    revalidatePath("/dashboard/staff");
+    revalidatePath("/dashboard/attendance");
+    revalidatePath("/dashboard/attendance/import");
+    return { message: `${entry.name} removed from the roster.` };
+  });
+}
+
+/** Put a removed roster employee back. */
+export async function restoreRosterEntry(idNo: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await requireAdmin();
+    const admin = getAdmin();
+    if (!admin) throw new Error("Data unavailable");
+    const key = (idNo ?? "").trim().toUpperCase();
+    const list = await readRemovedRoster(admin);
+    const hit = list.find((e) => e.idNo.trim().toUpperCase() === key);
+    if (!hit) throw new ValidationError("That person isn't on the removed list.");
+    await writeRemovedRoster(admin, list.filter((e) => e !== hit));
+
+    await logAudit({ action: "restore", entity: "staff_roster", entityId: hit.idNo, detail: `Restored ${hit.name} (${hit.idNo}) to the staff roster` });
+    revalidatePath("/dashboard/staff");
+    revalidatePath("/dashboard/attendance");
+    revalidatePath("/dashboard/attendance/import");
+    return { message: `${hit.name} is back on the roster.` };
   });
 }

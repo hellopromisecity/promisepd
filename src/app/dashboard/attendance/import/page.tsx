@@ -5,6 +5,8 @@ import { ArrowLeft, Fingerprint } from "lucide-react";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { PageHeader, Card } from "@/components/admin/ui";
 import { STAFF_ROSTER } from "@/lib/staff-roster";
+import { getAdmin } from "@/lib/admin-guard";
+import { readRemovedRoster, removedIdSet, activeRoster } from "@/lib/staff-roster-removed";
 import ImportForm from "./ImportForm";
 
 export const metadata: Metadata = {
@@ -16,6 +18,9 @@ export const dynamic = "force-dynamic";
 export default async function ImportAttendancePage() {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/dashboard");
+  // the roster minus anyone an admin removed on the Staff page
+  const admin = getAdmin();
+  const roster = admin ? activeRoster(removedIdSet(await readRemovedRoster(admin))) : STAFF_ROSTER;
 
   return (
     <div className="space-y-6">
@@ -60,7 +65,7 @@ export default async function ImportAttendancePage() {
           spaces are ignored when matching).
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {STAFF_ROSTER.map((e) => (
+          {roster.map((e) => (
             <span key={e.idNo} className="rounded-lg bg-bg-soft px-2.5 py-1 text-xs font-mono text-fg-muted">
               {e.idNo} · {e.name}
             </span>

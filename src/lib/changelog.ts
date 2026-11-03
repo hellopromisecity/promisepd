@@ -25,12 +25,21 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.1",
+    date: "2026-11-03",
+    title: "Staff: remove a roster employee · leaderboard opens on Lifetime",
+    changes: [
+      { kind: "new", text: "On the Staff page an employee who is on the roster but has no login can now be removed — a trash button sits next to Create login. Removed people disappear from Staff and Attendance; a “Removed from roster” line at the bottom of Staff lets an admin restore them. Someone who already has a login is deleted through their account's trash icon, as before." },
+      { kind: "changed", text: "The Report leaderboard opens on Lifetime; the other periods stay a click away." },
+    ],
+  },
+  {
     version: "2.7.0",
     date: "2026-11-03",
     title: "Report: the team leaderboard",
     changes: [
       { kind: "new", text: "The Report page now opens with a leaderboard. The three best reporters stand on a podium — best in the middle, second left, third right, with their profile photo, points, days reported, on-time %, and current streak — and everyone else is listed below in order. Points per reported day: filed the same day 3, the next day 2, later 1, so both showing up every day and filing promptly count. Each card also shows how many of the period's days were reported." },
-      { kind: "new", text: "Period filter on the leaderboard: this month (default), last month, this year, last year, lifetime." },
+      { kind: "new", text: "Period filter on the leaderboard: lifetime (default), this month, last month, this year, last year." },
       { kind: "changed", text: "The MD's login no longer shows the “Submit today's report” box — the MD reads the reports, he doesn't file them. Everyone else, admins included, still does." },
       { kind: "improved", text: "The per-person report tabs show profile photos, and their date filter gains “Last month”. Staff who can only see their own reports get a personal stats strip (days, on-time %, streak, points) in place of the leaderboard." },
     ],

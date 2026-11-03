@@ -98,7 +98,7 @@ function PodiumCard({ rank, s, delay }: { rank: Rank; s: MemberStats | null; del
 }
 
 export default function ReportLeaderboard({ team, reports, today }: { team: TeamMember[]; reports: ReportLite[]; today: string }) {
-  const [range, setRange] = useState<RangeKey>("month");
+  const [range, setRange] = useState<RangeKey>("all");
   const ranked = useMemo(() => computeLeaderboard(team, reports, range, today), [team, reports, range, today]);
   const label = RANGES.find((r) => r.key === range)?.label ?? "";
   // a slot is only "won" with at least one report in the period
@@ -157,7 +157,7 @@ export default function ReportLeaderboard({ team, reports, today }: { team: Team
 
 /** For staff who only see their own reports: the same numbers, for them. */
 export function PersonalStats({ me, reports, today }: { me: TeamMember; reports: ReportLite[]; today: string }) {
-  const [range, setRange] = useState<RangeKey>("month");
+  const [range, setRange] = useState<RangeKey>("all");
   const s = useMemo(() => computeLeaderboard([me], reports, range, today)[0], [me, reports, range, today]);
   return (
     <section className="rounded-2xl border border-border bg-bg p-5">

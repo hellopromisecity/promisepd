@@ -45,8 +45,10 @@ export function refForMember(m: { id: string; mobile: string }): string {
 }
 
 /** Build the unified, de-duplicated directory.  Roster first (in sheet
- *  order), then any accounts that aren't on the roster. */
-export function buildStaffDirectory(accounts: StaffAccount[]): StaffDirEntry[] {
+ *  order), then any accounts that aren't on the roster.  `removedIds`
+ *  (upper-cased employee codes an admin removed from the Staff page —
+ *  see staff-roster-removed.ts) drops those roster rows. */
+export function buildStaffDirectory(accounts: StaffAccount[], removedIds: Set<string> = new Set()): StaffDirEntry[] {
   const byMobile = new Map<string, StaffAccount>();
   for (const a of accounts) {
     const c = canonicalMobile(a.mobile);
@@ -60,6 +62,7 @@ export function buildStaffDirectory(accounts: StaffAccount[]): StaffDirEntry[] {
   // uniqueness guard on the code list), keeping the first occurrence.
   const matchedAccounts = new Set<string>();
   for (const e of STAFF_ROSTER) {
+    if (removedIds.has(e.idNo.trim().toUpperCase())) continue; // removed from the Staff page
     const canon = canonicalMobile(e.mobile) || e.idNo;
     if (seen.has(canon)) continue;
     seen.add(canon);
