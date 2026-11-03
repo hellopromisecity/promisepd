@@ -13,14 +13,16 @@ import {
 import { deleteReports } from "@/app/actions/admin-insights";
 import { confirmDialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
+import MemberAvatar from "@/components/admin/MemberAvatar";
 
 export type Report = { id: string; member_id: string; report_date: string; body: string; created_at: string };
-type Staff = { id: string; name: string };
-type Range = "all" | "month" | "30d" | "year" | "lastyear";
+export type Staff = { id: string; name: string; avatarUrl?: string | null };
+type Range = "all" | "month" | "lastmonth" | "30d" | "year" | "lastyear";
 
 const RANGES: { key: Range; label: string }[] = [
   { key: "all", label: "All time" },
   { key: "month", label: "This month" },
+  { key: "lastmonth", label: "Last month" },
   { key: "30d", label: "Last 30 days" },
   { key: "year", label: "This year" },
   { key: "lastyear", label: "Last year" },
@@ -43,6 +45,7 @@ function inRange(dateStr: string, range: Range): boolean {
   const now = new Date();
   const y = now.getFullYear();
   if (range === "month") return t >= new Date(y, now.getMonth(), 1).getTime();
+  if (range === "lastmonth") return t >= new Date(y, now.getMonth() - 1, 1).getTime() && t < new Date(y, now.getMonth(), 1).getTime();
   if (range === "30d") return t >= Date.now() - 30 * 86400000;
   if (range === "year") return t >= new Date(y, 0, 1).getTime();
   // last year
@@ -98,10 +101,12 @@ export default function ReportView({
             <button
               key={s.id}
               onClick={() => pickTab(s.id)}
-              className={`whitespace-nowrap rounded-t-lg px-3.5 py-2 text-sm font-semibold transition-colors ${
+              className={`inline-flex items-center gap-2 whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-semibold transition-colors ${
                 tab === s.id ? "bg-brand-blue-tint text-brand-blue-dark" : "text-fg-muted hover:bg-bg-soft hover:text-fg"
               }`}
             >
+              {/* profile photo beside the name (v2.7.0) */}
+              <MemberAvatar name={s.name} src={s.avatarUrl} size={22} className={tab === s.id ? "ring-2 ring-brand-blue/40" : ""} />
               {s.name || "—"}
             </button>
           ))}

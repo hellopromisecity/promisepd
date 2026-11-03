@@ -32,7 +32,7 @@ const SUPER_ADMINS = new Set(
     .filter(Boolean),
 );
 
-function isSuperAdmin(email: string | null, mobile: string | null): boolean {
+export function isSuperAdmin(email: string | null, mobile: string | null): boolean {
   if (SUPER_ADMINS.size === 0) return false;
   return (
     (!!email && SUPER_ADMINS.has(email.toLowerCase())) ||
