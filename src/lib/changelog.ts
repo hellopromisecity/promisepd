@@ -25,6 +25,19 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.2",
+    date: "2026-11-07",
+    title: "Types from the toolbar · referral points follow the balance · reports are final",
+    changes: [
+      { kind: "changed", text: "Transaction types are now added or removed from the All Customers toolbar — a Types button next to Add customer — instead of inside one customer's popup. A type is shared by every customer and every transaction form, so a change there shows up everywhere at once. CSV and PDF moved behind one Download button to make room." },
+      { kind: "improved", text: "Marketing: each officer's mobile number sits on the same line as their ID, under the name." },
+      { kind: "new", text: "Marketing: in an officer's referral history (the eye button) the customer's name is a link that opens All Customers already filtered to that customer and that project." },
+      { kind: "changed", text: "Marketing: a referral whose customer now has a zero balance in that project — withdrawn, or the file archived — earns the officer or director no points. The podium, the table, the period filters, the history and the public leaderboard all apply it; the row shows “ব্যালেন্স ৳0 — পয়েন্ট নেই” with the original points struck through. Nothing is rewritten: the moment the customer pays in again, the points come back." },
+      { kind: "changed", text: "Work reports are final once submitted: staff can no longer select and delete their reports, managers can't delete their own, and only the MD's login can delete anyone's." },
+      { kind: "changed", text: "A work report can only be filed for today (Bangladesh date). The date box is locked to today and the server refuses any other day, so yesterday's report can't be back-filled the next morning." },
+    ],
+  },
+  {
     version: "2.7.1",
     date: "2026-11-03",
     title: "Staff: remove a roster employee · leaderboard opens on Lifetime",

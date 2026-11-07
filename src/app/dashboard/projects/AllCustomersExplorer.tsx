@@ -10,8 +10,9 @@ import { useRouter } from "next/navigation";
 import {
   Search, Users, UserRound, BadgeCheck, Wallet, Download, FileText, Smartphone, Building2,
   ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, Trophy, Phone, X, UserPlus, CreditCard, Link2,
-  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck, AlertTriangle, Ban,
+  Pencil, Loader2, KeyRound, FolderPlus, MoreVertical, Trash2, UserX, UserCheck, AlertTriangle, Ban, Tags, ChevronDown,
 } from "lucide-react";
+import TypeManager from "@/components/admin/TypeManager";
 import { StatCard } from "@/components/admin/ui";
 import { taka, compact, fmtDate, localPhone, initial, avatarTint } from "@/app/dashboard/investments/users/shared";
 import type { TypeOpt, ProjectOpt } from "@/app/dashboard/investments/users/shared";
@@ -33,8 +34,48 @@ const firstName = (n: string) => (n || "—").trim().split(/\s+/)[0];
 type SortKey = "name" | "paid" | "profit" | "balance" | "joined";
 type StatusFilter = "all" | "verified" | "unverified" | "paying" | "nonpaying" | "withdrawn" | "apponly";
 
+/** CSV / PDF behind one button — frees toolbar room for Types (owner, 2026-11-07). */
+function DownloadMenu({ onCsv, onPdf }: { onCsv: () => void; onPdf: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} title="Download the current list" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-fg hover:border-brand-blue/40">
+        <Download className="h-4 w-4 text-brand-blue" /> Download <ChevronDown className="h-3.5 w-3.5 text-fg-faint" />
+      </button>
+      {open && (
+        <>
+          <button aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
+          <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-xl border border-border bg-bg shadow-lg">
+            <button onClick={() => { setOpen(false); onCsv(); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-fg hover:bg-bg-soft"><Download className="h-4 w-4 text-emerald-600" /> CSV / Excel</button>
+            <button onClick={() => { setOpen(false); onPdf(); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-fg hover:bg-bg-soft"><FileText className="h-4 w-4 text-brand-red" /> PDF</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Transaction types for every customer, managed from the toolbar: a small
+ *  dialog around the shared TypeManager (admins only on the server). */
+function TypesModal({ types, onAdded, onRemoved, onClose }: { types: TypeOpt[]; onAdded: (t: TypeOpt) => void; onRemoved: (name: string) => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md animate-[pop_.18s_ease-out] rounded-2xl border border-border bg-bg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-fg">Transaction types</h2>
+            <p className="text-xs text-fg-muted">Shared by every customer and every transaction form.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-fg-muted hover:bg-bg-soft hover:text-fg" aria-label="Close"><X className="h-5 w-5" /></button>
+        </div>
+        <TypeManager types={types} onAdded={onAdded} onRemoved={onRemoved} onClose={onClose} />
+      </div>
+    </div>
+  );
+}
+
 export default function AllCustomersExplorer({
-  people, projects, health, top, totals, investorTypes, investorProjects,
+  people, projects, health, top, totals, investorTypes, investorProjects, initialQ, initialProject,
 }: {
   people: PersonRow[];
   projects: HubProject[];
@@ -43,9 +84,17 @@ export default function AllCustomersExplorer({
   totals: { collected: number; finalBalance: number; memberships: number; uniqueCount: number; appAccounts: number; payers: number; withdrawn: number };
   investorTypes: TypeOpt[];
   investorProjects: ProjectOpt[];
+  /** Arrive pre-filtered (?q=…&project=…) — e.g. from a marketing officer's referral list. */
+  initialQ?: string;
+  initialProject?: string;
 }) {
-  const [q, setQ] = useState("");
-  const [projFilter, setProjFilter] = useState("all");
+  const [q, setQ] = useState(initialQ ?? "");
+  const [projFilter, setProjFilter] = useState(initialProject && projects.some((p) => p.key === initialProject) ? initialProject : "all");
+  // transaction types are global (investment_types) — the boss adds / removes
+  // them from this toolbar (the owner's ask, 2026-11-07); kept locally so the
+  // popups see a new type before the refresh lands
+  const [typeList, setTypeList] = useState<TypeOpt[]>(investorTypes);
+  const [typesOpen, setTypesOpen] = useState(false);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("balance");
   const [asc, setAsc] = useState(false);
@@ -230,7 +279,7 @@ export default function AllCustomersExplorer({
           <Users className="h-4 w-4" /> {total.toLocaleString("en-IN")} <span className="font-medium text-brand-blue/70">of {people.length}</span>
         </span>
         {/* deleted things live in the sidebar's Archive section now */}
-        <div className="relative min-w-[200px] flex-1">
+        <div className="relative min-w-[160px] max-w-md flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-faint" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, mobile, UID, project…"
             className="w-full rounded-xl border border-border bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-blue/50" />
@@ -256,8 +305,8 @@ export default function AllCustomersExplorer({
         <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-medium text-fg outline-none focus:border-brand-blue/50">
           {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / page</option>)}
         </select>
-        <button onClick={exportCsv} title="Export CSV" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-fg hover:border-emerald-500/40 hover:text-emerald-600"><Download className="h-4 w-4" /> CSV</button>
-        <button onClick={exportPdf} title="Export PDF" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-fg hover:border-brand-red/40 hover:text-brand-red"><FileText className="h-4 w-4" /> PDF</button>
+        <DownloadMenu onCsv={exportCsv} onPdf={exportPdf} />
+        <button onClick={() => setTypesOpen(true)} title="Add or remove transaction types" className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-fg hover:border-brand-blue/40 hover:text-brand-blue"><Tags className="h-4 w-4" /> Types</button>
         <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-brand-blue px-3 py-2.5 text-sm font-semibold text-white shadow-[var(--shadow-brand)] hover:bg-brand-blue-dark"><UserPlus className="h-4 w-4" /> Add customer</button>
       </div>
 
@@ -324,7 +373,7 @@ export default function AllCustomersExplorer({
                         <button onClick={() => setDetail(p)} title="View holdings" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-faint transition-colors hover:border-brand-blue/40 hover:text-brand-blue"><UserRound className="h-4 w-4" /></button>
                         {isApp && p.app ? (
                           <>
-                            <UserTxns user={p.app} types={investorTypes} projects={investorProjects} />
+                            <UserTxns user={p.app} types={typeList} projects={investorProjects} />
                             <CustomerEdit person={p} projects={hubProjects} />
                             <RowMenu person={p} />
                           </>
@@ -362,7 +411,15 @@ export default function AllCustomersExplorer({
         </div>
       </div>
 
-      {detail && <PersonModal person={detail} onClose={() => setDetail(null)} investorTypes={investorTypes} investorProjects={investorProjects} />}
+      {detail && <PersonModal person={detail} onClose={() => setDetail(null)} investorTypes={typeList} investorProjects={investorProjects} />}
+      {typesOpen && (
+        <TypesModal
+          types={typeList}
+          onAdded={(t) => setTypeList((l) => [...l, t])}
+          onRemoved={(n) => setTypeList((l) => l.filter((x) => x.name !== n))}
+          onClose={() => setTypesOpen(false)}
+        />
+      )}
       {linkBook && bookStub(linkBook) && <LinkModal customer={bookStub(linkBook)!} onClose={() => setLinkBook(null)} />}
       {adding && <CustomerFormModal project={hubProjects[0] ?? { key: "", name: "", type: "real_estate", sort: 0 }} customer={null} projects={hubProjects} onClose={() => setAdding(false)} />}
     </div>

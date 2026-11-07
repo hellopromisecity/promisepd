@@ -2,11 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Wallet, X, Loader2, Plus, Pencil, Trash2, Check, ArrowDown, ArrowUp, Tags } from "lucide-react";
+import { Wallet, X, Loader2, Plus, Pencil, Trash2, Check, ArrowDown, ArrowUp } from "lucide-react";
 import { saveInvestorTransaction, deleteInvestorTransaction, type TxnInput } from "@/app/actions/admin-investments";
 import { toast } from "@/components/ui/Toast";
 import PaymentMethodPicker from "@/components/admin/PaymentMethodPicker";
-import TypeManager from "@/components/admin/TypeManager";
 import { taka, fmtDate, dateInput, initial, avatarTint, type AppUser, type TypeOpt, type ProjectOpt, type UserTxn } from "./shared";
 
 const inputCls = "w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand-blue/50";
@@ -33,11 +32,9 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
   const shown = useMemo(() => (projectId ? user.txns.filter((t) => t.project_id === projectId) : user.txns), [user.txns, projectId]);
   const scopeName = projectId ? projects.find((p) => p.project_id === projectId)?.project_name ?? null : null;
   const [edit, setEdit] = useState<UserTxn | null>(null); // null = adding
-  // the Type dropdown is controlled so a type added in the Manage panel can be
-  // selected on the spot; the list is local so it updates before the refresh
+  // the Type dropdown is controlled (reset on add / cancel / after a save);
+  // types themselves are managed from the All Customers toolbar (v2.7.2)
   const [typeVal, setTypeVal] = useState("");
-  const [typeList, setTypeList] = useState<TypeOpt[]>(types);
-  const [manageTypes, setManageTypes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -138,16 +135,10 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
                 <p className="text-sm font-bold text-fg">{edit ? "Edit transaction" : "Add new transaction"}</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <label className="text-xs font-semibold text-fg-muted">Type</label>
-                      {/* the boss adds / removes types right here (v2.6.9) */}
-                      <button type="button" onClick={() => setManageTypes((v) => !v)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-blue hover:underline">
-                        <Tags className="h-3 w-3" /> {manageTypes ? "Done" : "Manage"}
-                      </button>
-                    </div>
+                    <label className={labelCls}>Type</label>
                     <select name="type" required value={typeVal} onChange={(e) => setTypeVal(e.target.value)} className={inputCls}>
                       <option value="" disabled>— Select —</option>
-                      {typeList.map((t) => <option key={t.name} value={t.name}>{t.name} ({t.operator})</option>)}
+                      {types.map((t) => <option key={t.name} value={t.name}>{t.name} ({t.operator})</option>)}
                     </select>
                   </div>
                   <div>
@@ -155,14 +146,6 @@ export default function UserTxns({ user, types, projects, projectId, initialOpen
                     <input name="amount" type="number" min="0" step="0.01" required defaultValue={edit?.amount ?? ""} placeholder="0" className={inputCls} />
                   </div>
                 </div>
-                {manageTypes && (
-                  <TypeManager
-                    types={typeList}
-                    onAdded={(t) => { setTypeList((l) => [...l, t]); setTypeVal(t.name); }}
-                    onRemoved={(n) => { setTypeList((l) => l.filter((x) => x.name !== n)); if (typeVal === n) setTypeVal(""); }}
-                    onClose={() => setManageTypes(false)}
-                  />
-                )}
                 <div>
                   <label className={labelCls}>Project <span className="font-normal text-fg-faint">(optional)</span></label>
                   <select name="project_id" defaultValue={edit?.project_id ?? projectId ?? ""} className={inputCls}>

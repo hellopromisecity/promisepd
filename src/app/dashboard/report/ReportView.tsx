@@ -53,9 +53,11 @@ function inRange(dateStr: string, range: Range): boolean {
 }
 
 export default function ReportView({
-  reports, staff, canSeeAll, meId,
+  reports, staff, canSeeAll, meId, isOwner = false,
 }: {
   reports: Report[]; staff: Staff[]; canSeeAll: boolean; meId: string;
+  /** The MD's login — the only one who may delete anyone's report, own included. */
+  isOwner?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<string>(canSeeAll ? (staff[0]?.id ?? "") : meId);
@@ -68,6 +70,9 @@ export default function ReportView({
     () => reports.filter((r) => (canSeeAll ? r.member_id === tab : true)).filter((r) => inRange(r.report_date, range)),
     [reports, tab, range, canSeeAll],
   );
+  // a submitted report is final for its author (owner's rule, 2026-11-07):
+  // managers may delete others' reports, the MD anyone's; staff none at all
+  const canDelete = canSeeAll && (isOwner || tab !== meId);
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggle = (id: string) =>
@@ -115,10 +120,12 @@ export default function ReportView({
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
-        <button onClick={toggleAll} disabled={!rows.length} className="grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:bg-bg-soft disabled:opacity-40" title={allSelected ? "Clear" : "Select all"}>
-          {allSelected ? <CheckSquare className="h-[18px] w-[18px] text-brand-blue" /> : <Square className="h-[18px] w-[18px]" />}
-        </button>
-        {selected.size > 0 ? (
+        {canDelete && (
+          <button onClick={toggleAll} disabled={!rows.length} className="grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:bg-bg-soft disabled:opacity-40" title={allSelected ? "Clear" : "Select all"}>
+            {allSelected ? <CheckSquare className="h-[18px] w-[18px] text-brand-blue" /> : <Square className="h-[18px] w-[18px]" />}
+          </button>
+        )}
+        {canDelete && selected.size > 0 ? (
           <button onClick={removeSelected} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-red-tint px-3 py-1.5 text-sm font-semibold text-brand-red-dark hover:bg-brand-red/20 disabled:opacity-60">
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete ({[...selected].filter((id) => rows.some((r) => r.id === id)).length})
           </button>
@@ -148,9 +155,11 @@ export default function ReportView({
             const oneLine = r.body.split("\n")[0];
             return (
               <div key={r.id} className={`flex items-start gap-3 border-b border-border/60 px-3 py-3 transition-colors ${isSel ? "bg-brand-blue-tint/40" : "hover:bg-bg-soft/60"}`}>
-                <button onClick={() => toggle(r.id)} className="mt-0.5 shrink-0 text-fg-muted hover:text-brand-blue" aria-label={isSel ? "Deselect" : "Select"}>
-                  {isSel ? <CheckSquare className="h-[18px] w-[18px] text-brand-blue" /> : <Square className="h-[18px] w-[18px]" />}
-                </button>
+                {canDelete && (
+                  <button onClick={() => toggle(r.id)} className="mt-0.5 shrink-0 text-fg-muted hover:text-brand-blue" aria-label={isSel ? "Deselect" : "Select"}>
+                    {isSel ? <CheckSquare className="h-[18px] w-[18px] text-brand-blue" /> : <Square className="h-[18px] w-[18px]" />}
+                  </button>
+                )}
                 <button onClick={() => toggleExpand(r.id)} className="min-w-0 flex-1 text-left">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <span className="text-xs font-semibold text-fg-muted">{fmtDate(r.report_date)}</span>

@@ -11,10 +11,11 @@
 
 import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Plus, Award, Crown, Medal, Trophy, Trash2, Pencil, X, Loader2, AlertCircle,
   Users, SlidersHorizontal, Check, Search, ChevronDown, ArrowUp, ArrowDown,
-  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet, Save, Eye, StickyNote,
+  ArrowUpDown, ChevronLeft, ChevronRight, Download, FileText, FileSpreadsheet, Save, Eye, StickyNote, ExternalLink,
 } from "lucide-react";
 import { Card } from "@/components/admin/ui";
 import { OFFICER_TYPES, type OfficerType } from "@/lib/marketing";
@@ -243,7 +244,8 @@ export default function MarketingOfficers({
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-semibold text-fg">{o.name}</div>
-                        {o.officer_code && <div className="text-xs text-fg-faint">{o.officer_code}</div>}
+                        {/* mobile · ID on one line (the owner's ask, 2026-11-07) */}
+                        {(o.mobile || o.officer_code) && <div className="text-xs text-fg-faint">{[o.mobile, o.officer_code].filter(Boolean).join(" · ")}</div>}
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-sm font-medium text-fg">{o.position || o.officer_type}</div>
@@ -858,7 +860,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
   }, [officer.id]);
 
   const totals = useMemo(
-    () => entries.reduce((a, e) => ({ afr: a.afr + e.afr, income: a.income + e.income, points: a.points + e.points }), { afr: 0, income: 0, points: 0 }),
+    () => entries.reduce((a, e) => ({ afr: a.afr + e.afr, income: a.income + e.income, points: a.points + e.effectivePoints }), { afr: 0, income: 0, points: 0 }),
     [entries],
   );
   const fmtDate = (iso: string) => {
@@ -901,7 +903,18 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
               <div key={e.id} className="rounded-xl border border-border bg-bg-soft px-3 py-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-fg">{e.client_name || (/FB|Facebook/i.test(e.item_label || "") ? "Like / Comment / Share" : "—")}</div>
+                    {e.link ? (
+                      <Link
+                        href={`/dashboard/projects/all?q=${encodeURIComponent(e.link.q)}${e.link.project ? `&project=${encodeURIComponent(e.link.project)}` : ""}`}
+                        title="Open this customer on All Customers"
+                        className="group inline-flex max-w-full items-center gap-1 truncate text-sm font-semibold text-fg hover:text-brand-blue hover:underline"
+                      >
+                        <span className="truncate">{e.client_name || e.link.q}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0 text-fg-faint group-hover:text-brand-blue" />
+                      </Link>
+                    ) : (
+                      <div className="truncate text-sm font-semibold text-fg">{e.client_name || (/FB|Facebook/i.test(e.item_label || "") ? "Like / Comment / Share" : "—")}</div>
+                    )}
                     {e.item_label && (
                       <span className="mt-0.5 inline-block rounded-md bg-brand-blue-tint px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue-dark">
                         {e.item_label}{e.quantity !== 1 ? ` ×${e.quantity}` : ""}
@@ -924,7 +937,15 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
                   <span className="text-fg-muted">এই সেলে <b className="text-fg">{fmtBDT(e.afr)}</b></span>
                   <span className="text-fg-muted">income <b className="text-emerald-700">{fmtBDT(e.income)}</b></span>
-                  <span className="text-fg-muted">points <b className={e.points < 0 ? "text-brand-red" : "text-brand-blue"}>{signedPts(e.points)}</b></span>
+                  <span className="text-fg-muted">
+                    points <b className={e.effectivePoints < 0 ? "text-brand-red" : "text-brand-blue"}>{signedPts(e.effectivePoints)}</b>
+                    {e.zeroBalance && e.points > 0 && <s className="ml-1 text-fg-faint">{signedPts(e.points)}</s>}
+                  </span>
+                  {e.zeroBalance && (
+                    <span title="The customer's balance in this project is 0 (withdrawn or archived) — no points until they pay in again" className="rounded-md bg-brand-red-tint px-1.5 py-0.5 font-semibold text-brand-red-dark">
+                      ব্যালেন্স ৳0 — পয়েন্ট নেই
+                    </span>
+                  )}
                   {e.clientInvested != null && (
                     // Commission maturity: green once the client's deposit hits
                     // 10× the commission (commission = 10% of deposit) — the

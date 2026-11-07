@@ -26,11 +26,13 @@ export async function submitReport(input: {
     const body = (input.body ?? "").trim();
     if (!body) throw new Error("Report can't be empty.");
 
-    // Default / validate the date (YYYY-MM-DD).
-    const report_date =
-      typeof input.report_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.report_date)
-        ? input.report_date
-        : new Date().toISOString().slice(0, 10);
+    // Today only (the owner's rule, 2026-11-07): a report is for the day it
+    // is written — nobody back-fills yesterday. The day is the Bangladesh
+    // calendar day; the form shows the same date, locked.
+    const todayBD = new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10);
+    const sent = typeof input.report_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.report_date) ? input.report_date : todayBD;
+    if (sent !== todayBD && !me.isOwner) throw new Error(`Reports can only be filed for today (${todayBD}).`);
+    const report_date = sent;
 
     const admin = getAdmin();
     if (!admin) throw new Error("Database isn't configured.");
@@ -64,9 +66,13 @@ export async function deleteReports(ids: string[]): Promise<ActionResult> {
     const clean = (ids ?? []).filter((x) => typeof x === "string" && x);
     if (!clean.length) throw new Error("Nothing selected.");
 
-    let q = admin.from("daily_reports").delete().in("id", clean);
-    if (!isManager(me.role)) q = q.eq("member_id", me.id); // staff → own only
-    const { error } = await q;
+    // A submitted report is final for the person who wrote it (the owner's
+    // rule, 2026-11-07): only managers delete, and never their own — the MD
+    // (owner login) may delete anything.
+    if (!isManager(me.role)) throw new Error("A submitted report can't be deleted or edited.");
+    const { data: owned } = await admin.from("daily_reports").select("id, member_id").in("id", clean);
+    if (!me.isOwner && (owned ?? []).some((r) => r.member_id === me.id)) throw new Error("You can't delete your own submitted reports.");
+    const { error } = await admin.from("daily_reports").delete().in("id", clean);
     if (error) throw new Error(error.message);
 
     await logAudit({

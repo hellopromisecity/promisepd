@@ -7,6 +7,7 @@
  *  consistent ActionResult shape. */
 
 import { revalidatePath } from "next/cache";
+import { referralBalances, effectivePoints } from "@/lib/marketing-balance";
 import {
   requireStaff,
   requireManager,
@@ -64,6 +65,16 @@ export type OfficerHistoryEntry = {
    *  withdrawable once the client has deposited 10× the commission (so the
    *  commission is 10% of the deposit). 100 = payable; below = not yet. */
   clientPct: number | null;
+  /** The book's current net (paid − withdrawn) for the referred customer in
+   *  that project; null when the entry has no linked book row. */
+  clientNet: number | null;
+  /** The customer has withdrawn (zero balance) or the file is archived — this
+   *  referral earns no points right now (the owner's rule, 2026-11-07). */
+  zeroBalance: boolean;
+  /** Points as they count today: 0 while zeroBalance, else `points`. */
+  effectivePoints: number;
+  /** Where to open this customer on All Customers (search + project filter). */
+  link: { q: string; project: string } | null;
 };
 
 const PROFIT_TYPES = new Set(["profit", "profit_share"]);
@@ -177,8 +188,16 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
       return { invested, goal };
     };
 
+    // the linked book rows: current balance (zero → no points) + where the
+    // customer lives on All Customers
+    const balances = await referralBalances(admin);
+
     return entries.map((e) => {
       const pp = perProject((e.client_id as string) ?? null, (e.client_name as string) ?? null, (e.item_label as string) ?? null);
+      const bal = balances.get(e.id as string) ?? null;
+      const zeroBalance = !!bal?.zero;
+      const rawPts = Number(e.points) || 0;
+      const q = (bal?.fileNo || bal?.name || (e.client_id as string) || (e.client_name as string) || "").trim();
       // Commission maturity: payable once the client's deposit reaches
       // 10 × this sale's commission (income). % = progress to that line.
       const income = Number(e.income) || 0;
@@ -198,6 +217,10 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
         clientInvested: pp.invested,
         clientGoal: pp.goal,
         clientPct: pct,
+        clientNet: bal ? bal.net : null,
+        zeroBalance,
+        effectivePoints: effectivePoints(rawPts, zeroBalance),
+        link: q ? { q, project: bal?.projectKey ?? "" } : null,
       };
     });
   } catch {

@@ -2,19 +2,18 @@
 
 /** "Submit today's report" form for the Message box.  Client component:
  *  posts to the submitReport server action, surfaces errors inline, and
- *  refreshes the feed on success. */
+ *  refreshes the feed on success. The date is today (Bangladesh) and locked
+ *  — the owner's rule (2026-11-07): nobody back-fills an earlier day. */
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { submitReport } from "@/app/actions/admin-insights";
 
-const today = () => new Date().toISOString().slice(0, 10);
-
-export default function ReportForm() {
+export default function ReportForm({ today }: { today: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [date, setDate] = useState(today);
+  const date = today;
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -31,7 +30,6 @@ export default function ReportForm() {
       const res = await submitReport({ report_date: date, body: body.trim() });
       if (res.ok) {
         setBody("");
-        setDate(today());
         setDone(true);
         router.refresh();
       } else {
@@ -51,10 +49,14 @@ export default function ReportForm() {
             id="report_date"
             type="date"
             value={date}
-            max={today()}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm outline-none focus:border-brand-blue/50"
+            min={today}
+            max={today}
+            readOnly
+            aria-readonly
+            title="Today only — a report is for the day it is written"
+            className="w-full cursor-not-allowed rounded-xl border border-border bg-bg-soft px-3 py-2.5 text-sm text-fg-muted outline-none"
           />
+          <p className="mt-1 text-[11px] text-fg-faint">Today only — earlier days can&apos;t be filed later.</p>
         </div>
       </div>
 

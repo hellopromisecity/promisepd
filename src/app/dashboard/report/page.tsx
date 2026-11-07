@@ -93,7 +93,7 @@ export default async function ReportPage() {
               <p className="text-xs text-fg-muted">A quick note on what you got done.</p>
             </div>
           </div>
-          <ReportForm />
+          <ReportForm today={today} />
         </Card>
       )}
 
@@ -106,7 +106,7 @@ export default async function ReportPage() {
           ) : (
             team[0] && <PersonalStats me={team[0]} reports={reports} today={today} />
           )}
-          <ReportView reports={reports} staff={staff} canSeeAll={canSeeAll} meId={me.id} />
+          <ReportView reports={reports} staff={staff} canSeeAll={canSeeAll} meId={me.id} isOwner={me.isOwner} />
         </>
       )}
     </div>

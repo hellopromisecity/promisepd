@@ -10,9 +10,12 @@ import AllCustomersExplorer from "../AllCustomersExplorer";
 export const metadata: Metadata = { title: "All Customers", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
-export default async function AllCustomersPage() {
+export default async function AllCustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
+  // ?q=…&project=… → arrive pre-filtered (a marketing officer's referral list links here)
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
   const data = await loadAllCustomers();
   const projectCount = data.projects.filter((p) => p.type !== "investment").length;
@@ -34,6 +37,8 @@ export default async function AllCustomersPage() {
         totals={data.totals}
         investorTypes={data.investorTypes}
         investorProjects={data.investorProjects}
+        initialQ={one(sp.q)}
+        initialProject={one(sp.project)}
       />
     </div>
   );
