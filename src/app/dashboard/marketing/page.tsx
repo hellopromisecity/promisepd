@@ -6,7 +6,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { getAdmin } from "@/lib/admin-guard";
 import { PageHeader, EmptyState } from "@/components/admin/ui";
 import MarketingOfficers, { type Officer, type PointItem, type Entry } from "./MarketingOfficers";
-import { zeroReferralPoints } from "@/lib/marketing-balance";
+import { auditEntries, adjustTotals, adjustEntry } from "@/lib/marketing-balance";
 
 export const metadata: Metadata = {
   title: "Marketing",
@@ -59,14 +59,22 @@ export default async function MarketingOverviewPage() {
       .gte("created_at", since.toISOString()),
     // Lifetime client list per officer (for TUPAC) — distinct buyers an
     // officer logged across all their point-award entries.
-    admin.from("marketing_point_entries").select("officer_id, client_id, client_name"),
+    admin.from("marketing_point_entries").select("id, officer_id, client_id, client_name"),
   ]);
+
+  // What each entry is really worth today (lib/marketing-balance.ts): a
+  // referral whose customer has a zero balance earns no points, and an old
+  // ledger entry that repeats a Projectify one (same officer, same file) — or
+  // a Projectify entry whose book row is gone — counts for nothing at all.
+  // Stored totals stay as awarded; the page takes those off.
+  const audit = await auditEntries(admin);
 
   // TUPAC numerator: distinct clients per officer (key on client_id, else name).
   const clientsByOfficer: Record<string, number> = {};
   {
     const seen: Record<string, Set<string>> = {};
     for (const e of clientsRes.data ?? []) {
+      if (audit.hiddenIds.has(e.id)) continue; // a duplicate / stale entry is not a client of its own
       const key = ((e.client_id ?? "").trim() || (e.client_name ?? "").trim()).toLowerCase();
       if (!key) continue;
       (seen[e.officer_id] ??= new Set<string>()).add(key);
@@ -91,25 +99,18 @@ export default async function MarketingOverviewPage() {
     if (rows.length < 1000) break;
   }
 
-  // The owner's rule (2026-11-07): a referral whose customer now has a zero
-  // balance in that project (withdrawn / archived file) earns no points. The
-  // stored totals stay as awarded; the page subtracts the zero-balance ones.
-  const { zeroIds, byOfficer: zeroPts } = await zeroReferralPoints(admin);
-
   // numeric columns arrive as strings from PostgREST — coerce to numbers.
   const officers: Officer[] = (officersRes.data ?? []).map((o) => ({
     id: o.id, name: o.name, officer_type: o.officer_type, position: o.position,
     district: o.district, officer_code: o.officer_code, mobile: o.mobile,
-    points: Math.round(((Number(o.points) || 0) - (zeroPts.get(o.id) ?? 0)) * 100) / 100,
-    afr: Number(o.afr_total) || 0, income: Number(o.income_total) || 0,
+    ...adjustTotals(audit, o.id, { points: Number(o.points) || 0, afr: Number(o.afr_total) || 0, income: Number(o.income_total) || 0 }),
   }));
   const items: PointItem[] = (itemsRes.data ?? []).map((i) => ({
     id: i.id, label: i.label, points: Number(i.points) || 0, afr: Number(i.afr) || 0, income: Number(i.income) || 0,
   }));
   const entries: Entry[] = (entriesRes.data ?? []).map((e) => ({
     officer_id: e.officer_id,
-    points: zeroIds.has(e.id) && (Number(e.points) || 0) > 0 ? 0 : Number(e.points) || 0,
-    afr: Number(e.afr) || 0, income: Number(e.income) || 0,
+    ...adjustEntry(audit, e.id, { points: Number(e.points) || 0, afr: Number(e.afr) || 0, income: Number(e.income) || 0 }),
     created_at: e.sale_date ? new Date(e.sale_date).toISOString() : e.created_at,
   }));
 

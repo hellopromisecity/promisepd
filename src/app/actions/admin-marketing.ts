@@ -7,7 +7,7 @@
  *  consistent ActionResult shape. */
 
 import { revalidatePath } from "next/cache";
-import { referralBalances, effectivePoints } from "@/lib/marketing-balance";
+import { auditEntries, effectivePoints } from "@/lib/marketing-balance";
 import {
   requireStaff,
   requireManager,
@@ -71,8 +71,12 @@ export type OfficerHistoryEntry = {
   /** The customer has withdrawn (zero balance) or the file is archived — this
    *  referral earns no points right now (the owner's rule, 2026-11-07). */
   zeroBalance: boolean;
-  /** Points as they count today: 0 while zeroBalance, else `points`. */
+  /** Points as they count today: 0 while zeroBalance or duplicate, else `points`. */
   effectivePoints: number;
+  /** An old ledger entry that repeats a Projectify one (same officer, same
+   *  file), or a Projectify entry whose book row is gone — not a referral of
+   *  its own: hidden by default and left out of every total. */
+  duplicate: boolean;
   /** Where to open this customer on All Customers (search + project filter). */
   link: { q: string; project: string } | null;
 };
@@ -188,9 +192,10 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
       return { invested, goal };
     };
 
-    // the linked book rows: current balance (zero → no points) + where the
-    // customer lives on All Customers
-    const balances = await referralBalances(admin);
+    // the audit: linked book rows (current balance → zero means no points,
+    // and where the customer lives) + which entries are duplicates
+    const audit = await auditEntries(admin);
+    const balances = audit.balances;
 
     return entries.map((e) => {
       const pp = perProject((e.client_id as string) ?? null, (e.client_name as string) ?? null, (e.item_label as string) ?? null);
@@ -219,7 +224,8 @@ export async function getOfficerHistory(officerId: string): Promise<OfficerHisto
         clientPct: pct,
         clientNet: bal ? bal.net : null,
         zeroBalance,
-        effectivePoints: effectivePoints(rawPts, zeroBalance),
+        effectivePoints: audit.hiddenIds.has(e.id as string) ? 0 : effectivePoints(rawPts, zeroBalance),
+        duplicate: audit.hiddenIds.has(e.id as string),
         link: q ? { q, project: bal?.projectKey ?? "" } : null,
       };
     });

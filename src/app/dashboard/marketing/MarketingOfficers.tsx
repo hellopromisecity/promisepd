@@ -849,6 +849,8 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
   const [edit, setEdit] = useState<OfficerHistoryEntry | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // duplicates (an old ledger entry repeating a Projectify one) stay hidden unless asked for
+  const [showDup, setShowDup] = useState(false);
   const reload = () => {
     setLoading(true);
     return getOfficerHistory(officer.id).then((e) => { setEntries(e); setLoading(false); });
@@ -860,9 +862,12 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
   }, [officer.id]);
 
   const totals = useMemo(
-    () => entries.reduce((a, e) => ({ afr: a.afr + e.afr, income: a.income + e.income, points: a.points + e.effectivePoints }), { afr: 0, income: 0, points: 0 }),
+    // duplicates are not referrals of their own — out of every total
+    () => entries.filter((e) => !e.duplicate).reduce((a, e) => ({ afr: a.afr + e.afr, income: a.income + e.income, points: a.points + e.effectivePoints }), { afr: 0, income: 0, points: 0 }),
     [entries],
   );
+  const dupCount = useMemo(() => entries.filter((e) => e.duplicate).length, [entries]);
+  const shown = useMemo(() => (showDup ? entries : entries.filter((e) => !e.duplicate)), [entries, showDup]);
   const fmtDate = (iso: string) => {
     try { return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); } catch { return iso; }
   };
@@ -888,7 +893,7 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
           {officer.position || officer.officer_type}{officer.district ? ` · ${officer.district}` : ""}{officer.officer_code ? ` · ${officer.officer_code}` : ""}
         </p>
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label="Referrals" value={String(entries.length)} />
+          <Stat label="Referrals" value={String(entries.length - dupCount)} />
           <Stat label="মোট বিনিয়োগ" value={fmtBDT(totals.afr)} tone="blue" />
           <Stat label="Income" value={fmtBDT(totals.income)} tone="green" />
           <Stat label="Points" value={fmtPts(totals.points)} />
@@ -899,14 +904,16 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
           <p className="py-8 text-center text-sm text-fg-muted">এখনো কোনো রেফার / সেল রেকর্ড নেই।</p>
         ) : (
           <div className="max-h-[48vh] space-y-2 overflow-y-auto pr-1">
-            {entries.map((e) => (
-              <div key={e.id} className="rounded-xl border border-border bg-bg-soft px-3 py-2.5">
+            {shown.map((e) => (
+              <div key={e.id} className={`rounded-xl border px-3 py-2.5 ${e.duplicate ? "border-dashed border-border bg-bg opacity-70" : "border-border bg-bg-soft"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     {e.link ? (
                       <Link
-                        href={`/dashboard/projects/all?q=${encodeURIComponent(e.link.q)}${e.link.project ? `&project=${encodeURIComponent(e.link.project)}` : ""}`}
-                        title="Open this customer on All Customers"
+                        // inside the customer's own project page, list filtered to them
+                        // (the owner's ask, 2026-11-17); All Customers only when the entry has no book row
+                        href={e.link.project ? `/dashboard/projects/${encodeURIComponent(e.link.project)}?q=${encodeURIComponent(e.link.q)}#customers` : `/dashboard/projects/all?q=${encodeURIComponent(e.link.q)}`}
+                        title={e.link.project ? "Open this customer inside their project" : "Open this customer on All Customers"}
                         className="group inline-flex max-w-full items-center gap-1 truncate text-sm font-semibold text-fg hover:text-brand-blue hover:underline"
                       >
                         <span className="truncate">{e.client_name || e.link.q}</span>
@@ -946,6 +953,11 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
                       ব্যালেন্স ৳0 — পয়েন্ট নেই
                     </span>
                   )}
+                  {e.duplicate && (
+                    <span title="The same sale is already counted from Projectify (same officer, same file) — this older ledger entry counts for nothing. Delete it with the trash icon if you want it gone." className="rounded-md bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700">
+                      ডুপ্লিকেট — গণনায় নেই
+                    </span>
+                  )}
                   {e.clientInvested != null && (
                     // Commission maturity: green once the client's deposit hits
                     // 10× the commission (commission = 10% of deposit) — the
@@ -967,6 +979,12 @@ function HistoryDialog({ officer, items, onClose, onChanged }: { officer: Office
               </div>
             ))}
           </div>
+        )}
+        {dupCount > 0 && (
+          <p className="mt-3 text-[11px] text-fg-muted">
+            {dupCount} older ledger {dupCount === 1 ? "entry repeats" : "entries repeat"} a sale already counted from Projectify (same file) — left out of the totals.{" "}
+            <button type="button" onClick={() => setShowDup((v) => !v)} className="font-semibold text-brand-blue hover:underline">{showDup ? "Hide them" : "Show them"}</button>
+          </p>
         )}
       </Modal>
       {edit && (

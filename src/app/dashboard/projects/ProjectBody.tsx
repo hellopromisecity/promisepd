@@ -10,7 +10,7 @@ import type { HubCustomer } from "@/lib/hub";
 import RealEstateInsights, { type InsightMode } from "./RealEstateInsights";
 import HubCustomerList, { type HubProject } from "./HubCustomerList";
 
-export default function ProjectBody({ customers, mode, accrued, details, between, project, profits }: {
+export default function ProjectBody({ customers, mode, accrued, details, between, project, profits, initialQ }: {
   customers: HubCustomer[];
   mode: InsightMode;
   accrued: number;
@@ -19,6 +19,8 @@ export default function ProjectBody({ customers, mode, accrued, details, between
   between?: React.ReactNode;
   project: HubProject;
   profits?: Record<string, number>;
+  /** Open the table already searching for this (name / file number). */
+  initialQ?: string;
 }) {
   const [month, setMonth] = useState<{ key: string; label: string } | null>(null);
   const shown = useMemo(() => (month ? customers.filter((c) => (c.joining_date ?? "").startsWith(month.key)) : customers), [customers, month]);
@@ -34,12 +36,16 @@ export default function ProjectBody({ customers, mode, accrued, details, between
         onMonthClick={(key, label) => setMonth((m) => (m?.key === key ? null : { key, label }))}
       />
       {between}
-      <HubCustomerList
-        customers={shown}
-        project={project}
-        profits={profits}
-        filterNote={month ? { label: `Joined ${month.label} · ${shown.length} ${noun}`, onClear: () => setMonth(null) } : undefined}
-      />
+      {/* #customers — a link from elsewhere (a referral list) lands on the table */}
+      <div id="customers" className="scroll-mt-24">
+        <HubCustomerList
+          customers={shown}
+          project={project}
+          profits={profits}
+          initialQ={initialQ}
+          filterNote={month ? { label: `Joined ${month.label} · ${shown.length} ${noun}`, onClear: () => setMonth(null) } : undefined}
+        />
+      </div>
     </>
   );
 }

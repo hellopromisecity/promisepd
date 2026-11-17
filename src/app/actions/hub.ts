@@ -203,6 +203,18 @@ async function syncCommission(
     const e = rec(data);
     if (!e || e.officer_id !== officerId) { await removeOld(); entryId = null; } // moved to a different officer → recreate
   }
+  // The old office ledger (hand-awarded / imported in June 2026) may already
+  // hold this very sale for this officer — same file number. Adopt that entry
+  // instead of adding a second one: until v2.7.3 a fresh one was always
+  // inserted, which counted 109 referrals twice. Only an entry no other book
+  // row points at can be adopted.
+  if (!entryId && cust.file_no?.trim()) {
+    const { data: cands } = await admin.from("marketing_point_entries").select("id").eq("officer_id", officerId).eq("client_id", cust.file_no.trim()).eq("item_label", label);
+    for (const c of (cands ?? []) as { id: string }[]) {
+      const { data: used } = await HC(admin).select("id").eq("commission_entry_id", c.id).limit(1);
+      if (!((used ?? []) as unknown[]).length) { entryId = c.id; break; }
+    }
+  }
   if (entryId) {
     await admin.from("marketing_point_entries").update(payload).eq("id", entryId);
   } else {

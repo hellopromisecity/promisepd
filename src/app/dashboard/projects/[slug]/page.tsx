@@ -33,11 +33,15 @@ const fmt = (n: number) => {
 };
 const pctTone = (p: number): Tone => (p >= 90 ? "danger" : p >= 60 ? "warning" : p > 0 ? "info" : "neutral");
 
-export default async function ProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProjectDetailPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await getCurrentUser();
   if (!me || !isManager(me.role)) redirect("/account");
 
   const { slug } = await params;
+  // ?q=… → the customer table opens already filtered (a marketing officer's
+  // referral list links here with the customer's file number)
+  const spQ = (await searchParams).q;
+  const initialQ = (Array.isArray(spQ) ? spQ[0] : spQ) ?? "";
   const meta = await hubProjectMeta(slug);
   if (!meta) notFound();
 
@@ -149,6 +153,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         between={profitPanel}
         project={{ key: slug, name: meta.name, type: meta.type, sort: meta.sort }}
         profits={profits}
+        initialQ={initialQ}
       />
 
       {staticProject && (

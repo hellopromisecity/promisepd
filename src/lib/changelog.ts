@@ -25,6 +25,17 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.3",
+    date: "2026-11-17",
+    title: "Marketing: every referral counted once · names open the project",
+    changes: [
+      { kind: "fixed", text: "Many officers and directors showed the same referral twice, with the points doubled. Cause: the old office ledger was entered in June (by hand and by import), and when the same customers were later linked to their officer in Projectify a second entry was added for the same file instead of reusing the first. 109 referrals across 42 officers were counted twice — 132 points, with the fund and income doubled too. Now the Projectify entry is the one that counts; the older entry for the same officer and file is left out of the points, the fund, the income, the period filters, the history and the public leaderboard." },
+      { kind: "improved", text: "An officer's history shows each referral once. A line under the list says how many older duplicate entries are left out, with a Show link to see them (marked “ডুপ্লিকেট — গণনায় নেই”) and delete them if wanted. Nothing was deleted automatically." },
+      { kind: "fixed", text: "Linking a customer to an officer in Projectify now reuses the ledger entry that already exists for that file, so a sale can no longer be added twice." },
+      { kind: "changed", text: "In an officer's history the customer's name now opens that customer inside their own project page (Promise City, Fuzala Tower…), with the table already filtered to them — not the All Customers list." },
+    ],
+  },
+  {
     version: "2.7.2",
     date: "2026-11-07",
     title: "Types from the toolbar · referral points follow the balance · reports are final",

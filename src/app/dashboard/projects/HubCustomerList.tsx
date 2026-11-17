@@ -34,13 +34,15 @@ const decOf = (c: HubCustomer): number | null => {
 };
 const fmtDec = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
-export default function HubCustomerList({ customers, project, projects, profits, filterNote }: {
+export default function HubCustomerList({ customers, project, projects, profits, filterNote, initialQ }: {
   customers: HubCustomer[]; project: HubProject; projects?: HubProject[]; profits?: Record<string, number>;
+  /** Start with the search box filled (the project page's ?q=…). */
+  initialQ?: string;
   /** External filter already applied to `customers` (e.g. a clicked "New customers" month) — shown as a chip with a clear button. */
   filterNote?: { label: string; onClear: () => void };
 }) {
   const isAll = !!projects;
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQ ?? "");
   const [projFilter, setProjFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("remaining");
   const [asc, setAsc] = useState(false);

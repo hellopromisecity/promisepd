@@ -5,7 +5,7 @@ import { breadcrumbSchema } from "@/lib/schema";
 import { getSiteUrl, absoluteUrl } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { officerTypeLabel } from "@/lib/marketing";
-import { zeroReferralPoints } from "@/lib/marketing-balance";
+import { auditEntries, adjustTotals, adjustEntry } from "@/lib/marketing-balance";
 
 const SITE_URL = getSiteUrl();
 const OG_IMAGE = absoluteUrl("/og-image.jpg");
@@ -52,8 +52,9 @@ export async function getLeaderboardData(): Promise<{ officers: LbOfficer[]; ent
         .select("id, officer_id, points, income, sale_date, created_at")
         .gte("created_at", since.toISOString()),
     ]);
-    // a referral whose customer withdrew (zero balance) earns no points
-    const { zeroIds, byOfficer: zeroPts } = await zeroReferralPoints(admin);
+    // same audit as the dashboard: zero-balance referrals earn no points and
+    // duplicate / stale ledger entries count for nothing
+    const audit = await auditEntries(admin);
 
     const officers: LbOfficer[] = (oRes.data ?? []).map((o) => ({
       id: o.id,
@@ -62,13 +63,11 @@ export async function getLeaderboardData(): Promise<{ officers: LbOfficer[]; ent
       mobile: o.mobile,
       type: o.officer_type,
       sub: [o.position, o.district].filter(Boolean).join(" · ") || officerTypeLabel(o.officer_type),
-      points: Math.round(((Number(o.points) || 0) - (zeroPts.get(o.id) ?? 0)) * 100) / 100,
-      income: Number(o.income_total) || 0,
+      ...(({ points, income }) => ({ points, income }))(adjustTotals(audit, o.id, { points: Number(o.points) || 0, afr: 0, income: Number(o.income_total) || 0 })),
     }));
     const entries: LbEntry[] = (eRes.data ?? []).map((e) => ({
       officer_id: e.officer_id,
-      points: zeroIds.has(e.id) && (Number(e.points) || 0) > 0 ? 0 : Number(e.points) || 0,
-      income: Number(e.income) || 0,
+      ...(({ points, income }) => ({ points, income }))(adjustEntry(audit, e.id, { points: Number(e.points) || 0, afr: 0, income: Number(e.income) || 0 })),
       created_at: e.sale_date ? new Date(e.sale_date).toISOString() : e.created_at,
     }));
     return { officers, entries };
