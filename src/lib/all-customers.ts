@@ -172,16 +172,18 @@ export async function loadAllCustomers(): Promise<AllCustomersData> {
   // project pages — so a fully-withdrawn deposit shows its TRUE remaining
   // (e.g. principal 8,00,000 + accrued 81,044 − withdrawn 8,81,044 = 0,
   // not −81,044 just because the dividend wasn't recorded as a row) ──
+  // the schemes are independent (each has its own members), so they are
+  // worked out together rather than one after another (v2.7.4)
   const accrued = new Map<string, number>();
-  for (const s of summaries.filter((x) => x.type === "deposit")) {
+  await Promise.all(summaries.filter((x) => x.type === "deposit").map(async (s) => {
     try {
       const cfg = await getProfitConfig(s.key);
-      if (!cfg.enabled) continue;
+      if (!cfg.enabled) return;
       const ids = customers.filter((c) => c.project_key === s.key).map((c) => c.id);
       const m = await accruedProfitByCustomer(ids, cfg);
       for (const [id, v] of m) accrued.set(id, v);
     } catch { /* a scheme without a rate simply shows recorded dividends */ }
-  }
+  }));
   const hubAcc = (c: HubCustomer) => accrued.get(c.id) ?? 0;
 
   // app project → book project (fixed naming so we land on the real 9)

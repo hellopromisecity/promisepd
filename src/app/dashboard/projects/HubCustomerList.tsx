@@ -308,6 +308,8 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
   const [price, setPrice] = useState(customer ? String(customer.total_price || "") : "");
   const [joining, setJoining] = useState(customer?.joining_date ?? "");
   const [expiry, setExpiry] = useState(String((customer?.bio?.expiry_date as string) ?? ""));
+  // each customer's own monthly installment — optional (the owner's ask, 2026-11-18)
+  const [monthly, setMonthly] = useState(customer?.bio?.monthly_installment ? String(customer.bio.monthly_installment) : "");
   const [refId, setRefId] = useState<string | null>((customer as unknown as { reference_officer_id?: string })?.reference_officer_id ?? null);
   const [refName, setRefName] = useState(customer?.reference ?? "");
   const [email, setEmail] = useState("");
@@ -323,7 +325,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
     setErr(null);
     if (!name.trim()) { setErr("Name is required."); return; }
     const input: CustomerInput = {
-      name, file_no: file, mobile, district, total_price: parseFloat(price) || 0, joining_date: joining, expiry_date: expiry, reference: refName, reference_officer_id: refId, email, password,
+      name, file_no: file, mobile, district, total_price: parseFloat(price) || 0, joining_date: joining, expiry_date: expiry, monthly_installment: monthly, reference: refName, reference_officer_id: refId, email, password,
       ...(isLand ? { shares: decimal, decimal, road, plot, block } : { shares }),
     };
     start(async () => {
@@ -354,7 +356,7 @@ export function CustomerFormModal({ project, customer, projects, onClose }: { pr
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={labelCls}>Last date to pay <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
-          <p className="flex items-end pb-1 text-[11px] leading-snug text-fg-faint">কিস্তি শেষ করার শেষ তারিখ — ভবিষ্যতে দৈনিক/মাসিক কত দিতে হবে, তা এখান থেকে হিসাব হবে।</p>
+          <div><label className={labelCls}>Monthly installment ৳ <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" inputMode="decimal" className={inputCls} value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="e.g. 10000" /></div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {isLand ? (
@@ -673,6 +675,7 @@ export function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCu
     ["NID", customer.nid], ["Nominee", b("nominee_name") ? `${b("nominee_name")}${b("nominee_relationship") ? ` (${b("nominee_relationship")})` : ""}` : null],
     ["Nominee mobile", b("nominee_mobile")], ["Unit", [b("block") && `Block ${b("block")}`, b("plot") && `Plot ${b("plot")}`, b("flat") && `Flat ${b("flat")}`, b("flat_size")].filter(Boolean).join(" · ") || null], ["Shares", b("shares")],
     ["Last date to pay", b("expiry_date") ? fmtDate(b("expiry_date")) : null],
+    ["Monthly installment", Number(bio.monthly_installment) > 0 ? fmt(Number(bio.monthly_installment)) : null],
   ];
   return (
     <Modal title={customer.name || "—"} subtitle={`${customer.project_name} · File ${customer.file_no ?? "—"}${customer.mobile ? ` · ${customer.mobile}` : ""}${customer.reference ? ` · ref ${customer.reference}` : ""}`} onClose={onClose} wide>

@@ -42,7 +42,29 @@ export default async function MarketingOverviewPage() {
   const since = new Date();
   since.setFullYear(since.getFullYear() - 2);
 
-  const [officersRes, itemsRes, entriesRes, clientsRes] = await Promise.all([
+  // Company-wide investor figures: total paying users (TUPAC denominator) and
+  // total fund raised (TFRAF denominator).  Paged — a plain select caps at 1000.
+  const companyFigures = async () => {
+    let payingUsers = 0;
+    let companyFund = 0;
+    for (let from = 0; ; from += 1000) {
+      const { data } = await admin.from("investor_accounts").select("balance").range(from, from + 999);
+      const rows = data ?? [];
+      for (const r of rows) {
+        const b = (r.balance ?? {}) as { total_investment?: number; total_balance?: number };
+        const inv = Number(b.total_investment) || 0;
+        const bal = Number(b.total_balance) || 0;
+        if (inv > 0 || bal > 0) payingUsers++;
+        companyFund += inv;
+      }
+      if (rows.length < 1000) break;
+    }
+    return { payingUsers, companyFund };
+  };
+
+  // Speed (v2.7.4): the ledger audit and the company figures used to wait for
+  // the four queries below; none of them depends on another, so all run together.
+  const [officersRes, itemsRes, entriesRes, clientsRes, audit, { payingUsers, companyFund }] = await Promise.all([
     admin
       .from("marketing_officers")
       .select("id, name, officer_type, position, district, officer_code, mobile, points, afr_total, income_total")
@@ -60,14 +82,14 @@ export default async function MarketingOverviewPage() {
     // Lifetime client list per officer (for TUPAC) — distinct buyers an
     // officer logged across all their point-award entries.
     admin.from("marketing_point_entries").select("id, officer_id, client_id, client_name"),
+    // What each entry is really worth today (lib/marketing-balance.ts): a
+    // referral whose customer has a zero balance earns no points, and an old
+    // ledger entry that repeats a Projectify one (same officer, same file) — or
+    // a Projectify entry whose book row is gone — counts for nothing at all.
+    // Stored totals stay as awarded; the page takes those off.
+    auditEntries(admin),
+    companyFigures(),
   ]);
-
-  // What each entry is really worth today (lib/marketing-balance.ts): a
-  // referral whose customer has a zero balance earns no points, and an old
-  // ledger entry that repeats a Projectify one (same officer, same file) — or
-  // a Projectify entry whose book row is gone — counts for nothing at all.
-  // Stored totals stay as awarded; the page takes those off.
-  const audit = await auditEntries(admin);
 
   // TUPAC numerator: distinct clients per officer (key on client_id, else name).
   const clientsByOfficer: Record<string, number> = {};
@@ -82,22 +104,6 @@ export default async function MarketingOverviewPage() {
     for (const id in seen) clientsByOfficer[id] = seen[id].size;
   }
 
-  // Company-wide investor figures: total paying users (TUPAC denominator) and
-  // total fund raised (TFRAF denominator).  Paged — a plain select caps at 1000.
-  let payingUsers = 0;
-  let companyFund = 0;
-  for (let from = 0; ; from += 1000) {
-    const { data } = await admin.from("investor_accounts").select("balance").range(from, from + 999);
-    const rows = data ?? [];
-    for (const r of rows) {
-      const b = (r.balance ?? {}) as { total_investment?: number; total_balance?: number };
-      const inv = Number(b.total_investment) || 0;
-      const bal = Number(b.total_balance) || 0;
-      if (inv > 0 || bal > 0) payingUsers++;
-      companyFund += inv;
-    }
-    if (rows.length < 1000) break;
-  }
 
   // numeric columns arrive as strings from PostgREST — coerce to numbers.
   const officers: Officer[] = (officersRes.data ?? []).map((o) => ({

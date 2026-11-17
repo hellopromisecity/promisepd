@@ -232,11 +232,21 @@ export type CustomerInput = {
   /** Last date to pay (installment deadline) — stored in bio.expiry_date;
    *  future features (per-day/week/month dues) compute from it. */
   expiry_date?: string;
+  /** The monthly installment (৳) agreed with THIS customer — every customer's
+   *  differs, so it is entered per file. Optional; stored in
+   *  bio.monthly_installment. Empty / 0 = none. */
+  monthly_installment?: string | number | null;
   /** App-login extras (create only): the account is made alongside the customer. */
   email?: string; password?: string;
   /** Promise City (land) only — stored in bio: decimal (শতাংশ) + road / plot /
    *  block. Sent only by the land form, so other projects never touch them. */
   decimal?: string; road?: string; plot?: string; block?: string;
+};
+
+/** A typed installment → a positive amount, or null when left empty. */
+const installmentOf = (v: unknown): number | null => {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? r2(n) : null;
 };
 
 /** The land fields, only for the keys the form actually sent — an update from
@@ -262,7 +272,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
       file_no: input.file_no || null, name: input.name.trim(), mobile: input.mobile || null, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, ...landBio(input) },
+      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, monthly_installment: installmentOf(input.monthly_installment), ...landBio(input) },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -707,7 +717,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
       file_no: input.file_no || (acc.fid as string) || null, name: acc.full_name as string, mobile, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, ...landBio(input) },
+      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, monthly_installment: installmentOf(input.monthly_installment), ...landBio(input) },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -734,6 +744,8 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
       shares: input.shares || (cur.bio as Record<string, unknown>)?.shares || null,
       // the form always sends expiry_date — an empty value CLEARS it
       expiry_date: "expiry_date" in input ? (input.expiry_date || null) : ((cur.bio as Record<string, unknown>)?.expiry_date ?? null),
+      // same rule for the monthly installment: sent → set or cleared; not sent → kept as it is
+      monthly_installment: "monthly_installment" in input ? installmentOf(input.monthly_installment) : ((cur.bio as Record<string, unknown>)?.monthly_installment ?? null),
       ...landBio(input),
     };
     await HC(admin).update({
@@ -771,12 +783,12 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     const newBio = bio as Record<string, unknown>;
     const pick = (src: Record<string, unknown>, b: Record<string, unknown>) => ({
       name: src.name, file_no: src.file_no, mobile: src.mobile, district: src.district, reference: src.reference, joining_date: src.joining_date, total_price: src.total_price,
-      expiry_date: b.expiry_date ?? null, shares: b.shares ?? null, decimal: b.decimal ?? null, road: b.road ?? null, plot: b.plot ?? null, block: b.block ?? null,
+      expiry_date: b.expiry_date ?? null, monthly_installment: b.monthly_installment ?? null, shares: b.shares ?? null, decimal: b.decimal ?? null, road: b.road ?? null, plot: b.plot ?? null, block: b.block ?? null,
     });
     const after = pick({ name: input.name.trim(), file_no: input.file_no || null, mobile: input.mobile || null, district: input.district || null, reference: input.reference || null, joining_date: input.joining_date || null, total_price: r2(input.total_price) }, newBio);
     await logAudit({
       action: "update", entity: "hub_customer", entityId: id,
-      detail: withChanges(`Edited customer ${String(cur.name ?? "")} · ${String(cur.project_name ?? projectKey)} · file ${String(cur.file_no ?? "—")}`, diffDetail(pick(cur, curBio), after, { file_no: "file no", joining_date: "joining date", total_price: "price", expiry_date: "last date to pay", reference: "reference officer" })) + (splitNote ? `\nown app account set up for the new number` : ""),
+      detail: withChanges(`Edited customer ${String(cur.name ?? "")} · ${String(cur.project_name ?? projectKey)} · file ${String(cur.file_no ?? "—")}`, diffDetail(pick(cur, curBio), after, { file_no: "file no", joining_date: "joining date", total_price: "price", expiry_date: "last date to pay", monthly_installment: "monthly installment", reference: "reference officer" })) + (splitNote ? `\nown app account set up for the new number` : ""),
     });
 
     revalidatePath(`/dashboard/projects/${projectKey}`);

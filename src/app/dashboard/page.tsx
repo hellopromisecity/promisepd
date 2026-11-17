@@ -45,13 +45,19 @@ async function recentLeads() {
 
 export default async function AdminDashboard() {
   const admin = getAdmin();
-  const [members, leads, recentLeadsList, blogCount, sms, bookRows] = await Promise.all([
-    tableCount("profiles"),
-    tableCount("contact_submissions"),
-    recentLeads(),
-    publishedBlogCount(),
-    smsStats(),
-    hubAllCustomers(),
+  // Speed (v2.7.4): the site figures and the investment figures don't depend
+  // on each other, so both groups are read together instead of one after the
+  // other. Same reads, same numbers.
+  const [[members, leads, recentLeadsList, blogCount, sms, bookRows], invData] = await Promise.all([
+    Promise.all([
+      tableCount("profiles"),
+      tableCount("contact_submissions"),
+      recentLeads(),
+      publishedBlogCount(),
+      smsStats(),
+      hubAllCustomers(),
+    ]),
+    admin ? Promise.all([listInvestors(admin), listProjects(admin), listTypes(admin), listTransactions(admin), loadAllCustomers()]) : Promise.resolve(null),
   ]);
 
   // Real-estate sales ledger — the SAME rule the project pages use for their
@@ -83,12 +89,12 @@ export default async function AdminDashboard() {
     txns: [], funding: [], topInvestors: [], recentTxns: [],
   };
 
-  if (admin) {
+  if (admin && invData) {
     // Projectify's All Customers is the source of truth for the headline
     // cards — the exact numbers the user sees on /dashboard/projects
     // (book + app merged, one row per person, accrued dividends included).
     const [investors, projects, types, txns, ac]: [InvestorAccount[], InvestmentProject[], InvestmentType[], InvestorTransaction[], Awaited<ReturnType<typeof loadAllCustomers>>] =
-      await Promise.all([listInvestors(admin), listProjects(admin), listTypes(admin), listTransactions(admin), loadAllCustomers()]);
+      invData;
 
     const op = new Map(types.map((t) => [t.name, t.operator]));
     const pname = new Map(projects.map((p) => [p.project_id, p.project_name]));

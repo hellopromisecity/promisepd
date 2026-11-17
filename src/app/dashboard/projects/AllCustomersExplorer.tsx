@@ -565,6 +565,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   const [district, setDistrict] = useState("");
   const [joining, setJoining] = useState("");
   const [expiry, setExpiry] = useState("");
+  const [monthly, setMonthly] = useState(""); // this file's monthly installment — optional
   const [shares, setShares] = useState("");
   // Promise City (land): decimal (শতাংশ) + road / plot / block instead of shares
   const [decimal, setDecimal] = useState("");
@@ -611,7 +612,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
     setErr(null); setMsg(null);
     if (!projKey) { setErr("Pick a project."); return; }
     const input: Omit<CustomerInput, "name" | "email" | "password"> = {
-      file_no: file, district, joining_date: joining, expiry_date: expiry, total_price: parseFloat(price) || 0,
+      file_no: file, district, joining_date: joining, expiry_date: expiry, monthly_installment: monthly, total_price: parseFloat(price) || 0,
       reference: refName, reference_officer_id: refId,
       // land: decimals drive the commission quantity (জমি — প্রতি শতাংশ) the way shares do elsewhere
       ...(isLand ? { shares: decimal, decimal, road, plot, block } : { shares }),
@@ -686,7 +687,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className={labelCls}>Last date to pay <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
-                  <p className="flex items-end pb-1 text-[11px] leading-snug text-fg-faint">কিস্তি শেষ করার শেষ তারিখ।</p>
+                  <div><label className={labelCls}>Monthly installment ৳ <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" inputMode="decimal" className={inputCls} value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="e.g. 10000" /></div>
                 </div>
                 {isLand ? (
                   <>

@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.4",
+    date: "2026-11-18",
+    title: "Monthly installment per customer · pages load faster",
+    changes: [
+      { kind: "new", text: "Add customer / Edit customer has a Monthly installment field next to Last date to pay — every customer's installment is different, so the office enters it per file. It is optional; leave it empty and nothing changes. It shows in the customer's details and edits are written to the audit log." },
+      { kind: "improved", text: "Speed: the project pages, the Dashboard home, All Customers and Marketing used to read the database in several steps, each waiting for the one before. Steps that don't depend on each other now run together — a project page makes three round-trips instead of seven. Only the order of reading changed; what is read, and every figure on screen, is the same." },
+    ],
+  },
+  {
     version: "2.7.3",
     date: "2026-11-17",
     title: "Marketing: every referral counted once · names open the project",

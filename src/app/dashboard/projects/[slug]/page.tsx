@@ -42,20 +42,36 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
   // referral list links here with the customer's file number)
   const spQ = (await searchParams).q;
   const initialQ = (Array.isArray(spQ) ? spQ[0] : spQ) ?? "";
-  const meta = await hubProjectMeta(slug);
+  // Speed (v2.7.4): the same reads as before, but what depends only on the
+  // slug is fetched together, then what needs the customer list — three
+  // round-trip stages instead of seven one after another. Nothing else changed.
+  const admin = getAdmin();
+  const [meta, customers, appProjects] = await Promise.all([
+    hubProjectMeta(slug),
+    hubProjectCustomers(slug),
+    // this book project's matching APP project is looked up among these (below)
+    admin ? listProjects(admin) : Promise.resolve([] as Awaited<ReturnType<typeof listProjects>>),
+  ]);
   if (!meta) notFound();
 
-  const admin = getAdmin();
-  const customers = await hubProjectCustomers(slug);
+  const isDeposit = meta.type === "deposit";
+  const staticProject = PROJECTS.find((p) => p.slug === slug);
+  const customerIds = customers.map((c) => c.id);
+  const [flowTxns, deposit, overrideRes] = await Promise.all([
+    hubProjectFlowTxns(customerIds),
+    // deposit schemes: the rate, then each member's accrued dividend
+    isDeposit ? getProfitConfig(slug).then(async (cfg) => ({ cfg, accrued: await accruedProfitByCustomer(customerIds, cfg) })) : Promise.resolve(null),
+    // real-estate projects: the public-site availability override
+    staticProject && admin ? admin.from("project_overrides").select("slug, status, share_map, buildings").eq("slug", slug).maybeSingle() : Promise.resolve(null),
+  ]);
+
   const payers = customers.filter((c) => c.total_paid > 0).length;
   const raised = customers.reduce((s, c) => s + c.total_paid, 0);
   const payments = customers.reduce((s, c) => s + c.payments_count, 0);
-  const flowTxns = await hubProjectFlowTxns(customers.map((c) => c.id));
 
   // This book project's matching APP project (same real project, matched by
   // name) — its rich metadata is what the app/PWA reads. Surfacing it here lets
   // one edit update the book view, the app, and the investor PWA together.
-  const appProjects = admin ? await listProjects(admin) : [];
   const linkedProj = matchHubProject(appProjects, meta.name);
   const editable: EditableProject | null = linkedProj
     ? {
@@ -76,12 +92,10 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
 
   // Deposit schemes: accrue each member's dividend per day from every deposit's
   // date until the payout date (rate is editable in the panel below).
-  const isDeposit = meta.type === "deposit";
   let profits: Record<string, number> | undefined;
   let profitPanel: React.ReactNode = null;
-  if (isDeposit) {
-    const cfg = await getProfitConfig(slug);
-    const accrued = await accruedProfitByCustomer(customers.map((c) => c.id), cfg);
+  if (deposit) {
+    const { cfg, accrued } = deposit;
     profits = {};
     for (const c of customers) { const a = accrued.get(c.id) || 0; if (a) profits[c.id] = a; }
     profitPanel = (
@@ -102,14 +116,7 @@ export default async function ProjectDetailPage({ params, searchParams }: { para
     : raised;
 
   // Real-estate projects also expose the public-site availability editor.
-  const staticProject = PROJECTS.find((p) => p.slug === slug);
-  let override: OverrideRow | null = null;
-  if (staticProject) {
-    if (admin) {
-      const { data } = await admin.from("project_overrides").select("slug, status, share_map, buildings").eq("slug", slug).maybeSingle();
-      override = (data as OverrideRow | null) ?? null;
-    }
-  }
+  const override: OverrideRow | null = (overrideRes?.data as OverrideRow | null | undefined) ?? null;
   const model = staticProject ? projectModel(staticProject) : "none";
   const st = staticProject ? sellThrough(staticProject, override) : null;
   const ovShare = shareMapFromOverride(override);
