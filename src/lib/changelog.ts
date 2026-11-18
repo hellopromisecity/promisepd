@@ -25,6 +25,14 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.5",
+    date: "2026-11-18",
+    title: "Promise City: customer details show Decimal",
+    changes: [
+      { kind: "fixed", text: "Promise City: the customer details popup (the eye button) labelled the land size “Shares”. It now reads “Decimal” (শতাংশ), the same figure as the Decimal column in the table, and the decimals no longer repeat inside the Unit line. Road number joins Block and Plot there when it is on file. Other projects still show Shares." },
+    ],
+  },
+  {
     version: "2.7.4",
     date: "2026-11-18",
     title: "Monthly installment per customer · pages load faster",

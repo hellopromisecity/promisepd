@@ -669,11 +669,18 @@ export function HistoryModal({ customer, isDeposit, onClose }: { customer: HubCu
   useEffect(() => { let a = true; getHubCustomerDetail(customer.id).then((d) => { if (a) setPayments(d?.payments ?? []); }); return () => { a = false; }; }, [customer.id]);
   const bio = customer.bio || {};
   const b = (k: string) => (bio[k] as string) || null;
+  // Promise City sells land: the row shows Decimal (শতাংশ) like the table column,
+  // not Shares. The book import kept the decimals in flat_size, so for land that
+  // value belongs on the Decimal row rather than inside Unit.
+  const isLand = customer.project_key === "promise-city";
+  const dec = decOf(customer);
   const bioRows: [string, string | null][] = [
     ["Father / Husband", b("father_husband")], ["Mother", b("mother")],
     ["Address", [b("village"), b("post_office"), b("police_station"), customer.district].filter(Boolean).join(", ") || null],
     ["NID", customer.nid], ["Nominee", b("nominee_name") ? `${b("nominee_name")}${b("nominee_relationship") ? ` (${b("nominee_relationship")})` : ""}` : null],
-    ["Nominee mobile", b("nominee_mobile")], ["Unit", [b("block") && `Block ${b("block")}`, b("plot") && `Plot ${b("plot")}`, b("flat") && `Flat ${b("flat")}`, b("flat_size")].filter(Boolean).join(" · ") || null], ["Shares", b("shares")],
+    ["Nominee mobile", b("nominee_mobile")],
+    ["Unit", [isLand && b("road") && `Road ${b("road")}`, b("block") && `Block ${b("block")}`, b("plot") && `Plot ${b("plot")}`, b("flat") && `Flat ${b("flat")}`, !isLand && b("flat_size")].filter(Boolean).join(" · ") || null],
+    isLand ? ["Decimal", dec != null ? fmtDec(dec) : null] : ["Shares", b("shares")],
     ["Last date to pay", b("expiry_date") ? fmtDate(b("expiry_date")) : null],
     ["Monthly installment", Number(bio.monthly_installment) > 0 ? fmt(Number(bio.monthly_installment)) : null],
   ];
