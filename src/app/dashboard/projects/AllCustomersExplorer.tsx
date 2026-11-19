@@ -566,6 +566,8 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
   const [joining, setJoining] = useState("");
   const [expiry, setExpiry] = useState("");
   const [monthly, setMonthly] = useState(""); // this file's monthly installment — optional
+  const [booking, setBooking] = useState(""); // agreed booking money — optional
+  const [yearly, setYearly] = useState(""); // agreed yearly installment — optional
   const [shares, setShares] = useState("");
   // Promise City (land): decimal (শতাংশ) + road / plot / block instead of shares
   const [decimal, setDecimal] = useState("");
@@ -612,7 +614,7 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
     setErr(null); setMsg(null);
     if (!projKey) { setErr("Pick a project."); return; }
     const input: Omit<CustomerInput, "name" | "email" | "password"> = {
-      file_no: file, district, joining_date: joining, expiry_date: expiry, monthly_installment: monthly, total_price: parseFloat(price) || 0,
+      file_no: file, district, joining_date: joining, expiry_date: expiry, monthly_installment: monthly, booking_money: booking, yearly_installment: yearly, total_price: parseFloat(price) || 0,
       reference: refName, reference_officer_id: refId,
       // land: decimals drive the commission quantity (জমি — প্রতি শতাংশ) the way shares do elsewhere
       ...(isLand ? { shares: decimal, decimal, road, plot, block } : { shares }),
@@ -685,9 +687,13 @@ function CustomerEdit({ person, projects }: { person: PersonRow; projects: HubPr
                   <div><label className={labelCls}>District</label><input className={inputCls} value={district} onChange={(e) => setDistrict(e.target.value)} /></div>
                   <div><label className={labelCls}>Total price ৳</label><input type="number" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} /></div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 items-end gap-3">
                   <div><label className={labelCls}>Last date to pay <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="date" className={inputCls} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
                   <div><label className={labelCls}>Monthly installment ৳ <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" inputMode="decimal" className={inputCls} value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="e.g. 10000" /></div>
+                </div>
+                <div className="grid grid-cols-2 items-end gap-3">
+                  <div><label className={labelCls}>Booking money ৳ <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" inputMode="decimal" className={inputCls} value={booking} onChange={(e) => setBooking(e.target.value)} placeholder="e.g. 100000" /></div>
+                  <div><label className={labelCls}>Yearly installment ৳ <span className="font-normal normal-case text-fg-faint">(optional)</span></label><input type="number" min={0} step="any" inputMode="decimal" className={inputCls} value={yearly} onChange={(e) => setYearly(e.target.value)} placeholder="e.g. 120000" /></div>
                 </div>
                 {isLand ? (
                   <>

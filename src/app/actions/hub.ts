@@ -236,6 +236,12 @@ export type CustomerInput = {
    *  differs, so it is entered per file. Optional; stored in
    *  bio.monthly_installment. Empty / 0 = none. */
   monthly_installment?: string | number | null;
+  /** The booking money (৳) and the yearly installment (৳) agreed for this
+   *  file — the PLAN, not a payment: money received is still recorded as a
+   *  transaction. Not every project uses them, so both are optional; stored in
+   *  bio.booking_money and bio.yearly_installment. Empty / 0 = none. */
+  booking_money?: string | number | null;
+  yearly_installment?: string | number | null;
   /** App-login extras (create only): the account is made alongside the customer. */
   email?: string; password?: string;
   /** Promise City (land) only — stored in bio: decimal (শতাংশ) + road / plot /
@@ -272,7 +278,7 @@ export async function createHubCustomer(project: { key: string; name: string; ty
       file_no: input.file_no || null, name: input.name.trim(), mobile: input.mobile || null, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, monthly_installment: installmentOf(input.monthly_installment), ...landBio(input) },
+      bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, monthly_installment: installmentOf(input.monthly_installment), booking_money: installmentOf(input.booking_money), yearly_installment: installmentOf(input.yearly_installment), ...landBio(input) },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -717,7 +723,7 @@ export async function assignCustomerToProject(uid: string, projectKey: string, i
       file_no: input.file_no || (acc.fid as string) || null, name: acc.full_name as string, mobile, district: input.district || null,
       reference: input.reference || null, reference_officer_id: input.reference_officer_id || null,
       joining_date: input.joining_date || null, total_price: r2(input.total_price), total_paid: 0, payments_count: 0,
-      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, monthly_installment: installmentOf(input.monthly_installment), ...landBio(input) },
+      investor_uid: uid, bio: { shares: input.shares || null, expiry_date: input.expiry_date || null, monthly_installment: installmentOf(input.monthly_installment), booking_money: installmentOf(input.booking_money), yearly_installment: installmentOf(input.yearly_installment), ...landBio(input) },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     const cid = rec(data)?.id as string;
@@ -746,6 +752,8 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
       expiry_date: "expiry_date" in input ? (input.expiry_date || null) : ((cur.bio as Record<string, unknown>)?.expiry_date ?? null),
       // same rule for the monthly installment: sent → set or cleared; not sent → kept as it is
       monthly_installment: "monthly_installment" in input ? installmentOf(input.monthly_installment) : ((cur.bio as Record<string, unknown>)?.monthly_installment ?? null),
+      booking_money: "booking_money" in input ? installmentOf(input.booking_money) : ((cur.bio as Record<string, unknown>)?.booking_money ?? null),
+      yearly_installment: "yearly_installment" in input ? installmentOf(input.yearly_installment) : ((cur.bio as Record<string, unknown>)?.yearly_installment ?? null),
       ...landBio(input),
     };
     await HC(admin).update({
@@ -783,12 +791,12 @@ export async function updateHubCustomer(id: string, projectKey: string, input: C
     const newBio = bio as Record<string, unknown>;
     const pick = (src: Record<string, unknown>, b: Record<string, unknown>) => ({
       name: src.name, file_no: src.file_no, mobile: src.mobile, district: src.district, reference: src.reference, joining_date: src.joining_date, total_price: src.total_price,
-      expiry_date: b.expiry_date ?? null, monthly_installment: b.monthly_installment ?? null, shares: b.shares ?? null, decimal: b.decimal ?? null, road: b.road ?? null, plot: b.plot ?? null, block: b.block ?? null,
+      expiry_date: b.expiry_date ?? null, monthly_installment: b.monthly_installment ?? null, booking_money: b.booking_money ?? null, yearly_installment: b.yearly_installment ?? null, shares: b.shares ?? null, decimal: b.decimal ?? null, road: b.road ?? null, plot: b.plot ?? null, block: b.block ?? null,
     });
     const after = pick({ name: input.name.trim(), file_no: input.file_no || null, mobile: input.mobile || null, district: input.district || null, reference: input.reference || null, joining_date: input.joining_date || null, total_price: r2(input.total_price) }, newBio);
     await logAudit({
       action: "update", entity: "hub_customer", entityId: id,
-      detail: withChanges(`Edited customer ${String(cur.name ?? "")} · ${String(cur.project_name ?? projectKey)} · file ${String(cur.file_no ?? "—")}`, diffDetail(pick(cur, curBio), after, { file_no: "file no", joining_date: "joining date", total_price: "price", expiry_date: "last date to pay", monthly_installment: "monthly installment", reference: "reference officer" })) + (splitNote ? `\nown app account set up for the new number` : ""),
+      detail: withChanges(`Edited customer ${String(cur.name ?? "")} · ${String(cur.project_name ?? projectKey)} · file ${String(cur.file_no ?? "—")}`, diffDetail(pick(cur, curBio), after, { file_no: "file no", joining_date: "joining date", total_price: "price", expiry_date: "last date to pay", monthly_installment: "monthly installment", booking_money: "booking money", yearly_installment: "yearly installment", reference: "reference officer" })) + (splitNote ? `\nown app account set up for the new number` : ""),
     });
 
     revalidatePath(`/dashboard/projects/${projectKey}`);

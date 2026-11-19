@@ -25,6 +25,15 @@ export const CHANGELOG_FOOTER = {
 /** Newest first. */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.6",
+    date: "2026-11-19",
+    title: "Booking money and Yearly installment per customer",
+    changes: [
+      { kind: "new", text: "Add customer / Edit customer has two more optional fields, Booking money and Yearly installment, in a row under Last date to pay and Monthly installment. They record the plan agreed with that customer; not every project uses them, so leave them empty where they don't apply. Entering a figure records no payment — money received is still entered as a transaction. Both show in the customer's details and edits appear in the audit log." },
+      { kind: "improved", text: "The form's boxes stay in line even when a label wraps onto two lines." },
+    ],
+  },
+  {
     version: "2.7.5",
     date: "2026-11-18",
     title: "Promise City: customer details show Decimal",
